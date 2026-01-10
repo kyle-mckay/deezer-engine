@@ -2,8 +2,13 @@ playlists:
   - name: "My Library Filter"
     source:
       - type: "favorites"
-        retention: 12
+        retention: 0 # Pull live
     modifiers:
-      # ... modifiers go here ...
+      - type: "exclude"
+        source:
+          type: "playlist"
+          id: "12345678"  # Exclude these songs from source
+          retention: 0
     destination:
-      # ... destination goes here ...
+      type: "replace"     # 'replace' clears it first, 'append' adds to the end
+      target: "01234567" # Playlist that will contain songs
