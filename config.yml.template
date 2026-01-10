@@ -1,0 +1,12 @@
+config:
+  # Open https://www.deezer.com and log in
+  # Open developer settigns in browser (usually F12)
+  # Go to the Application tab (Chrome) or Storage tab (Firefox).
+  # In the left sidebar, expand Cookies and select https://www.deezer.com
+  # Find the cookie named `arl`
+  # Copy the Value
+  arl_token: "PASTE_ARL_HERE"
+  # https://www.deezer.com/us/profile/ABC123
+  user_id: "YOUR_NUMERIC_USER_ID" # Found in your profile URL
+  log_level: "INFO" # Options: DEBUG, INFO, WARNING, ERROR
+  # batch_size: 50  # Deezer batch size, recommended to leave unchanged
