@@ -1,0 +1,9 @@
+playlists:
+  - name: "My Library Filter"
+    source:
+      - type: "favorites"
+        retention: 12
+    modifiers:
+      # ... modifiers go here ...
+    destination:
+      # ... destination goes here ...
