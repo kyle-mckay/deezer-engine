@@ -1,0 +1,39 @@
+# --- CONFIG FILES ---
+# We maintain the templates
+config.yml
+strategies.yml
+
+# --- TEMP FILES ---
+cache/
+tmp/
+
+# --- PYTHON SETTINGS ---
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+venv/
+env/
+.venv/
+ENV/
+bin
+include
+lib
+lib64
+pyvenv.cfg
+
+# --- LOG FILES ---
+*.log
+logs/
+
+# --- IDE SETTINGS ---
+# VS Code
+.vscode/
+# PyCharm / IntelliJ
+.idea/
+
+# --- OS SPECIFIC ---
+.DS_Store
+Thumbs.db

@@ -9,16 +9,16 @@ def setup_logger(name, log_level="INFO"):
     logger = logging.getLogger(name)
     logger.setLevel(level)
 
-    # Ensure no duplicate handlers are added to the logger.
+    # Avoid adding multiple handlers if the logger is already configured
     if not logger.handlers:
-        # Set up a console handler to output logs to standard output.
+        # Console handler to emit log records to stdout
         c_handler = logging.StreamHandler(sys.stdout)
-        
-        # Define the log message format including timestamp, logger name, level, and message.
+
+        # Timestamp, logger name, level, and the message
         fmt = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
                                 datefmt='%Y-%m-%d %H:%M:%S')
         c_handler.setFormatter(fmt)
-        
+
         logger.addHandler(c_handler)
-        
+
     return logger

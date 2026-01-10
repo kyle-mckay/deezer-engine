@@ -12,12 +12,12 @@ class StrategyController:
         os.makedirs("./tmp", exist_ok=True)
         os.makedirs("./cache", exist_ok=True)
 
-    # Write track IDs to a temporary file.
+    # Save track IDs to a temporary file for the strategy run.
     def _write_tmp(self, track_ids):
         with open(self.tmp_file, 'w') as f:
             json.dump(track_ids, f)
 
-    # Read track IDs from the temporary file if it exists.
+    # Load track IDs from the temporary file if it exists, else return empty list.
     def _read_tmp(self):
         if not os.path.exists(self.tmp_file): return []
         with open(self.tmp_file, 'r') as f:
@@ -32,20 +32,20 @@ class StrategyController:
             yield data_list[i:i + n]
 
     def handle_source(self, source_data):
-        # source_data: {'type': 'favorites', 'retention': 24}
+        # Example source_data: {'type': 'favorites', 'retention': 24}
         module = importlib.import_module(f"strategies.sources.{source_data['type']}")
         track_ids = module.run(self.client, self.config, self.logger, source_data)
         self._write_tmp(track_ids)
 
     def handle_modifier(self, mod_data):
-        # mod_data: {'type': 'exclude', 'source': '...'}
+        # Example mod_data: {'type': 'exclude', 'source': {...}}
         current_tracks = self._read_tmp()
         module = importlib.import_module(f"strategies.modifiers.{mod_data['type']}")
         modified_tracks = module.run(self.client, self.config, self.logger, mod_data, current_tracks)
         self._write_tmp(modified_tracks)
 
     def handle_destination(self, dest_data):
-        # dest_data: {'type': 'replace', 'target': '...'}
+        # Example dest_data: {'type': 'replace', 'target': '...'}
         current_tracks = self._read_tmp()
         module = importlib.import_module(f"strategies.destinations.playlist")
         module.run(self.client, self.config, self.logger, dest_data, current_tracks)

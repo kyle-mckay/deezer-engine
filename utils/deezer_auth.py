@@ -4,37 +4,37 @@ from utils.logger import setup_logger
 
 def get_authenticated_client(config, logger):
     """
-    Set up the Deezer Client using the ARL cookie from the configuration.
+    Initialize a Deezer client using the ARL cookie from the config.
     """
     arl = config.get('config', {}).get('arl_token')
     user_id = config.get('config', {}).get('user_id')
 
-    # Check if the ARL token is present and valid.
+    # Ensure an ARL token is provided in the configuration
     if not arl or arl == "PASTE_YOUR_ARL_HERE":
         logger.error("ARL token is missing in config.yml")
         sys.exit(1)
 
-    # Prepare headers for the Deezer API request using the ARL cookie.
+    # Build request headers with the ARL cookie
     headers = {
         "Cookie": f"arl={arl}",
         "Accept-Language": "en-US",
     }
 
-    # Get batch size from config or default to 50
+    # Read batch size from config (default: 50)
     batch_size = config.get('config', {}).get('batch_size', 50)
 
     try:
         client = deezer.Client(headers=headers)
         
-        # Attach the batch size to the client for global access
+        # Store the batch size on the client for later use
         client.batch_size = batch_size
 
-        # Test connection using the numeric user_id
+        # If a user_id is provided, use it to verify authentication
         if user_id:
             user = client.get_user(user_id)
             logger.info(f"Authenticated successfully as: {user.name}")
         else:
-            # Fallback test if user_id isn't provided (checking a public track)
+            # If no user_id, perform a simple public request as a sanity check
             client.get_track(3135556)
             logger.warning("Connection successful, but user_id is missing in config.yml. "
                            "Exclusion strategies may fail without it.")

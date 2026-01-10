@@ -1,9 +1,11 @@
 import yaml
+import sys
 from utils.logger import setup_logger
 from utils.deezer_auth import get_authenticated_client
+from strategies.base import StrategyController
 
 def load_configs():
-    """Loads both the main configuration and the playlist strategies."""
+    """Load the main configuration and playlist strategies."""
     try:
         with open('config.yml', 'r') as f:
             config = yaml.safe_load(f)
@@ -15,29 +17,57 @@ def load_configs():
         sys.exit(1)
 
 def main():
-    # 1. Load data
+    # Load configuration and strategies
     config, strategies_config = load_configs()
-    
-    # 2. Setup Logger
+    # Configure logger
     log_level = config.get('config', {}).get('log_level', 'INFO')
     logger = setup_logger("DeezerEngine", log_level)
     
     logger.info("--- Starting Deezer Smart Playlist Engine ---")
 
-    # 3. Authenticate
+    # Authenticate with Deezer
     client = get_authenticated_client(config, logger)
-    
-    # 4. Strategy Execution Loop
+    # Execute configured strategies
     if not strategies_config or 'playlists' not in strategies_config:
         logger.warning("No strategies found in strategies.yml.")
         return
 
     for s_data in strategies_config['playlists']:
-        strategy_name = s_data.get('name', 'Unknown Strategy')
-        strategy_type = s_data.get('type')
+        strategy_name = s_data.get('name', 'unnamed_strategy')
         
-        logger.info(f"Processing: {strategy_name} [{strategy_type}]")
+        # Sanitize the strategy name for use in filenames
+        safe_name = strategy_name.lower().replace(" ", "_")
         
-        # To call strategy class
+        logger.info(f"--- Executing Strategy: {strategy_name} ---")
+        
+        # Initialize a controller instance for this strategy
+        controller = StrategyController(client, config, logger, safe_name)
+        
+        try:
+            # Source phase: collect track IDs from configured sources
+            sources = s_data.get('source', [])
+            if not sources:
+                logger.error(f"Strategy '{strategy_name}' has no sources.")
+                continue
+            
+            for src in sources:
+                controller.handle_source(src)
+            
+            # Modifier phase: apply any transformations/filters
+            modifiers = s_data.get('modifiers', [])
+            for mod in modifiers:
+                controller.handle_modifier(mod)
+            
+            # Destination phase: push results to the target
+            destination = s_data.get('destination')
+            if destination:
+                controller.handle_destination(destination)
+            else:
+                logger.warning(f"Strategy '{strategy_name}' has no destination defined.")
+
+        except Exception as e:
+            logger.error(f"Strategy '{strategy_name}' failed: {e}")
+            logger.debug("Exception details:", exc_info=True)
+
 if __name__ == "__main__":
     main()
