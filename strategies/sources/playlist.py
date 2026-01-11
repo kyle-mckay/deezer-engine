@@ -1,45 +1,113 @@
 import os
 import json
 import time
+import logging
+import re
 
 def run(client, config, logger, source_data):
-        """
-        Retrieve track IDs from a Deezer playlist.
-        source_data keys:
-            - id: str (numeric playlist ID)
-            - retention: int (optional cache retention hours)
-        """
+    """
+    Fetches tracks from a specific Deezer playlist with local caching.
+    source_data:
+      - id: str (The numeric playlist ID)
+      - retention: int (hours to keep cache, 0 for live)
+    """
     playlist_id = source_data.get('id')
-    retention_hrs = source_data.get('retention', 24) # Default retention: 24 hours for playlists
+    retention_hrs = source_data.get('retention', 0)
     
     if not playlist_id:
         logger.error("Source type 'playlist' requires an 'id'.")
         return []
 
-    cache_file = f"./cache/playlist_{playlist_id}.json"
-
-    # Use cached IDs when still within the retention window
-    if retention_hrs > 0 and os.path.exists(cache_file):
-        file_age = (time.time() - os.path.getmtime(cache_file)) / 3600
-        if file_age < retention_hrs:
-            logger.debug(f"Using cached playlist {playlist_id}")
-            with open(cache_file, 'r') as f:
-                return json.load(f)
-
-    # Fetch live data from the Deezer API
+    # 1. Fetch metadata first to get the human-readable name
     try:
-        # `get_playlist` yields a PaginatedList that auto-paginates when iterated
         playlist = client.get_playlist(playlist_id)
+        # Sanitize name for a safe filename (remove special chars, replace spaces with underscores)
+        clean_name = re.sub(r'[^\w\s-]', '', playlist.title).strip().replace(' ', '_')
+    except Exception as e:
+        logger.error(f"Error fetching playlist metadata for {playlist_id}: {e}")
+        return []
 
-        # Keep only track IDs
-        track_ids = [track.id for track in playlist.get_tracks()]
+    # 2. Update cache path with human-readable name
+    cache_file = f"./cache/playlist_{playlist_id}_{clean_name}.json"
+    
+    if logger.isEnabledFor(logging.DEBUG):
+        logger.debug(f"--- Playlist Source Run: '{playlist.title}' ({playlist_id}) ---")
+        logger.debug(f"Retention setting: {retention_hrs} hours")
+        logger.debug(f"Cache file path: {os.path.abspath(cache_file)}")
+
+    # 3. Cache Logic
+    if os.path.exists(cache_file):
+        mtime = os.path.getmtime(cache_file)
+        file_age_hrs = (time.time() - mtime) / 3600
         
-        # Save IDs to cache for future runs
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Cache found. Current age: {file_age_hrs:.2f}h")
+
+        if retention_hrs > 0 and file_age_hrs < retention_hrs:
+            logger.info(f"Using cached version of '{playlist.title}' (Age: {file_age_hrs:.1f}h)")
+            try:
+                with open(cache_file, 'r') as f:
+                    cached_data = json.load(f)
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(f"Loaded {len(cached_data)} track IDs from cache.")
+                return cached_data
+            except Exception as e:
+                logger.error(f"Failed to read playlist cache {playlist_id}: {e}")
+        else:
+            if logger.isEnabledFor(logging.DEBUG):
+                reason = "retention set to 0" if retention_hrs == 0 else "cache expired"
+                logger.debug(f"Refreshing from API because {reason}.")
+    else:
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"No cache file exists for '{playlist.title}'.")
+
+    # 4. API Logic
+    try:
+        logger.info(f"Fetching live tracks from playlist: '{playlist.title}'")
+
+        track_ids = []
+        tracks_generator = playlist.get_tracks()
+        
+        for track in tracks_generator:
+            track_ids.append(track.id)
+
+            # Every 250 tracks, let the user know the progress
+            if len(track_ids) % 250 == 0:
+                logger.info(f"Looking through '{playlist.title}'... found {len(track_ids)} songs so far.")
+
+        # 5. Cleanup & Save to Cache
+        # Remove old files for this ID (e.g., if the playlist was renamed)
+        _cleanup_old_caches(playlist_id, cache_file, logger)
+
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Updating cache file {cache_file} with {len(track_ids)} tracks.")
+            
         with open(cache_file, 'w') as f:
             json.dump(track_ids, f)
-        
-        logger.info(f"Successfully fetched {len(track_ids)} tracks.")
+            
         return track_ids
+
     except Exception as e:
-        logger.error(f"Error fetching playlist {playlist_id}: {e}")
+        logger.error(f"Error fetching tracks for '{playlist.title}': {e}")
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.exception(f"Traceback for playlist {playlist_id} failure:")
+            
+        # Fallback to expired cache as a safety net
+        if os.path.exists(cache_file):
+            logger.warning(f"Returning stale cache for '{playlist.title}' due to API error.")
+            with open(cache_file, 'r') as f:
+                return json.load(f)
         return []
+
+def _cleanup_old_caches(playlist_id, current_cache_path, logger):
+    """Deletes old cache files for the same playlist ID to prevent folder clutter."""
+    try:
+        cache_dir = "./cache"
+        current_filename = os.path.basename(current_cache_path)
+        for f in os.listdir(cache_dir):
+            # Check for files with same ID but different names
+            if f.startswith(f"playlist_{playlist_id}") and f != current_filename:
+                os.remove(os.path.join(cache_dir, f))
+                logger.debug(f"Cleaned up old cache file: {f}")
+    except Exception as e:
+        logger.debug(f"Cleanup failed (non-critical): {e}")
