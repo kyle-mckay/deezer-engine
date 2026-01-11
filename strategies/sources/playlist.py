@@ -44,7 +44,7 @@ def run(client, config, logger, source_data):
             logger.debug(f"Cache found. Current age: {file_age_hrs:.2f}h")
 
         if retention_hrs > 0 and file_age_hrs < retention_hrs:
-            logger.info(f"Using cached version of '{playlist.title}' (Age: {file_age_hrs:.1f}h)")
+            logger.debug(f"Using cached version of '{playlist.title}' (Age: {file_age_hrs:.1f}h)")
             try:
                 with open(cache_file, 'r') as f:
                     cached_data = json.load(f)

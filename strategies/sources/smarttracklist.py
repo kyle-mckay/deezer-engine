@@ -3,6 +3,7 @@ import json
 import time
 import re
 import random
+import logging
 from utils.deezer_auth import get_authenticated_session
 
 def run(client, config, logger, source_data):
@@ -22,7 +23,7 @@ def run(client, config, logger, source_data):
     if retention_hrs > 0 and os.path.exists(cache_file):
         file_age = (time.time() - os.path.getmtime(cache_file)) / 3600
         if file_age < retention_hrs:
-            logger.info(f"Using cached smart list: {list_name} ({file_age:.1f}h old)")
+            logger.debug(f"Using cached smart list: {list_name} ({file_age:.1f}h old)")
             with open(cache_file, 'r') as f:  # <--- Added the missing 'with open'
                 return json.load(f)
 
