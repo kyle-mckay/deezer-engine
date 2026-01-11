@@ -23,6 +23,7 @@ def main():
     
     # 2. Setup Logger & Validate Level
     user_log_level = config.get('config', {}).get('log_level', 'INFO').upper()
+    should_write_logs = config.get('config', {}).get('write_logs', True)
     
     # Check if the level is officially recognized by the logging module
     # logging.getLevelName(str) returns the numeric level if valid, 
@@ -36,7 +37,7 @@ def main():
         actual_level = 'INFO'
         warning_needed = True
 
-    logger = setup_logger("DeezerEngine", actual_level)
+    logger = setup_logger("DeezerEngine", actual_level,log_to_file=should_write_logs)
 
     # Issue the warning if config was bad
     if warning_needed:

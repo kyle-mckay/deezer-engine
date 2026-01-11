@@ -27,7 +27,7 @@ def run(client, config, logger, source_data):
         logger.debug(f"Cache file found. Age: {file_age_hrs:.2f} hours.")
 
         if retention_hrs > 0 and file_age_hrs < retention_hrs:
-            logger.info(f"Using cached favorites (Age: {file_age_hrs:.1f}h)")
+            logger.debug(f"Using cached favorites (Age: {file_age_hrs:.1f}h)")
             try:
                 with open(cache_file, 'r') as f:
                     cached_ids = json.load(f)

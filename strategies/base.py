@@ -63,6 +63,8 @@ class StrategyController:
     def handle_source(self, source_data):
         """Dynamically loads a source worker and appends its results to the strategy's tmp file."""
         src_type = source_data.get('type')
+        # Use 'name' if available (e.g. 'discovery'), otherwise fallback to type
+        src_label = source_data.get('name', src_type) 
         module_path = f"strategies.sources.{src_type}"
         
         self.logger.debug(f"Attempting to load source module: {module_path}")
@@ -72,16 +74,24 @@ class StrategyController:
             # Retrieve what we have in the current strategy pipeline so far
             current_tracks = self._read_tmp()
             
-            # Run the worker logic (Source workers handle their own long-term ./cache/)
+            # Run the worker logic
             new_tracks = module.run(self.client, self.config, self.logger, source_data)
             
             # Combine IDs 
             combined = list(dict.fromkeys(current_tracks + new_tracks))
-            
             self._write_tmp(combined)
-            self.logger.info(f"Source '{src_type}' resolved. Pipeline grew from {len(current_tracks)} to {len(combined)} tracks.")
+            
+            self.logger.info(f"Found {len(new_tracks)} songs in source: {src_label}")
+            
+            # Detailed tracking for DEBUG
+            self.logger.debug(
+                f"Source '{src_label}' ({src_type}) resolved. "
+                f"Pipeline grew: {len(current_tracks)} -> {len(combined)} tracks. "
+                f"Net gain: +{len(combined) - len(current_tracks)} unique IDs."
+            )
+
         except Exception as e:
-            self.logger.error(f"Failed to process source '{src_type}': {e}")
+            self.logger.error(f"Failed to process source '{src_label}': {e}")
             raise
 
     def handle_modifier(self, mod_data):
