@@ -80,9 +80,9 @@ def run(client, config, logger, source_data):
             with open(cache_file, 'w') as f:
                 json.dump(track_ids, f)
             
-            logger.info(f"Resolved {len(track_ids)} songs for '{list_name}'.")
             
             if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Resolved {len(track_ids)} songs for '{list_name}'.")
                 logger.debug(f"Track IDs for {list_name}: {track_ids}")
                 
             return track_ids

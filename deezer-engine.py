@@ -43,7 +43,7 @@ def main():
     if warning_needed:
         logger.warning(f"Unsupported log level '{user_log_level}' found in config.yml. Defaulting to 'INFO'.")
 
-    logger.info("--- Starting Deezer Smart Playlist Engine ---")
+    logger.info("--- Starting Deezer Engine ---")
 
     # Log Config Metadata (Debug Only)
     if logger.isEnabledFor(logging.DEBUG):

@@ -66,7 +66,39 @@ python3 deezer-engine.py
 
 The engine will process each strategy defined in `strategies.yml`, updating your playlists accordingly.
 
-![ExampleImageTBD]()
+**Example**:
+
+```log
+2026-01-12 20:08:40 - [DeezerEngine] [INFO] - --- Starting Deezer Engine ---
+2026-01-12 20:08:41 - [DeezerEngine] [INFO] - Authenticated successfully as: (redacted)
+2026-01-12 20:08:41 - [DeezerEngine] [INFO] - --- Executing Strategy: No Sad Boy ---
+2026-01-12 20:08:41 - [DeezerEngine] [INFO] - Fetching live favorites from Deezer API for User (redacted)...
+2026-01-12 20:08:44 - [DeezerEngine] [INFO] - Looking through your library... found 250 songs so far.
+...
+2026-01-12 20:09:12 - [DeezerEngine] [INFO] - Looking through your library... found 2750 songs so far.
+2026-01-12 20:09:12 - [DeezerEngine] [INFO] - Found 2767 songs in source: favorites
+2026-01-12 20:09:12 - [DeezerEngine] [INFO] - Applying 'exclude' modifier...
+2026-01-12 20:09:13 - [DeezerEngine] [INFO] - Fetching live tracks from playlist: 'Depresso'
+2026-01-12 20:09:16 - [DeezerEngine] [INFO] - Exclusion complete: Removed 212 matching tracks.
+2026-01-12 20:09:16 - [DeezerEngine] [INFO] - Modifier 'exclude' applied. Pipeline now contains 2555 tracks.
+2026-01-12 20:09:16 - [DeezerEngine] [INFO] - Preparing destination for type 'smart' with 2555 tracks.
+2026-01-12 20:09:47 - [DeezerEngine] [INFO] - Connected to 'No Sad Boi'. Running Smart Sync...
+2026-01-12 20:09:47 - [DeezerEngine] [INFO] - 'No Sad Boi' is already in sync.
+2026-01-12 20:09:47 - [DeezerEngine] [INFO] - --- Executing Strategy: Daily Discovery Mix ---
+2026-01-12 20:09:49 - [DeezerEngine] [INFO] - Fetching songs for 'discovery'...
+2026-01-12 20:09:49 - [DeezerEngine] [INFO] - Found 40 songs in source: discovery
+2026-01-12 20:09:51 - [DeezerEngine] [INFO] - Fetching songs for 'new-releases'...
+2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Found 40 songs in source: new-releases
+2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Applying 'exclude' modifier...
+2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Exclusion complete: Removed 0 matching tracks.
+2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Modifier 'exclude' applied. Pipeline now contains 80 tracks.
+2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Applying 'dedupe' modifier...
+2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Dedupe complete: No duplicates found.
+2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Modifier 'dedupe' applied. Pipeline now contains 80 tracks.
+2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Preparing destination for type 'smart' with 80 tracks.
+2026-01-12 20:09:54 - [DeezerEngine] [INFO] - Connected to 'Daily Discover Mix'. Running Smart Sync...
+2026-01-12 20:09:54 - [DeezerEngine] [INFO] - 'Daily Discover Mix' is already in sync.
+```
 
 ## Development
 

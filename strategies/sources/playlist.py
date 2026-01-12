@@ -80,6 +80,7 @@ def run(client, config, logger, source_data):
         _cleanup_old_caches(playlist_id, cache_file, logger)
 
         if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Successfully fetched {len(track_ids)} tracks.")
             logger.debug(f"Updating cache file {cache_file} with {len(track_ids)} tracks.")
             
         with open(cache_file, 'w') as f:
