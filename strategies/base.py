@@ -2,6 +2,8 @@ import importlib
 import os
 import json
 import logging
+from pathlib import Path
+from utils.paths import get_data_dir
 
 class StrategyController:
     def __init__(self, client, config, logger, strategy_name):
@@ -9,11 +11,14 @@ class StrategyController:
         self.config = config
         self.logger = logger
         self.strategy_name = strategy_name
-        self.tmp_file = f"./tmp/{strategy_name}.json"
+        
+        # Get base data directory
+        data_dir = get_data_dir()
+        self.tmp_file = str(data_dir / 'tmp' / f"{strategy_name}.json")
         
         # Ensure working directories exist
-        os.makedirs("./tmp", exist_ok=True)
-        os.makedirs("./cache", exist_ok=True)
+        os.makedirs(data_dir / 'tmp', exist_ok=True)
+        os.makedirs(data_dir / 'cache', exist_ok=True)
 
         # Clear the tmp file at the start of a fresh strategy run.
         if os.path.exists(self.tmp_file):

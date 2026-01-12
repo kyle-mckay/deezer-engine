@@ -5,6 +5,7 @@ import re
 import random
 import logging
 from utils.deezer_auth import get_authenticated_session
+from utils.paths import get_cache_dir
 
 def run(client, config, logger, source_data):
     """
@@ -17,7 +18,7 @@ def run(client, config, logger, source_data):
     retention_hrs = source_data.get('retention', 0)
     arl = config.get('config', {}).get('arl_token')
     
-    cache_file = f"./cache/smart_{list_name}.json"
+    cache_file = str(get_cache_dir() / f"smart_{list_name}.json")
     
     # 1. Cache Check Logic
     if retention_hrs > 0 and os.path.exists(cache_file):
@@ -76,7 +77,7 @@ def run(client, config, logger, source_data):
             # Deduplicate while preserving order
             track_ids = list(dict.fromkeys(track_ids))
             
-            os.makedirs("./cache", exist_ok=True)
+            os.makedirs(get_cache_dir(), exist_ok=True)
             with open(cache_file, 'w') as f:
                 json.dump(track_ids, f)
             

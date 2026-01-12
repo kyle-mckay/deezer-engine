@@ -3,6 +3,7 @@ import json
 import time
 import logging
 import re
+from utils.paths import get_cache_dir
 
 def run(client, config, logger, source_data):
     """
@@ -28,7 +29,7 @@ def run(client, config, logger, source_data):
         return []
 
     # 2. Update cache path with human-readable name
-    cache_file = f"./cache/playlist_{playlist_id}_{clean_name}.json"
+    cache_file = str(get_cache_dir() / f"playlist_{playlist_id}_{clean_name}.json")
     
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(f"--- Playlist Source Run: '{playlist.title}' ({playlist_id}) ---")
@@ -103,7 +104,7 @@ def run(client, config, logger, source_data):
 def _cleanup_old_caches(playlist_id, current_cache_path, logger):
     """Deletes old cache files for the same playlist ID to prevent folder clutter."""
     try:
-        cache_dir = "./cache"
+        cache_dir = get_cache_dir()
         current_filename = os.path.basename(current_cache_path)
         for f in os.listdir(cache_dir):
             # Check for files with same ID but different names
