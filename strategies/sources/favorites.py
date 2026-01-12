@@ -61,12 +61,12 @@ def run(client, config, logger, source_data):
         
         # 3. Save to Cache
         if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Successfully fetched {len(track_ids)} tracks.")
             logger.debug(f"Writing {len(track_ids)} IDs to cache file: {cache_file}")
             
         with open(cache_file, 'w') as f:
             json.dump(track_ids, f)
             
-        logger.info(f"Successfully fetched {len(track_ids)} tracks.")
         return track_ids
 
     except Exception as e:
