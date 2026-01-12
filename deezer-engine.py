@@ -1,20 +1,27 @@
 import yaml
 import sys
 import logging
+import os
+from pathlib import Path
 from utils.logger import setup_logger
+from utils.paths import get_data_dir
+from utils.config_loader import load_config_with_env_overrides, load_strategies_with_env_overrides
 from utils.deezer_auth import get_authenticated_client
 from strategies.base import StrategyController
 
 def load_configs():
-    """Load the main configuration and playlist strategies."""
+    """Load configuration and strategies with environment variable overrides."""
     try:
-        with open('config.yml', 'r') as f:
-            config = yaml.safe_load(f)
-        with open('strategies.yml', 'r') as f:
-            strategies = yaml.safe_load(f)
+        config = load_config_with_env_overrides()
+        strategies = load_strategies_with_env_overrides()
+        
+        # Validate that required config exists
+        if 'config' not in config:
+            raise ValueError("No 'config' section found in configuration")
+        
         return config, strategies
     except Exception as e:
-        print(f"Critical Error: Could not load YAML files. {e}")
+        print(f"Critical Error: Could not load configuration. {e}")
         sys.exit(1)
 
 def main():
@@ -44,7 +51,10 @@ def main():
         logger.warning(f"Unsupported log level '{user_log_level}' found in config.yml. Defaulting to 'INFO'.")
 
     logger.info("--- Starting Deezer Engine ---")
-
+    if os.getenv('CONTAINERIZED', 'false').lower() == 'true':
+        logger.info("Deezer Engine is running in DOCKER mode.")
+        logger.debug("Defaulting paths to '/app/data/'")
+    
     # Log Config Metadata (Debug Only)
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(f"Configuration metadata: UserID={config.get('config', {}).get('user_id')}, "
