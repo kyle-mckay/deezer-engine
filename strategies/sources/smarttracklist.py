@@ -66,6 +66,11 @@ def run(client, config, logger, source_data):
                         break
             except Exception:
                 continue
+        # FAILSAFE: Direct HTML Scrape
+        if not track_ids:
+            logger.debug(f"Gateway methods returned empty for {list_name}, attempting direct HTML regex scrape...")
+            # This searches for "SNG_ID":"12345" inside the raw page HTML
+            track_ids = re.findall(r'"SNG_ID":"?(\d+)"?', page_text)
 
         if track_ids:
             # Deduplicate while preserving order
