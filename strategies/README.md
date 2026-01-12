@@ -1,40 +1,155 @@
-# Strategy Engine Architecture
+# Strategy Engine
 
-This directory contains the modular components of the parent script. 
-The system follows a **Declarative Pipeline** pattern where tracks flow from a source, 
-through various modifiers, and finally to a destination.
+This directory contains the modular components for building smart playlists. Strategies are defined in `strategies.yml` as a declarative pipeline: tracks flow from sources, through modifiers, and finally to a destination.
 
-## Folder Structure
+## Supported Components
 
-### `sources/`
-**Responsibility:** Fetching raw track lists.
-- Scripts here are responsible for interacting with the Deezer API or the local cache.
-- **Caching Logic:** Should check `./cache/` for existing data. If `retention` is met (or 0), it performs a live fetch and updates the cache.
-- **Output:** Returns a flat list of Track IDs to the Controller.
+### Sources
 
-### `modifiers/`
-**Responsibility:** Transforming and filtering data.
-- These are "pure" functions. They take a list of Track IDs and return a modified list.
-- Examples: `exclude.py` (subtracts one list from another), `dedupe.py` (removes duplicates), `sort.py` (reorders tracks).
+Sources fetch track lists from Deezer. All sources support caching with a `retention` parameter (hours to keep cache; 0 = always fresh).
 
-### `destinations/`
-**Responsibility:** Outputting the final list to Deezer.
-- Handles the actual modification of your Deezer account.
-- **Types:**
-    - `replace`: Clears the target playlist before adding new tracks.
-    - `append` or `insert`: Adds tracks to the end without checking for duplicates.
+**favorites** - Your library
+```yaml
+source:
+  - type: "favorites"
+    retention: 24
+```
+
+**playlist** - A specific playlist by ID
+```yaml
+source:
+  - type: "playlist"
+    id: "12345678"
+    retention: 24
+```
+
+**smarttracklist** - Deezer's curated lists (discovery, new-releases, inspired-by-1 *through* inspired-by-5)
+```yaml
+source:
+  - type: "smarttracklist"
+    name: "discovery"
+    retention: 24
+```
+
+Multiple sources can be combined in a single strategy:
+```yaml
+source:
+  - type: "smarttracklist"
+    name: "new-releases"
+    retention: 24
+  - type: "smarttracklist"
+    name: "discovery"
+    retention: 24
+```
+
+### Modifiers
+
+Modifiers transform the track list. They are applied in order.
+
+**dedupe** - Remove duplicate track IDs
+```yaml
+modifiers:
+  - type: "dedupe"
+```
+
+**exclude** - Remove tracks found in another source
+```yaml
+modifiers:
+  - type: "exclude"
+    source:
+      type: "favorites"
+      retention: 24
+```
+
+You can exclude from a playlist, smart list, or any source:
+```yaml
+modifiers:
+  - type: "exclude"
+    source:
+      type: "playlist"
+      id: "98765432"
+      retention: 24
+```
+
+**Planned Modifiers** - Some modifiers are in the works or not yet documented here:
+- `sort`: [#9](https://github.com/kyle-mckay/deezer-engine/issues/9)
+- `limit`: [#10](https://github.com/kyle-mckay/deezer-engine/issues/10)
+- `artist-seperation`: [#11](https://github.com/kyle-mckay/deezer-engine/issues/11)
+- `randomize`: [#12](https://github.com/kyle-mckay/deezer-engine/issues/12)
+
+### Destinations
+
+Destinations push the final track list to a **Deezer playlist**.
+
+```yaml
+destination:
+  type: "smart"
+  target: "01234567"
+```
+
+**Types** - There are a few different methods in which your playlist is updated:
+- `smart` or `smartreplace` - (Recommended) Update playlist intelligently, preserving track dates by only adding/removing what changed
+- `replace` - Removes **all** tracks in destination library first, then adds songs from pipeline.
+- `insert` or `append` - Add tracks from pipeline to playlist without removing any
+
+**replace**
+---
+
+## Complete Examples
+
+>Will be moved to wiki when more strategies are available
+
+### Example 1: Filter your library
+Pull your favorite tracks but exclude a specific playlist, then update a target playlist.
+
+```yaml
+playlists:
+  - name: "Filtered Favorites"
+    source:
+      - type: "favorites"
+        retention: 48
+    modifiers:
+      - type: "exclude"
+        source:
+          type: "playlist"
+          id: "12345678"
+          retention: 48
+    destination:
+      type: "smart"
+      target: "99999999"
+```
+
+### Example 2: Combine discovery sources
+Merge new releases and discovery mixes, deduplicate, then exclude anything already in your library.
+
+```yaml
+playlists:
+  - name: "Weekly Discovery"
+    source:
+      - type: "smarttracklist"
+        name: "new-releases"
+        retention: 24
+      - type: "smarttracklist"
+        name: "discovery"
+        retention: 24
+    modifiers:
+      - type: "dedupe"
+      - type: "exclude"
+        source:
+          type: "favorites"
+          retention: 48
+    destination:
+      type: "smart"
+      target: "88888888"
+```
 
 ---
 
-## Data Flow (The Pipeline)
+## How It Works
 
-1. **Initialization:** `deezer-playlists.py` reads `strategies.yml`.
-2. **Source Phase:** The `StrategyController` (in `base.py`) calls a source worker. The worker saves the initial list to `./tmp/<strategy-name>.json`.
-3. **Modification Phase:** The Controller iterates through the `modifiers` list in the YAML. Each modifier reads the `.json` file, performs its logic, and overwrites the file.
-4. **Destination Phase:** The final IDs in the `.json` file are read and pushed to the target playlist via a destination worker.
+1. **Initialization:** `deezer-engine.py` reads `strategies.yml`.
+2. **Source Phase:** Each source fetches tracks and writes to `./tmp/<strategy-name>.json`.
+3. **Modifier Phase:** Each modifier reads the temp file, transforms it, and overwrites it.
+4. **Destination Phase:** The final track list is pushed to your target playlist.
 
-## Guidelines for New Workers
-
-- **Isolation:** Workers should not call each other directly (except for `exclude` calling a source).
-- **Logging:** Use the centralized logger passed from the Controller to maintain a consistent audit trail.
-- **Rate Limiting:** Destination workers must implement batching (e.g., 50 tracks per request) to respect Deezer API limits.
+Caching is handled automatically based on `retention` values. Live data is fetched only when cache is expired or set to 0.
