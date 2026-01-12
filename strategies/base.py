@@ -120,7 +120,7 @@ class StrategyController:
         
         # Read the final state of the pipeline after all sources and modifiers
         current_tracks = self._read_tmp()
-        self.logger.debug(f"Preparing destination sync for {len(current_tracks)} tracks.")
+        self.logger.info(f"Preparing destination for type '{dest_data.get('type')}' with {len(current_tracks)} tracks.")
         
         try:
             module = importlib.import_module(module_path)

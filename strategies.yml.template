@@ -1,14 +1,37 @@
 playlists:
-  - name: "My Library Filter"
+  - name: "Normie Songs"
+    # Take songs from my Library
+    # Exclude my playlist with Anime Songs
+    # Update my 'Normie Songs' playlist with smart replace
     source:
       - type: "favorites"
-        retention: 0 # Pull live
+        retention: 23 # Pull after a day
     modifiers:
       - type: "exclude"
         source:
           type: "playlist"
           id: "12345678"  # Exclude these songs from source
-          retention: 0
+          retention: 23
     destination:
-      type: "replace"     # 'replace' clears it first, 'append' adds to the end
+      type: "smart"
       target: "01234567" # Playlist that will contain songs
+  - name: "Discovery Mix"
+    # Take my discovery list and new releases
+    # Exclude songs in my favorites & dedupe
+    # Add to my 'Daily Discovery' playlist with smart replace
+    source:
+      - type: "smarttracklist"
+        name: "discovery"
+        retention: 23
+      - type: "smarttracklist"
+        name: "new-releases"
+        retention: 23
+    modifiers:
+      - type: "exclude"
+        source: 
+          type: "favorites" 
+          retention: 23
+      - type: "dedupe"
+    destination:
+      type: "smart"
+      target: "99998888"
