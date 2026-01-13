@@ -52,11 +52,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Update and Push versoin
+      - name: Checkout with PAT
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.REPO_PAT }}
+          
+      - name: Update and Push version
         run: |
           NEW_TAG="${{ steps.drafter.outputs.tag_name }}"
           
