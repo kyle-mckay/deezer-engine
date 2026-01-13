@@ -2,7 +2,7 @@
 
 - A Deezer account
 - An ARL token
-- (If building from source) Python 3.11 or higher
+- (If building from source) Python 3.7 or higher
 
 ## Obtaining ARL token
 
@@ -66,6 +66,37 @@ services:
             - DEEZER_LOG_LEVEL=INFO # Log level - DEBUG, INFO, WARNING, ERROR
 ```
 
+### Command Modes
+
+You can control how the script executes by specifying a `command:` option in Docker Compose or as a command argument in `docker run`. The supported modes are:
+
+- **`run`** (default if `DEEZER_SCHEDULE` not set): Execute the engine once and exit. Useful for one-time operations or scheduled external triggers.
+- **`cron`**: Run the engine on a forced schedule defined by the `DEEZER_SCHEDULE` environment variable (default: `0 3 * * *`). The container will stay running and execute the script at each scheduled interval.
+- **`shell`**: Start an interactive bash shell for debugging or manual operations.
+
+>[!WARNING]
+>Cron behaviour is still under assessment
+
+#### Docker Compose Example with Cron
+
+
+```yml
+services:
+    deezer-engine:
+        image: kylemmkay/deezer-engine:latest
+        container_name: deezer-engine
+        volumes:
+            - './strategies.yml:/app/data/strategies.yml'
+            - './data:/app/data'
+        environment:
+            - DEEZER_USER_ID="123456789"
+            - DEEZER_ARL_TOKEN="TOKEN_STRING_HERE"
+            - DEEZER_SCHEDULE="0 3 * * *" # Run daily at 3 AM UTC
+            - TZ=UTC
+        command: cron
+```
+
+
 ## Source
 
 1. Clone and open the repository.
@@ -82,13 +113,35 @@ cd deezer-engine
 docker build -t deezer-engine .
 ```
 
-3.1 Run the container with Docker.
+3.1 Run the container with Docker (single execution).
 ```bash
 # Example with mounted config directory
 docker run --rm \
   -v $(pwd)/config.yml:/app/config.yml \
   -v $(pwd)/strategies.yml:/app/strategies.yml \
-  deezer-engine
+  deezer-engine run
+```
+
+3.2 Run the container with cron scheduling.
+```bash
+# Run on a schedule (daily at 3 AM UTC)
+docker run --rm \
+  -e DEEZER_USER_ID="123456789" \
+  -e DEEZER_ARL_TOKEN="TOKEN_STRING_HERE" \
+  -e DEEZER_SCHEDULE="0 3 * * *" \
+  -e TZ=UTC \
+  -v $(pwd)/strategies.yml:/app/data/strategies.yml \
+  -v $(pwd)/data:/app/data \
+  deezer-engine cron
+```
+
+3.3 Debug with interactive shell.
+```bash
+# Start an interactive shell for debugging
+docker run --rm -it \
+  -v $(pwd)/config.yml:/app/config.yml \
+  -v $(pwd)/strategies.yml:/app/strategies.yml \
+  deezer-engine shell
 ```
 
 ### Python
