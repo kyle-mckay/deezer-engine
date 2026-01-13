@@ -4,6 +4,19 @@
 
 Inspired by [Goofy](https://github.com/Chimildic/goofy) and [Playlist Machinery / Smarter Playlists](http://www.playlistmachinery.com/), Deezer Engine is a Python script that allows you to create and maintain smart playlists within Deezer using a declarative configuration approach.
 
+> [!WARNING]
+> **This script can delete songs from your playlists.** This goes without saying, but be aware that running this script with an incorrect configuration may result in permanently lost or broken playlists. At this time there is no backup functionality.
+
+> [!WARNING]
+> **Second Warning!.** This repository is under heavy revision. Any change has the potential of being a breaking change until a stable release is out. Until this time, limited support will be provided in setting this up. 
+
+## Getting Started
+
+- [Setup/Installation](https://github.com/kyle-mckay/deezer-engine/wiki/Setup-Installation)
+  - [Docker Compose](https://github.com/kyle-mckay/deezer-engine/wiki/Setup-Installation#docker-compose)
+- [Strategy Configuration](https://github.com/kyle-mckay/deezer-engine/wiki/Strategy-Configuration)
+- [Environment Variables]() TBD
+
 ## Overview
 
 This project implements a pipeline-based system for managing playlists. You define strategies in a YAML configuration file that specify:
@@ -11,60 +24,7 @@ This project implements a pipeline-based system for managing playlists. You defi
 - How to transform the track list (exclude certain songs, remove duplicates, etc.)
 - Where to send the final results (create or update playlists)
 
-The engine handles caching, API interactions, and batch operations for you.
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.7 or higher
-- A Deezer account
-- An ARL token (authentication key) from your Deezer session
-
-### Installation
-
-1. Clone the repository.
-```bash
-git clone https://github.com/kyle-mckay/deezer-engine.git
-cd deezer-engine
-```
-
-2. Set up a Python virtual environment (recommended).
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-> On Windows: venv\Scripts\activate
-
-3. Install dependencies.
-```bash
-pip install -r requirements.txt
-```
-
-### Configuration
-
-1. Copy the template files to create your local configuration.
-```bash
-cp config.yml.template config.yml
-cp strategies.yml.template strategies.yml
-```
-
-2. Edit `config.yml` with your Deezer credentials.
-   - Get your ARL token from your Deezer browser session (see the template for instructions).
-   - Add your numeric user ID from your Deezer profile URL.
-
-3. Edit `strategies.yml` to define your smart playlists.
-   - Each strategy specifies sources, modifiers, and a destination.
-   - See the [strategies.yml.template](strategies.yml.template) and [strategies/README.md](strategies/README.md) for example configurations.
-
-### Running the Engine
-
-```bash
-python3 deezer-engine.py
-```
-
-The engine will process each strategy defined in `strategies.yml`, updating your playlists accordingly.
+The engine handles caching, 'API' interactions, and batch operations for you.
 
 **Example**:
 
@@ -98,11 +58,4 @@ The engine will process each strategy defined in `strategies.yml`, updating your
 2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Preparing destination for type 'smart' with 80 tracks.
 2026-01-12 20:09:54 - [DeezerEngine] [INFO] - Connected to 'Daily Discover Mix'. Running Smart Sync...
 2026-01-12 20:09:54 - [DeezerEngine] [INFO] - 'Daily Discover Mix' is already in sync.
-```
-
-## Development
-
-If you make changes to the dependencies, update the requirements file.
-```bash
-pip freeze > requirements.txt
 ```
