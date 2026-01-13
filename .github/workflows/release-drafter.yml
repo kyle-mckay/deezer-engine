@@ -48,5 +48,5 @@ jobs:
         if: steps.skip_check.outputs.skip != 'true'
         uses: release-drafter/release-drafter@v6
         env:
-          GITHUB_TOKEN: ${{ secrets.G_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
