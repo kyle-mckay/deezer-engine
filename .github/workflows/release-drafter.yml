@@ -64,6 +64,11 @@ jobs:
           
           # Update version number
           sed -i "s/^__version__ = .*/__version__ = \"$NEW_TAG\"/" __version__.py
+
+          if git diff --exit-code __version__.py; then
+            echo "No changes to __version__.py. Version is already up to date."
+            exit 0
+          fi
           
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
