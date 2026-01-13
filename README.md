@@ -59,3 +59,23 @@ The engine handles caching, 'API' interactions, and batch operations for you.
 2026-01-12 20:09:54 - [DeezerEngine] [INFO] - Connected to 'Daily Discover Mix'. Running Smart Sync...
 2026-01-12 20:09:54 - [DeezerEngine] [INFO] - 'Daily Discover Mix' is already in sync.
 ```
+
+Here is a professionally formatted **"Acknowledgments"** or **"Credits"** section for your GitHub Wiki or `README.md`. It highlights the key open-source library that powers your engine's communication with Deezer.
+
+---
+
+## Acknowledgments & Dependencies
+
+This project is made possible thanks to the following open-source libraries and resources:
+
+### [deezer-python](https://github.com/browniebroke/deezer-python)
+
+A friendly Python wrapper around the Deezer API. This library handles the heavy lifting of mapping Deezer's API responses to easy-to-use Python objects.
+
+- **Author:** [Bruno Alla (browniebroke)](https://github.com/browniebroke)
+- **License:** MIT
+
+### Additional Python Dependencies
+
+- **[Requests](https://github.com/psf/requests):** Used for low-level HTTP handling and session management during the authentication handshake.
+- **[PyYAML](https://github.com/yaml/pyyaml):** Powering the logic behind the `strategies.yml` configuration.
