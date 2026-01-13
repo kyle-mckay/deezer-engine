@@ -1,6 +1,8 @@
 import logging
 import os
 from datetime import datetime
+from pathlib import Path
+from .paths import get_logs_dir
 
 class ColorFormatter(logging.Formatter):
     """
@@ -47,7 +49,7 @@ def setup_logger(name="DeezerEngine", level=logging.INFO, log_to_file=True):
         
         # 2. File Handler (Date-based, No Colors)
         if log_to_file:
-            log_dir = "logs"
+            log_dir = get_logs_dir()
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)
             

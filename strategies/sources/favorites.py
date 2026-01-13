@@ -2,6 +2,7 @@ import os
 import json
 import time
 import logging
+from utils.paths import get_cache_dir
 
 def run(client, config, logger, source_data):
     """
@@ -13,7 +14,7 @@ def run(client, config, logger, source_data):
     retention_hrs = source_data.get('retention', 0)
     
     # Define cache path based on user_id
-    cache_file = f"./cache/favorites_{user_id}.json"
+    cache_file = str(get_cache_dir() / f"favorites_{user_id}.json")
     
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(f"Favorites Source Initialization: UserID={user_id}, Retention={retention_hrs}h")
