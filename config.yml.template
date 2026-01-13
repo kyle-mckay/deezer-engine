@@ -10,3 +10,4 @@ config:
   user_id: "YOUR_NUMERIC_USER_ID" # Found in your profile URL
   log_level: "INFO" # Options: DEBUG, INFO, WARNING, ERROR
   # batch_size: 50  # Deezer batch size, recommended to leave unchanged
+  #print_banner: true # Whether to print the startup banner

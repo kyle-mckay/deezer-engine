@@ -5,9 +5,10 @@ import os
 from pathlib import Path
 from utils.logger import setup_logger
 from utils.paths import get_data_dir
-from utils.config_loader import load_config_with_env_overrides, load_strategies_with_env_overrides
+from utils.config_loader import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates
 from utils.deezer_auth import get_authenticated_client
 from strategies.base import StrategyController
+from __version__ import __version__, __banner__
 
 def load_configs():
     """Load configuration and strategies with environment variable overrides."""
@@ -24,10 +25,14 @@ def load_configs():
         print(f"Critical Error: Could not load configuration. {e}")
         sys.exit(1)
 
+def print_startup():
+    print(__banner__)
+    print(f"Running Deezer-Engine {__version__}")
+
 def main():
     # 1. Load data
     config, strategies_config = load_configs()
-    
+
     # 2. Setup Logger & Validate Level
     user_log_level = config.get('config', {}).get('log_level', 'INFO').upper()
     should_write_logs = config.get('config', {}).get('write_logs', True)
@@ -45,17 +50,29 @@ def main():
         warning_needed = True
 
     logger = setup_logger("DeezerEngine", actual_level,log_to_file=should_write_logs)
-
+    
     # Issue the warning if config was bad
     if warning_needed:
         logger.warning(f"Unsupported log level '{user_log_level}' found in config.yml. Defaulting to 'INFO'.")
+    logger.debug("--- Starting Deezer Engine ---")
 
-    logger.info("--- Starting Deezer Engine ---")
-    if os.getenv('CONTAINERIZED', 'false').lower() == 'true':
+    # Print banner if enabled and verbosity is info or higher
+    if  config.get('config', {}).get('print_banner', True) and logger.isEnabledFor(logging.INFO):
+        print_startup()
+
+    containerized = os.getenv('CONTAINERIZED', 'false').lower()
+    check_for_updates(__version__,containerized,logger)
+
+    if containerized == 'true':
         logger.info("Deezer Engine is running in DOCKER mode.")
         logger.debug("Defaulting paths to '/app/data/'")
+    else:
+        logger.debug("Deezer Engine is running in LOCAL mode.")
+        logger.debug(f"Using standard paths './'")
     
-    # Log Config Metadata (Debug Only)
+        
+    
+    # Log Config Metadata (Debug Only )
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(f"Configuration metadata: UserID={config.get('config', {}).get('user_id')}, "
                      f"BatchSize={config.get('config', {}).get('batch_size', 50)}")

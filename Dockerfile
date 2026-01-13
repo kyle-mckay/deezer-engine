@@ -46,6 +46,7 @@ ENV CONTAINERIZED=true
 # - DEEZER_WRITE_LOGS: Write logs to file - true/false (default: true)
 # - DEEZER_SCHEDULE: Cron schedule expression (default: "0 3 * * *" for daily at 3 AM UTC)
 # - TZ: Timezone for cron (e.g., "ETC/UTC")
+# - DEEZER_PRINT_BANNER: Print banner on startup - true/false (default: true)
 
 # Use entrypoint script to handle cron and application
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

@@ -2,7 +2,7 @@
 
 - A Deezer account
 - An ARL token
-- (If building from source) Python 3.7 or higher
+- (If building from source) Python 3.11 or higher
 
 ## Obtaining ARL token
 
@@ -31,7 +31,26 @@ To authenticate the engine, you need an `arl` token from your active Deezer sess
 
 # Installation
 
+## Configuration
+
+
+Deezer Engine is configured either through `config.yml` file or docker environment variables. Environment variables take precedence over file values.
+
+| Config Name | Environment Variable | Required | Type | Default | Description |
+|---|---|---|---|---|---|
+| `arl_token` | `DEEZER_ARL_TOKEN` | Yes | String | N/A | Your Deezer ARL authentication token. Required to authenticate with Deezer API. See [Obtaining ARL token](#obtaining-arl-token) section. |
+| `user_id` | `DEEZER_USER_ID` | Yes | String | N/A | Your numeric Deezer user ID. Found in your profile URL: `https://www.deezer.com/us/profile/123456789` |
+| `log_level` | `DEEZER_LOG_LEVEL` | No | String | `INFO` | Logging verbosity level. Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
+| `write_logs` | `DEEZER_WRITE_LOGS` | No | Boolean | `true` | Whether to write logs to file in `/app/data/logs/`. Accepts: `true`, `false`, `1`, `0`, `yes`, `no`. |
+| `batch_size` | `DEEZER_BATCH_SIZE` | No | Integer | `50` | Tracks will be chunked and processed in groups not exceeding this value when adding or removing from playlists. |
+| `print_banner` | `DEEZER_PRINT_BANNER` | No | Boolean | `true` | Whether to print the startup banner on launch. When run in docker mode, it prints on container start. When running locally it's printed on script execution while `log_level` is `INFO` or `DEBUG`. |
+
 ## Docker Compose
+
+> Note: `config.yml` and `strategies.yml` can be bind mounted directly into the containers `/app/data/` folder.
+> If you decide to bind mount these, ensure you create the file on your host first.
+
+> If you do not provide a `strategies.yml` file, the container will generate a copy in the `/app/data` for you from the template.
 
 ```yml
 services:
@@ -39,19 +58,13 @@ services:
         image: kylemmkay/deezer-engine:latest
         container_name: deezer-engine
         volumes:
-            - './strategies.yml:/app/data/strategies.yml'
-            #- './config.yml:/app/data/config.yml' # Can use bind mount instead of environment variables
-            - './data:/app/data' # Contains cache/ tmp/ and logs/ folders
+            #- './strategies.yml:/app/data/strategies.yml' # If bind mounting file only
+            - './data:/app/data' # Contains cache/ tmp/ and logs/ folders, will create strategies if not present
         environment:
-            - DEEZER_USER_ID="123456789" # https://www.deezer.com/us/profile/123456789 <- these numbers
+            - DEEZER_USER_ID="123456789"
             - DEEZER_ARL_TOKEN="TOKEN_STRING_HERE"
-            - DEEZER_LOG_LEVEL=INFO # Log level - DEBUG, INFO, WARNING, ERROR (default: INFO)
-            # - DEEZER_BATCH_SIZE=50 # The batch size for performing add/remove operations on playlists (default: 50)
-            #- DEEZER_WRITE_LOGS: Write logs to file - true/false (default: true)
-            #- DEEZER_SCHEDULE="0 3 * * *" # Cron schedule expression (default: "0 3 * * *" for daily at 3 AM UTC)
-            #- TZ=UTC # Timezone for cron (e.g., "ETC/UTC")
+            - DEEZER_LOG_LEVEL=INFO # Log level - DEBUG, INFO, WARNING, ERROR
 ```
-
 
 ## Source
 

@@ -64,6 +64,26 @@ setup_run(){
 [ -n "$DEEZER_LOG_LEVEL" ] && DEEZER_LOG_LEVEL=$(strip_quotes "$DEEZER_LOG_LEVEL") && export DEEZER_LOG_LEVEL
 [ -n "$DEEZER_WRITE_LOGS" ] && DEEZER_WRITE_LOGS=$(strip_quotes "$DEEZER_WRITE_LOGS") && export DEEZER_WRITE_LOGS
 [ -n "$DEEZER_SCHEDULE" ] && DEEZER_SCHEDULE=$(strip_quotes "$DEEZER_SCHEDULE") && export DEEZER_SCHEDULE
+[ -n "$DEEZER_PRINT_BANNER" ] && DEEZER_PRINT_BANNER=$(strip_quotes "$DEEZER_PRINT_BANNER") && export DEEZER_PRINT_BANNER
+
+# Print banner unless disabled
+if [ "$DEEZER_PRINT_BANNER" = "true" ]; then
+    python3 -c "from __version__ import __banner__, __version__; print(__banner__); print(f'Running Deezer-Engine {__version__}\n')"
+    echo "----------------------------"
+fi
+
+# Check if strategies.yml exists, if not generate from template
+if [ ! -f /app/data/strategies.yml ]; then
+    echo "No strategy file detected on startup!"
+    cp /app/strategies.yml.template /app/data/strategies.yml
+    echo ""
+    echo "If you're bind mounting the '/app/data' folder, a default strategy file has been generated at /app/data/strategies.yml"
+    echo "Please edit the file to configure your strategies before re-running the container."
+    echo ""
+    echo "Container will exit in 60 seconds"
+    sleep 60
+    exit 0
+fi
 
 # Track if DEEZER_SCHEDULE was explicitly provided (before setting default)
 SCHEDULE_PROVIDED=false
@@ -76,6 +96,7 @@ if [ -z "$DEEZER_SCHEDULE" ]; then
     DEEZER_SCHEDULE="0 3 * * *"
 fi
 
+echo "Container started with opts '$1'"
 case "$1" in
     cron)
         setup_cron
@@ -89,7 +110,6 @@ case "$1" in
         ;;
     *)
         # Default behavior: if DEEZER_SCHEDULE was provided, run cron; otherwise run once
-        echo "Container started with opts '$1'"
         if [ "$SCHEDULE_PROVIDED" = true ]; then
             setup_cron
         else

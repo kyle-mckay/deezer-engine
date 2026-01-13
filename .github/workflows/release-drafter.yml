@@ -8,6 +8,7 @@ on:
     paths-ignore:
       - '.github/**'
       - '.wiki/**'
+      - '__version__.py'
   workflow_dispatch:
     inputs:
       branch:
@@ -46,7 +47,25 @@ jobs:
 
       - name: Run Release Drafter
         if: steps.skip_check.outputs.skip != 'true'
+        id: drafter
         uses: release-drafter/release-drafter@v6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Update and Push versoin
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.REPO_PAT }}
+        run: |
+          NEW_TAG="${{ steps.drafter.outputs.tag_name }}"
+          
+          # Update version number
+          sed -i "s/^__version__ = .*/__version__ = \"$NEW_TAG\"/" __version__.py
+          
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add __version__.py
+          git commit -m "chore: bump version to $NEW_TAG [skip ci]"
+          git push origin main

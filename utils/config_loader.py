@@ -1,6 +1,7 @@
 import os
 import yaml
 from pathlib import Path
+import requests
 from utils.paths import get_data_dir
 
 def load_config_with_env_overrides():
@@ -14,6 +15,7 @@ def load_config_with_env_overrides():
     - DEEZER_BATCH_SIZE: Batch size for API operations
     - DEEZER_LOG_LEVEL: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     - DEEZER_WRITE_LOGS: Whether to write logs to file (true/false)
+    - DEEZER_PRINT_BANNER: Whether to print the startup banner (true/false)
     """
     data_dir = get_data_dir()
     config_path = data_dir / 'config.yml'
@@ -36,6 +38,7 @@ def load_config_with_env_overrides():
         'DEEZER_BATCH_SIZE': 'batch_size',
         'DEEZER_LOG_LEVEL': 'log_level',
         'DEEZER_WRITE_LOGS': 'write_logs',
+        'DEEZER_PRINT_BANNER': 'print_banner',
     }
     
     for env_var, config_key in env_mappings.items():
@@ -48,7 +51,7 @@ def load_config_with_env_overrides():
                     value = int(value)
                 except ValueError:
                     pass
-            elif config_key == 'write_logs':
+            elif config_key == 'write_logs' or config_key == 'print_banner':
                 value = value.lower() in ('true', '1', 'yes', 'on')
             
             config['config'][config_key] = value
@@ -76,3 +79,39 @@ def load_strategies_with_env_overrides():
     # This function is here for consistency and future extensibility
     
     return strategies
+
+def check_for_updates(current_version,containerized,logger):
+    """
+    Checks the GitHub API for a newer release tag.
+    Provides context-aware advice for Docker users.
+    """
+    dh_owner = "kylemmkay"
+    gh_owner = "kyle-mckay"
+    repo_name = "deezer-engine"
+
+    api_url = f"https://api.github.com/repos/{gh_owner}/{repo_name}/releases/latest"
+    
+    try:
+        response = requests.get(api_url, timeout=3)
+        response.raise_for_status()
+        latest_version = response.json().get('tag_name')
+
+        if latest_version and latest_version != current_version:
+            logger.warning("=" * 60)
+            logger.warning(f"  UPDATE AVAILABLE: {current_version} -> {latest_version}")
+            
+            if containerized:
+                # Docker-specific advice
+                logger.warning("  Container detected: Please pull the latest image to update.")
+                logger.warning(f"  Run: docker pull {dh_owner}/{repo_name}:<tag number>")
+            else:
+                # Local execution advice
+                logger.warning(f"  Download: https://github.com/{gh_owner}/{repo_name}/releases/latest")
+                logger.warning("  Or run 'git pull' if you cloned the repository.")
+                
+            logger.warning("=" * 60 )
+        else:
+            logger.debug(f"Version check: You are running the latest version ({current_version}).")
+            
+    except Exception as e:
+        logger.debug(f"Update check skipped: {e}")
