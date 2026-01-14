@@ -26,6 +26,11 @@ jobs:
           token: ${{ secrets.REPO_PAT }}
           ref: ${{ github.event.inputs.branch || 'main' }}
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync
+
       - name: Set up Git user
         run: |
           git config --global user.name "forgejo-ci-bot"
