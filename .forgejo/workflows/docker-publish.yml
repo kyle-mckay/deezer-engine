@@ -6,20 +6,41 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Manual tag name (e.g. v1.0.0)'
+        description: 'Manual tag name'
         default: 'latest'
         type: string
 
 jobs:
   push_to_registries:
     name: Build and Push
-    runs-on: codeberg-medium
+    runs-on: ubuntu-20.04
+    
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
 
+      - name: Install Docker CLI
+        run: |
+          apt-get update
+          apt-get install -y docker.io
+
+      - name: Docker Network Discovery
+        run: |
+          echo "Checking DOCKER_HOST: $DOCKER_HOST"
+          
+          echo "--- Testing: localhost ---"
+          DOCKER_HOST=tcp://localhost:2375 docker ps && echo "SUCCESS: localhost is the winner" || echo "FAIL: localhost unreachable"
+          
+          echo "--- Testing: docker-in-docker sidecar ---"
+          DOCKER_HOST=tcp://docker-in-docker:2375 docker ps && echo "SUCCESS: sidecar name is the winner" || echo "FAIL: sidecar name unreachable"
+          
+          echo "--- Final Environment ---"
+          docker version
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
 
       - name: Log in to Codeberg Container Registry
         uses: docker/login-action@v3
@@ -43,7 +64,6 @@ jobs:
             kylemmkay/deezer-engine
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
             type=raw,value=${{ github.event.inputs.tag_name }},enabled=${{ github.event_name == 'workflow_dispatch' }}
 
@@ -54,5 +74,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
