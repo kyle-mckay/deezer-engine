@@ -67,6 +67,7 @@ setup_run(){
 [ -n "$DEEZER_PRINT_BANNER" ] && DEEZER_PRINT_BANNER=$(strip_quotes "$DEEZER_PRINT_BANNER") && export DEEZER_PRINT_BANNER
 
 # Print banner unless disabled
+: "${DEEZER_PRINT_BANNER:=true}"
 if [ "$DEEZER_PRINT_BANNER" = "true" ]; then
     python3 -c "from __version__ import __banner__, __version__; print(__banner__); print(f'Running Deezer-Engine {__version__}\n')"
     echo "----------------------------"
