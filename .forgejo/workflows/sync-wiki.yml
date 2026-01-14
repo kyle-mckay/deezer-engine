@@ -15,7 +15,8 @@ on:
 
 jobs:
   push-wiki:
-    runs-on: ubuntu-latest
+    runs-on: codeberg-small
+    if: ${{ github.actor != 'forgejo-ci-bot' }}
 
     steps:
       - name: Checkout repository
@@ -23,6 +24,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.REPO_PAT }}
+          ref: ${{ github.event.inputs.branch || 'main' }}
 
       - name: Set up Git user
         run: |
@@ -31,16 +33,13 @@ jobs:
 
       - name: Clone and Sync Wiki
         run: |
-          WIKI_URL="${{ gitea.server_url }}/${{ gitea.repository }}.wiki.git"
-
+          WIKI_URL="https://${{ secrets.REPO_PAT }}@codeberg.org/${{ github.repository }}.wiki.git"
           rm -rf wiki_repo
-          git clone "https://${{ secrets.REPO_PAT }}@codeberg.org/${{ gitea.repository }}.wiki.git" wiki_repo
-
+          git clone "$WIKI_URL" wiki_repo
           rsync -av --delete --exclude='.git' ./.wiki/ ./wiki_repo/
           
           cd wiki_repo
           git add .
-          
           if ! git diff --cached --quiet; then
             git commit -m "Automated sync from ./.wiki folder"
             git push origin master
