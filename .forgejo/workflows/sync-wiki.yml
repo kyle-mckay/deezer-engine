@@ -1,0 +1,49 @@
+name: Sync .wiki folder to Codeberg Wiki
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.wiki/**'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to build'
+        required: true
+        default: 'main'
+
+jobs:
+  push-wiki:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.REPO_PAT }}
+
+      - name: Set up Git user
+        run: |
+          git config --global user.name "forgejo-ci-bot"
+          git config --global user.email "noreply@codeberg.org"
+
+      - name: Clone and Sync Wiki
+        run: |
+          WIKI_URL="${{ gitea.server_url }}/${{ gitea.repository }}.wiki.git"
+
+          rm -rf wiki_repo
+          git clone "https://${{ secrets.REPO_PAT }}@codeberg.org/${{ gitea.repository }}.wiki.git" wiki_repo
+
+          rsync -av --delete --exclude='.git' ./.wiki/ ./wiki_repo/
+          
+          cd wiki_repo
+          git add .
+          
+          if ! git diff --cached --quiet; then
+            git commit -m "Automated sync from ./.wiki folder"
+            git push origin master
+          else
+            echo "No changes to sync."
+          fi
