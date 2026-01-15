@@ -19,6 +19,8 @@ on:
 
 jobs:
   draft-release:
+    # Don't trigger yourself
+    if: "!endsWith(github.event.head_commit.message, '[release-draft]')"
     runs-on: docker
     permissions:
       contents: write
@@ -60,7 +62,7 @@ jobs:
           git add __version__.py CHANGELOG.md
   
           if ! git diff --cached --quiet; then
-            git commit -m "chore: release $NEW_TAG [skip ci]"
+            git commit -m "chore: release $NEW_TAG [release-draft]"
 
             PUSH_OPTS="--verbose"
             if [[ "${{ github.ref_name }}" != "main" ]]; then
