@@ -149,4 +149,4 @@ echo "Action     : $UPDATE_ACTION"
 echo "------------------------------------------"
 
 # update changelog
-bash .forgejo/update-changelog.sh "$CURRENT_TAG" "$NEW_TAG" "$CATEGORY" "$FORMATTED_LINE"
+bash .forgejo/update-changelog.sh "$CURRENT_TAG" "$FINAL_TAG" "$CATEGORY" "$FORMATTED_LINE"
