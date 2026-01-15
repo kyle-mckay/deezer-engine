@@ -4,6 +4,7 @@
 
 ### Maintenance
 
+- docs: update to codeberg link #0 (@kylemmkay)
 - Update .forgejo/release-drafter.sh #0 (@kylemmkay)
 
 ## v0.3.0 - 2026-01-13
