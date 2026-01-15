@@ -3,6 +3,7 @@ import json
 import time
 import logging
 from utils.paths import get_cache_dir
+from utils.deezer_auth import get_tracks
 
 def run(client, config, logger, source_data):
     """
@@ -31,9 +32,9 @@ def run(client, config, logger, source_data):
             logger.debug(f"Using cached favorites (Age: {file_age_hrs:.1f}h)")
             try:
                 with open(cache_file, 'r') as f:
-                    cached_ids = json.load(f)
-                logger.debug(f"Successfully loaded {len(cached_ids)} IDs from cache.")
-                return cached_ids
+                    cached_tracks = json.load(f)
+                logger.debug(f"Successfully loaded {len(cached_tracks)} tracks from cache.")
+                return cached_tracks
             except Exception as e:
                 logger.error(f"Failed to read cache file even though it exists: {e}")
         else:
@@ -48,27 +49,10 @@ def run(client, config, logger, source_data):
     try:
         # `get_user_tracks` yields a PaginatedList that auto-paginates when iterated
         logger.debug("Calling client.get_user_tracks()... auto-pagination will start now.")
+
+        tracks = get_tracks(client.get_user_tracks(user_id),logger,"favorites",user_id,cache_file)
             
-        user_tracks = client.get_user_tracks(user_id)
-        
-        # Keep only track IDs
-        track_ids = []
-        for track in user_tracks:
-            track_ids.append(track.id)
-            
-            # Every 250 tracks, let the user know the progress
-            if len(track_ids) % 250 == 0:
-                logger.info(f"Looking through your library... found {len(track_ids)} songs so far.")
-        
-        # 3. Save to Cache
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"Successfully fetched {len(track_ids)} tracks.")
-            logger.debug(f"Writing {len(track_ids)} IDs to cache file: {cache_file}")
-            
-        with open(cache_file, 'w') as f:
-            json.dump(track_ids, f)
-            
-        return track_ids
+        return tracks
 
     except Exception as e:
         logger.error(f"Failed to fetch favorites: {e}")

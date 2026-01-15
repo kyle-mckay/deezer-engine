@@ -4,7 +4,9 @@ import logging
 import requests
 import random
 import logging
+import json
 from utils.logger import setup_logger
+from utils.paths import _cleanup_old_caches
 
 def get_authenticated_client(config, logger):
     """
@@ -120,3 +122,56 @@ def get_authenticated_session(arl, logger, warm_url=None):
     except Exception as e:
         logger.error(f"Authentication utility error: {e}")
         return None, None
+    
+def get_tracks(client, logger, type, var, cache_file):
+
+    logger.debug(f"Getting tracks for type '{type}' with ID '{var}'")
+
+
+    if isinstance(var, str) and var.startswith("playlist__"):
+        # Split the string by "__"
+        parts = var.split("__")
+        
+        if len(parts) >= 3:
+            var = parts[0]
+            display_name = parts[1].replace("_", " ")
+            playlist_id = parts[2]
+            logger.debug(f"Parsed var: Name='{display_name}', ID='{playlist_id}'")
+
+    tracks = []
+
+    # Extract full track metadata
+    for i, track in enumerate(client, 1):
+            d = track.as_dict()
+            
+            tracks.append({
+                'id': str(d.get('id')),
+                'title': d.get('title'),
+                'artist': d.get('artist', {}).get('name', 'Unknown'),
+                'album': d.get('album', {}).get('title', 'Unknown'),
+                'duration': d.get('duration', 0),
+                'preview': d.get('preview'),
+            })
+
+            # Every 250 tracks, let the user know the progress
+            if i % 250 == 0:
+                if type == "favorites":
+                    logger.info(f"Scanning favorites... cached {i} tracks.")
+                elif var == "playlist":
+                    logger.info(f"Scanning '{display_name}'... cached {i} tracks.")
+                    var = playlist_id
+                # Fallback
+                else:
+                    logger.info(f"Scanning {type}... cached {i} tracks.")
+    
+    # Remove old files for this ID (e.g., if the playlist was renamed)
+    _cleanup_old_caches(type, var, cache_file, logger)
+
+    if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(f"Successfully fetched {len(tracks)} tracks.")
+            logger.debug(f"Updating cache file {cache_file} with {len(tracks)} tracks.")
+            
+    with open(cache_file, 'w') as f:
+        json.dump(tracks, f)
+
+    return tracks

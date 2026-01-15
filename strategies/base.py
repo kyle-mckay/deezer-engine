@@ -33,13 +33,13 @@ class StrategyController:
             self.logger.debug(f"Working directory: {os.getcwd()}")
             self.logger.debug(f"Temporary state path: {self.tmp_file}")
 
-    def _write_tmp(self, track_ids):
+    def _write_tmp(self, tracks):
         """Writes the current pipeline state to the local filesystem."""
         if self.logger.isEnabledFor(logging.DEBUG):
-            self.logger.debug(f"Writing {len(track_ids)} IDs to {self.tmp_file}")
+            self.logger.debug(f"Writing {len(tracks)} tracks to {self.tmp_file}")
             
         with open(self.tmp_file, 'w') as f:
-            json.dump(track_ids, f)
+            json.dump(tracks, f)
 
     def _read_tmp(self):
         """Reads the current pipeline state. Returns empty list if file doesn't exist."""
@@ -82,8 +82,15 @@ class StrategyController:
             # Run the worker logic
             new_tracks = module.run(self.client, self.config, self.logger, source_data)
             
-            # Combine IDs 
-            combined = list(dict.fromkeys(current_tracks + new_tracks))
+            # Combine tracks
+            seen_ids = set()
+            combined = []
+            for track in current_tracks + new_tracks:
+                track_id = str(track.get('id') if isinstance(track, dict) else track.id)
+                if track_id not in seen_ids:
+                    combined.append(track)
+                    seen_ids.add(track_id)
+            
             self._write_tmp(combined)
             
             self.logger.info(f"Found {len(new_tracks)} songs in source: {src_label}")
@@ -92,7 +99,7 @@ class StrategyController:
             self.logger.debug(
                 f"Source '{src_label}' ({src_type}) resolved. "
                 f"Pipeline grew: {len(current_tracks)} -> {len(combined)} tracks. "
-                f"Net gain: +{len(combined) - len(current_tracks)} unique IDs."
+                f"Net gain: +{len(combined) - len(current_tracks)} unique tracks."
             )
 
         except Exception as e:

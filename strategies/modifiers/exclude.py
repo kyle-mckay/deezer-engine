@@ -33,19 +33,30 @@ def run(client, config, logger, mod_data, current_tracks):
         exclude_tracks = source_worker.run(client, config, logger, source_info)
         
         # 2. Perform the subtraction
-        # Convert to a set for O(1) membership checks
-        exclude_set = set(exclude_tracks)
+        # Build set of IDs to exclude
+        exclude_set = set()
+        for track in exclude_tracks:
+            track_id = str(track.get('id') if isinstance(track, dict) else track.id)
+            exclude_set.add(track_id)
         
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Exclusion list loaded: {len(exclude_set)} unique tracks to filter out.")
             # Verify if there is any overlap at all before filtering
-            intersection = set(current_tracks).intersection(exclude_set)
+            current_ids = set()
+            for track in current_tracks:
+                track_id = str(track.get('id') if isinstance(track, dict) else track.id)
+                current_ids.add(track_id)
+            intersection = current_ids.intersection(exclude_set)
             logger.debug(f"Intersection found: {len(intersection)} tracks in pipeline match the exclusion list.")
 
         starting_count = len(current_tracks)
         
         # Preserve the original order while filtering
-        result = [t for t in current_tracks if t not in exclude_set]
+        result = []
+        for track in current_tracks:
+            track_id = str(track.get('id') if isinstance(track, dict) else track.id)
+            if track_id not in exclude_set:
+                result.append(track)
         
         removed_count = starting_count - len(result)
         logger.info(f"Exclusion complete: Removed {removed_count} matching tracks.")

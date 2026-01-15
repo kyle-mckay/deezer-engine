@@ -54,6 +54,7 @@ def run(client, config, logger, source_data):
         ]
 
         logger.info(f"Fetching songs for '{list_name}'...")
+        track_ids = []
         for method, payload in fetch_strategies:
             cid = random.randint(100000000, 999999999)
             gw_url = f"https://www.deezer.com/ajax/gw-light.php?method={method}&input=3&api_version=1.0&api_token={api_token}&cid={cid}"
@@ -77,16 +78,30 @@ def run(client, config, logger, source_data):
             # Deduplicate while preserving order
             track_ids = list(dict.fromkeys(track_ids))
             
+            # Fetch full metadata for each track
+            tracks = []
+            for track_id in track_ids:
+                try:
+                    track = client.get_track(track_id)
+                    tracks.append({
+                        'id': str(track.id),
+                        'title': track.title,
+                        'artist': track.artist.name if hasattr(track, 'artist') and track.artist else 'Unknown',
+                        'album': track.album.title if hasattr(track, 'album') and track.album else 'Unknown',
+                        'duration': track.duration if hasattr(track, 'duration') else 0,
+                        'preview': track.preview if hasattr(track, 'preview') else None,
+                    })
+                except Exception as e:
+                    logger.debug(f"Could not fetch metadata for track {track_id}: {e}")
+            
             os.makedirs(get_cache_dir(), exist_ok=True)
             with open(cache_file, 'w') as f:
-                json.dump(track_ids, f)
-            
+                json.dump(tracks, f)
             
             if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Resolved {len(track_ids)} songs for '{list_name}'.")
-                logger.debug(f"Track IDs for {list_name}: {track_ids}")
+                logger.debug(f"Resolved {len(tracks)} songs for '{list_name}'.")
                 
-            return track_ids
+            return tracks
         
         logger.error(f"Could not find any tracks for '{list_name}' in Gateway or HTML.")
         return []

@@ -20,14 +20,15 @@ def run(client, config, logger, mod_data, current_tracks):
         
         duplicate_count = 0
         
-        for tid in current_tracks:
-            if tid not in seen:
-                deduplicated_list.append(tid)
-                seen.add(tid)
+        for track in current_tracks:
+            track_id = str(track.get('id') if isinstance(track, dict) else track.id)
+            if track_id not in seen:
+                deduplicated_list.append(track)
+                seen.add(track_id)
             else:
                 duplicate_count += 1
                 if logger.isEnabledFor(logging.DEBUG) and duplicate_count <= 5:
-                    logger.debug(f"Found duplicate track ID: {tid}")
+                    logger.debug(f"Found duplicate track ID: {track_id}")
 
         if duplicate_count > 0:
             logger.info(f"Dedupe complete: Removed {duplicate_count} duplicate songs.")

@@ -3,7 +3,8 @@ import json
 import time
 import logging
 import re
-from utils.paths import get_cache_dir
+from utils.paths import get_cache_dir 
+from utils.deezer_auth import get_tracks
 
 def run(client, config, logger, source_data):
     """
@@ -50,7 +51,7 @@ def run(client, config, logger, source_data):
                 with open(cache_file, 'r') as f:
                     cached_data = json.load(f)
                 if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(f"Loaded {len(cached_data)} track IDs from cache.")
+                    logger.debug(f"Loaded {len(cached_data)} tracks from cache.")
                 return cached_data
             except Exception as e:
                 logger.error(f"Failed to read playlist cache {playlist_id}: {e}")
@@ -66,28 +67,10 @@ def run(client, config, logger, source_data):
     try:
         logger.info(f"Fetching live tracks from playlist: '{playlist.title}'")
 
-        track_ids = []
-        tracks_generator = playlist.get_tracks()
-        
-        for track in tracks_generator:
-            track_ids.append(track.id)
-
-            # Every 250 tracks, let the user know the progress
-            if len(track_ids) % 250 == 0:
-                logger.info(f"Looking through '{playlist.title}'... found {len(track_ids)} songs so far.")
-
-        # 5. Cleanup & Save to Cache
-        # Remove old files for this ID (e.g., if the playlist was renamed)
-        _cleanup_old_caches(playlist_id, cache_file, logger)
-
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"Successfully fetched {len(track_ids)} tracks.")
-            logger.debug(f"Updating cache file {cache_file} with {len(track_ids)} tracks.")
+        playlist_var = f"playlist__{playlist.title}__{playlist.id}"
+        tracks = get_tracks(playlist.get_tracks(),logger,playlist,playlist_var,cache_file)
             
-        with open(cache_file, 'w') as f:
-            json.dump(track_ids, f)
-            
-        return track_ids
+        return tracks
 
     except Exception as e:
         logger.error(f"Error fetching tracks for '{playlist.title}': {e}")
@@ -100,16 +83,3 @@ def run(client, config, logger, source_data):
             with open(cache_file, 'r') as f:
                 return json.load(f)
         return []
-
-def _cleanup_old_caches(playlist_id, current_cache_path, logger):
-    """Deletes old cache files for the same playlist ID to prevent folder clutter."""
-    try:
-        cache_dir = get_cache_dir()
-        current_filename = os.path.basename(current_cache_path)
-        for f in os.listdir(cache_dir):
-            # Check for files with same ID but different names
-            if f.startswith(f"playlist_{playlist_id}") and f != current_filename:
-                os.remove(os.path.join(cache_dir, f))
-                logger.debug(f"Cleaned up old cache file: {f}")
-    except Exception as e:
-        logger.debug(f"Cleanup failed (non-critical): {e}")
