@@ -2,7 +2,7 @@
 
 This directory contains the modular components for building smart playlists. Strategies are defined in `strategies.yml` as a declarative pipeline: tracks flow from sources, through modifiers, and finally to a destination.
 
-See [Configuration](https://github.com/kyle-mckay/deezer-engine/wiki/Configuration) in the wiki for more details.
+See [Configuration](https://codeberg.org/kylemmkay/deezer-engine/wiki/Configuration) in the wiki for more details.
 
 ---
 

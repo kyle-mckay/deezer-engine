@@ -12,10 +12,10 @@ Inspired by [Goofy](https://github.com/Chimildic/goofy) and [Playlist Machinery 
 
 ## Getting Started
 
-- [Setup/Installation](https://github.com/kyle-mckay/deezer-engine/wiki/Setup-Installation)
-  - [Docker Compose](https://github.com/kyle-mckay/deezer-engine/wiki/Setup-Installation#docker-compose)
-- [Environment Variables](https://github.com/kyle-mckay/deezer-engine/wiki/Setup-Installation#configuration)
-- [Strategy Setup](https://github.com/kyle-mckay/deezer-engine/wiki/Strategy-Configuration)
+- [Setup/Installation](https://codeberg.org/kylemmkay/deezer-engine/wiki/Setup-Installation)
+  - [Docker Compose](https://codeberg.org/kylemmkay/deezer-engine/wiki/Setup-Installation#docker-compose)
+- [Environment Variables](https://codeberg.org/kylemmkay/deezer-engine/wiki/Setup-Installation#configuration)
+- [Strategy Setup](https://codeberg.org/kylemmkay/deezer-engine/wiki/Strategy-Configuration)
 
 ## Overview
 

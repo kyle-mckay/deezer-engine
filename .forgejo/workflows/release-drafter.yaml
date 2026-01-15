@@ -8,6 +8,7 @@ on:
     paths-ignore:
       - '__version__.py'
       - 'CHANGELOG.md'
+      - '.forgejo/**'
   workflow_dispatch:
     inputs:
       branch:
@@ -79,8 +80,12 @@ jobs:
         run: |
           # use header.tmp to populate release body if available
           if [ -f "./header.tmp" ]; then
+            echo "--- Release Body Content ---"
+            cat ./header.tmp
+            echo "----------------------------"
             echo "content<<EOF" >> $GITHUB_OUTPUT
             cat ./header.tmp >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           else
             echo "content=Automated release for ${{ steps.git_push.outputs.final_tag }}" >> $GITHUB_OUTPUT
@@ -91,7 +96,7 @@ jobs:
         if: ${{ github.ref_name == 'main' }}
         with:
           base_url: https://codeberg.org
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.REPO_PAT }}
           tag: ${{ steps.git_push.outputs.final_tag }}
           name: "Release ${{ steps.git_push.outputs.final_tag }}"
           draft: true

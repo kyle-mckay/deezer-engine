@@ -101,7 +101,7 @@ services:
 
 1. Clone and open the repository.
 ```bash
-git clone https://github.com/kyle-mckay/deezer-engine.git
+git clone https://codeberg.org/kylemmkay/deezer-engine.git
 cd deezer-engine
 ```
 

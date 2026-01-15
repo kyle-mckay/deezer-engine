@@ -38,5 +38,5 @@ template: |
 
   $CHANGES
 
-  **Full Changelog**: https://github.com/kyle-mckay/deezer-engine/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
+  **Full Changelog**: https://codeberg.org/kylemmkay/deezer-engine/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION
 

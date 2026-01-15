@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - '.wiki/**'
+      - '.forgejo/**'
   workflow_dispatch:
     inputs:
       branch:

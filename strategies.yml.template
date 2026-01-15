@@ -1,4 +1,4 @@
-# See for more examples: https://github.com/kyle-mckay/deezer-engine/wiki/Configuration#examples
+# See for more examples: https://codeberg.org/kylemmkay/deezer-engine/wiki/Configuration#examples
 playlists:
   - name: "Normie Songs"
     # Take songs from my Library

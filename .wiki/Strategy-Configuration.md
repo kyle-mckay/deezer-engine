@@ -58,7 +58,7 @@ This section provides information on how each modifier is structured and used.
 
 Sources fetch track lists from Deezer. Will be combined into a single list of tracks for processing in [Modifiers](#modifiers).
 
->Sources do not currently support sub-modifers, though it is a planned feature within [Issue #13](https://github.com/kyle-mckay/deezer-engine/issues/13)
+>Sources do not currently support sub-modifers, though it is a planned feature within [Issue #13](https://codeberg.org/kylemmkay/deezer-engine/issues/13)
 
 ### Usage
 
@@ -138,10 +138,10 @@ Modifiers is an **optional** section designed to transform the consolidated trac
 ```
 
 **Planned Modifiers** - Some modifiers are in the works or not yet documented here:
-- `sort`: [#9](https://github.com/kyle-mckay/deezer-engine/issues/9)
-- `limit`: [#10](https://github.com/kyle-mckay/deezer-engine/issues/10)
-- `artist-seperation`: [#11](https://github.com/kyle-mckay/deezer-engine/issues/11)
-- `randomize`: [#12](https://github.com/kyle-mckay/deezer-engine/issues/12)
+- `sort`: [#9](https://codeberg.org/kylemmkay/deezer-engine/issues/9)
+- `limit`: [#10](https://codeberg.org/kylemmkay/deezer-engine/issues/10)
+- `artist-seperation`: [#11](https://codeberg.org/kylemmkay/deezer-engine/issues/11)
+- `randomize`: [#12](https://codeberg.org/kylemmkay/deezer-engine/issues/12)
 
 ### `dedupe`
 
