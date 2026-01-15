@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - test-release
     paths-ignore:
       - '__version__.py'
       - 'CHANGELOG.md'
@@ -18,6 +19,9 @@ on:
 jobs:
   draft-release:
     runs-on: docker
+    permissions:
+      contents: write
+      pull-requests: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -25,18 +29,23 @@ jobs:
           fetch-depth: 0
 
       - name: Execute Release Drafter
+        env:
+          RAW_LABELS: "${{ join(github.event.pull_request.labels.*.name, ',') || 'none' }}"
         run: |
           # extract current version
-          CURRENT_TAG=$(grep "__version__ =" __version__.py | cut -d '"' -f 2)
+          LATEST_RELEASE_TAG=$(curl -s -H "Authorization: token ${{ secrets.REPO_PAT }}" \
+            "https://codeberg.org/api/v1/repos/${{ github.repository }}/releases?draft=false&pre-release=false" \
+            | grep -oE '"tag_name":"[^"]+"' | head -1 | cut -d'"' -f4)
+
+          CURRENT_TAG=${LATEST_RELEASE_TAG:-"v0.0.0"}
           
           # extract metadata from commit
           MSG="${{ github.event.head_commit.message }}"
           AUTHOR="${{ github.actor }}"
           PR_NUMBER=$(echo "$MSG" | grep -oE '#[0-9]+' | head -1 | sed 's/#//' || echo "0")
-          LABELS="${{ join(github.event.pull_request.labels.*.name, ',') }}"
           
           # run release-drafter script
-          bash .forgejo/release-drafter.sh -m "$MSG" -t "$CURRENT_TAG" -p "$PR_NUMBER" -a "$AUTHOR" -l "$LABELS"
+          bash .forgejo/release-drafter.sh -m "$MSG" -t "$CURRENT_TAG" -p "$PR_NUMBER" -a "$AUTHOR" -l "$RAW_LABELS"
 
       - name: Commit and Push Changes
         id: git_push
@@ -44,12 +53,23 @@ jobs:
           # read updated version from file
           NEW_TAG=$(grep "__version__ =" __version__.py | cut -d '"' -f 2)
           
-          git config user.name "codeberg-actions[bot]"
-          git config user.email "actions@noreply.codeberg.org"
+          git config user.name "kylemmkay"
+          git config user.email "kylemmkay@noreply.codeberg.org"
           
           git add __version__.py CHANGELOG.md
-          git commit -m "chore: release $NEW_TAG [skip ci]"
-          git push origin main
+  
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: release $NEW_TAG [skip ci]"
+
+            PUSH_OPTS="--verbose"
+            if [[ "${{ github.ref_name }}" != "main" ]]; then
+              echo ">>> NOT on main branch. Performing DRY RUN."
+              PUSH_OPTS="$PUSH_OPTS --dry-run"
+            fi
+            git push $PUSH_OPTS https://${{ secrets.REPO_PAT }}@codeberg.org/${{ github.repository }}.git ${{ github.ref_name }} 2>&1 | tee push_log.txt
+          else
+            echo "No changes to sync."
+          fi
           
           # save version for release creation step
           echo "final_tag=$NEW_TAG" >> $GITHUB_OUTPUT
@@ -68,6 +88,7 @@ jobs:
 
       - name: Create Draft Release
         uses: https://gitea.com/actions/gitea-release-action@main
+        if: ${{ github.ref_name == 'main' }}
         with:
           base_url: https://codeberg.org
           token: ${{ secrets.GITHUB_TOKEN }}
