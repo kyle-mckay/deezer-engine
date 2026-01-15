@@ -173,10 +173,11 @@ inject_changes "$FILE" "$CATEGORY" "$COMMIT_MSG"
 # add spacing newline if needed
 [ -n "$(tail -n 1 "$FILE")" ] && echo "" >> "$FILE"
 
+# strip header for release body
+cp "$FILE" "$TEMP_HEADER"
+sed -i '1,4d' "$TEMP_HEADER"
+
 # append old versions
 cat "$TEMP_BODY" >> "$FILE"
-
-# strip header for release body
-sed -i '1,4d' "$TEMP_HEADER"
 
 echo "Header processed. $FILE now contains the title and the new version header."
