@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.1 - 2026-01-15
+
+### Maintenance
+
+- Update .forgejo/release-drafter.sh #0 (@kylemmkay)
+
 ## v0.3.0 - 2026-01-13
 
 ### Enhancement
