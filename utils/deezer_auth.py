@@ -6,7 +6,7 @@ import random
 import logging
 import json
 from utils.logger import setup_logger
-from utils.paths import _cleanup_old_caches
+from utils.cache_manager import _cleanup_old_caches
 
 def get_authenticated_client(config, logger):
     """
@@ -123,55 +123,55 @@ def get_authenticated_session(arl, logger, warm_url=None):
         logger.error(f"Authentication utility error: {e}")
         return None, None
     
-def get_tracks(client, logger, type, var, cache_file):
+def get_tracks(client, logger, source_type, identifier, cache_file):
+    """
+    Transforms Deezer API objects into a list of dictionaries.
+    """
+    logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
 
-    logger.debug(f"Getting tracks for type '{type}' with ID '{var}'")
+    display_name = identifier
+    playlist_id = identifier
 
-
-    if isinstance(var, str) and var.startswith("playlist__"):
-        # Split the string by "__"
-        parts = var.split("__")
-        
+    # Parse internal variable string for playlists if provided
+    if isinstance(identifier, str) and identifier.startswith("playlist__"):
+        parts = identifier.split("__")
         if len(parts) >= 3:
-            var = parts[0]
             display_name = parts[1].replace("_", " ")
             playlist_id = parts[2]
-            logger.debug(f"Parsed var: Name='{display_name}', ID='{playlist_id}'")
+            logger.debug(f"Parsed identifier: Name='{display_name}', ID='{playlist_id}'")
 
     tracks = []
 
     # Extract full track metadata
     for i, track in enumerate(client, 1):
-            d = track.as_dict()
-            
-            tracks.append({
-                'id': str(d.get('id')),
-                'title': d.get('title'),
-                'artist': d.get('artist', {}).get('name', 'Unknown'),
-                'album': d.get('album', {}).get('title', 'Unknown'),
-                'duration': d.get('duration', 0),
-                'preview': d.get('preview'),
-            })
+        d = track.as_dict()
+        
+        tracks.append({
+            'id': str(d.get('id')),
+            'title': d.get('title'),
+            'artist': d.get('artist', {}).get('name', 'Unknown'),
+            'album': d.get('album', {}).get('title', 'Unknown'),
+            'duration': d.get('duration', 0),
+            'preview': d.get('preview'),
+        })
 
-            # Every 250 tracks, let the user know the progress
-            if i % 250 == 0:
-                if type == "favorites":
-                    logger.info(f"Scanning favorites... cached {i} tracks.")
-                elif var == "playlist":
-                    logger.info(f"Scanning '{display_name}'... cached {i} tracks.")
-                    var = playlist_id
-                # Fallback
-                else:
-                    logger.info(f"Scanning {type}... cached {i} tracks.")
+        # Every 250 tracks, let the user know the progress
+        if i % 250 == 0:
+            if source_type == "favorites":
+                logger.info(f"Scanning favorites... processed {i} tracks.")
+            elif identifier.startswith("playlist__"):
+                logger.info(f"Scanning '{display_name}'... processed {i} tracks.")
+            else:
+                logger.info(f"Scanning {source_type}... processed {i} tracks.")
     
     # Remove old files for this ID (e.g., if the playlist was renamed)
-    _cleanup_old_caches(type, var, cache_file, logger)
+    try:
+        from utils.cache_manager import _cleanup_old_caches
+        _cleanup_old_caches(source_type, playlist_id, cache_file, logger)
+    except ImportError:
+        pass
 
     if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"Successfully fetched {len(tracks)} tracks.")
-            logger.debug(f"Updating cache file {cache_file} with {len(tracks)} tracks.")
+        logger.debug(f"Successfully transformed {len(tracks)} tracks.")
             
-    with open(cache_file, 'w') as f:
-        json.dump(tracks, f)
-
     return tracks
