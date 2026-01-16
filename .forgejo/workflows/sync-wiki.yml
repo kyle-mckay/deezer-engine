@@ -17,7 +17,7 @@ on:
 
 jobs:
   push-wiki:
-    runs-on: codeberg-small
+    runs-on: ubuntu-latest
     if: ${{ github.actor != 'forgejo-actions[bot]' }}
 
     steps:
