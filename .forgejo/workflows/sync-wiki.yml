@@ -6,7 +6,7 @@ on:
       - main
     paths:
       - '.wiki/**'
-      - '.forgejo/**'
+      - '.forgejo/workflows/sync-wiki.yml'
   workflow_dispatch:
     inputs:
       branch:
@@ -18,7 +18,7 @@ on:
 jobs:
   push-wiki:
     runs-on: codeberg-small
-    if: ${{ github.actor != 'forgejo-ci-bot' }}
+    if: ${{ github.actor != 'forgejo-actions[bot]' }}
 
     steps:
       - name: Checkout repository
@@ -35,8 +35,8 @@ jobs:
 
       - name: Set up Git user
         run: |
-          git config --global user.name "forgejo-ci-bot"
-          git config --global user.email "noreply@codeberg.org"
+          git config --global user.name "forgejo-actions[bot]"
+          git config --global user.email "forgejo-actions[bot]@noreply.codeberg.org"
 
       - name: Clone and Sync Wiki
         run: |

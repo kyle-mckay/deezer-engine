@@ -110,6 +110,29 @@ jobs:
           else
             echo "content=Automated release for ${{ steps.git_push.outputs.final_tag }}" >> $GITHUB_OUTPUT
           fi
+      
+      - name: Cleanup Old Drafts
+        env:
+          TOKEN: ${{ secrets.REPO_PAT }}
+        run: |
+          apt-get update
+          apt-get install -y jq
+
+          echo ">>> Fetching releases..."
+          # Get all releases and filter for IDs where draft is true
+          DRAFT_IDS=$(curl -s -H "Authorization: token $TOKEN" \
+            "https://codeberg.org/api/v1/repos/${{ github.repository }}/releases" \
+            | jq -r '.[] | select(.draft == true) | .id')
+
+          if [ -z "$DRAFT_IDS" ]; then
+            echo ">>> No drafts found to delete."
+          else
+            for ID in $DRAFT_IDS; do
+              echo ">>> Deleting old draft ID: $ID"
+              curl -s -X DELETE -H "Authorization: token $TOKEN" \
+                "https://codeberg.org/api/v1/repos/${{ github.repository }}/releases/$ID"
+            done
+          fi
 
       - name: Create Draft Release
         uses: https://gitea.com/actions/gitea-release-action@main
@@ -117,7 +140,7 @@ jobs:
         with:
           base_url: https://codeberg.org
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ steps.git_push.outputs.final_tag }}
+          tag_name: ${{ steps.git_push.outputs.final_tag }}
           name: "Release ${{ steps.git_push.outputs.final_tag }}"
           draft: true
           body: ${{ steps.body.outputs.content }}
