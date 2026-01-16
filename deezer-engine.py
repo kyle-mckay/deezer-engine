@@ -110,13 +110,15 @@ def main():
                 
                 # Check for large dataset logging performance
                 if logger.isEnabledFor(logging.DEBUG):
-                    current_ids = controller._read_tmp()
-                    logger.debug(f"Pipeline size after source: {len(current_ids)} tracks.")
-                    # Only log the actual IDs if the list is manageable, or just head/tail
-                    if len(current_ids) > 100:
-                        logger.debug(f"Sample IDs: {current_ids[:5]} ... {current_ids[-5:]}")
+                    current_tracks = controller._read_tmp()
+                    logger.debug(f"Pipeline size after source: {len(current_tracks)} tracks.")
+                    # Only log the tracks if the list is manageable, or just head/tail
+                    if len(current_tracks) > 100:
+                        sample = [t.get('title', str(t))[:30] if isinstance(t, dict) else str(t.title)[:30] for t in current_tracks[:3]]
+                        logger.debug(f"Sample tracks: {sample}...")
                     else:
-                        logger.debug(f"Full ID list: {current_ids}")
+                        titles = [t.get('title', str(t)) if isinstance(t, dict) else t.title for t in current_tracks[:5]]
+                        logger.debug(f"Track titles: {titles}")
             
             # Modifier Phase
             modifiers = s_data.get('modifiers', [])
@@ -125,8 +127,8 @@ def main():
                 controller.handle_modifier(mod)
                 
                 if logger.isEnabledFor(logging.DEBUG):
-                    modified_ids = controller._read_tmp()
-                    logger.debug(f"Pipeline size after modifier: {len(modified_ids)} tracks.")
+                    modified_tracks = controller._read_tmp()
+                    logger.debug(f"Pipeline size after modifier: {len(modified_tracks)} tracks.")
 
             # Destination Phase
             destination = s_data.get('destination')

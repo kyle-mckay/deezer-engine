@@ -1,0 +1,64 @@
+import os
+import json
+import time
+import logging
+from utils.paths import get_cache_dir
+
+def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, context, fallback_on_error=True):
+    """
+    Generic cache handler. 
+    1. Checks if valid cache exists.
+    2. If not, runs source workers fetch function.
+    3. If fetch fails, falls back to expired cache.
+    """
+    logger.debug(f"Handling cache for context '{context}' with retention {retention_hrs} hours.")
+    logger.debug(f"Target cache file: {os.path.abspath(cache_file)}")
+    
+    # 1. Load Valid Cache
+    if retention_hrs > 0 and os.path.exists(cache_file):
+        file_age = (time.time() - os.path.getmtime(cache_file)) / 3600
+        if file_age < retention_hrs:
+            with open(cache_file, 'r') as f:
+                logger.debug(f"Valid {context} cache found (age: {file_age:.2f} hrs). Loading from cache.")
+                return json.load(f)
+
+    # 2. Fetch Fresh Data
+    try:
+        data = fetch_callback()
+        if data: # Only cache if we actually got results
+            logger.debug(f"Caching fresh {context} data to {cache_file}.")
+            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
+            with open(cache_file, 'w') as f:
+                json.dump(data, f)
+        return data
+    except Exception as e:
+        logger.error(f"Failed to fetch data for {context}, checking for fallback: {e}")
+        if os.path.exists(cache_file):
+            logger.debug(f"Falling back to expired cache for {context}.")
+            with open(cache_file, 'r') as f:
+                return json.load(f)
+        else:
+            logger.warn(f"No cache available to fall back on for {context}.")
+        return []
+    
+def _cleanup_old_caches(type, var, current_cache_path, logger):
+    """Deletes old cache files for the same playlist ID to prevent folder clutter."""
+    try:
+        cache_dir = get_cache_dir()
+        current_filename = os.path.basename(current_cache_path)
+        cleanup = False
+        for f in os.listdir(cache_dir):
+            if type == "playlist":
+                # Check for files with same ID but different names
+                if f.startswith(f"playlist_{var}") and f != current_filename:
+                    cleanup = True
+            elif type == "favorites":
+                if f.startswith(f"favorites_{var}") and f != current_filename:
+                    cleanup = True
+            
+            if cleanup:
+                    os.remove(os.path.join(cache_dir, f))
+                    logger.debug(f"Cleaned up old cache file: {f}")
+    
+    except Exception as e:
+        logger.warn(f"Cleanup failed (non-critical): {e}")

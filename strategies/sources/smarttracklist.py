@@ -1,15 +1,15 @@
 import os
 import json
-import time
 import re
 import random
 import logging
 from utils.deezer_auth import get_authenticated_session
 from utils.paths import get_cache_dir
+from utils.cache_manager import handle_cached_data
 
 def run(client, config, logger, source_data):
     """
-    Fetches tracks from a specific Deezer playlist with local caching.
+    Fetches tracks from a specific Deezer smarttracklists with local caching.
     source_data:
       - id: str (The numeric playlist ID)
       - retention: int (hours to keep cache, 0 for live)
@@ -19,26 +19,15 @@ def run(client, config, logger, source_data):
     arl = config.get('config', {}).get('arl_token')
     
     cache_file = str(get_cache_dir() / f"smart_{list_name}.json")
-    
-    # 1. Cache Check Logic
-    if retention_hrs > 0 and os.path.exists(cache_file):
-        file_age = (time.time() - os.path.getmtime(cache_file)) / 3600
-        if file_age < retention_hrs:
-            logger.debug(f"Using cached smart list: {list_name} ({file_age:.1f}h old)")
-            with open(cache_file, 'r') as f:  # <--- Added the missing 'with open'
-                return json.load(f)
 
-    # 2. Use Utility for Auth
-    # We use the smarttracklist URL as the "warm up" to ensure the session is valid for this list
-    warm_url = f"https://www.deezer.com/us/smarttracklist/{list_name}"
-    session, api_token = get_authenticated_session(arl, logger, warm_url)
-    
-    if not session or not api_token:
-        logger.error(f"Authentication utility failed to provide a session for {list_name}")
-        return []
-
-    try:
-        track_ids = []
+    def fetch_smart_list():
+        # called by handle_cached_data if cache is invalid/missing
+        warm_url = f"https://www.deezer.com/us/smarttracklist/{list_name}"
+        session, api_token = get_authenticated_session(arl, logger, warm_url)
+        
+        if not session or not api_token:
+            logger.error(f"Authentication utility failed to provide a session for {list_name}")
+            return []
         # Identify the Internal ID via Scrape
         page_response = session.get(warm_url)
         page_text = page_response.text
@@ -46,14 +35,14 @@ def run(client, config, logger, source_data):
         real_id_match = re.search(r'"SMART_TRACKLIST":\{.*?"id":"([^"]+)"', page_text)
         target_id = real_id_match.group(1) if real_id_match else list_name.replace('-', '_')
 
-        # 3. Universal Fetch Strategies
-        # Try the two methods discovered in your HAR files
+        # Universal Fetch Strategies
         fetch_strategies = [
             ("deezer.pageSmartTracklist", {"smartTracklist_id": target_id, "tab": 0}),
             ("song.getListData", {"sng_ids": [], "type": "smarttracklist", "id": target_id})
         ]
 
         logger.info(f"Fetching songs for '{list_name}'...")
+        track_ids = []
         for method, payload in fetch_strategies:
             cid = random.randint(100000000, 999999999)
             gw_url = f"https://www.deezer.com/ajax/gw-light.php?method={method}&input=3&api_version=1.0&api_token={api_token}&cid={cid}"
@@ -67,30 +56,37 @@ def run(client, config, logger, source_data):
                         break
             except Exception:
                 continue
+
         # FAILSAFE: Direct HTML Scrape
         if not track_ids:
             logger.debug(f"Gateway methods returned empty for {list_name}, attempting direct HTML regex scrape...")
             # This searches for "SNG_ID":"12345" inside the raw page HTML
             track_ids = re.findall(r'"SNG_ID":"?(\d+)"?', page_text)
 
-        if track_ids:
-            # Deduplicate while preserving order
-            track_ids = list(dict.fromkeys(track_ids))
-            
-            os.makedirs(get_cache_dir(), exist_ok=True)
-            with open(cache_file, 'w') as f:
-                json.dump(track_ids, f)
-            
-            
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Resolved {len(track_ids)} songs for '{list_name}'.")
-                logger.debug(f"Track IDs for {list_name}: {track_ids}")
-                
-            return track_ids
-        
-        logger.error(f"Could not find any tracks for '{list_name}' in Gateway or HTML.")
-        return []
+        if not track_ids:
+            logger.error(f"Could not find any tracks for '{list_name}'")
+            return []
 
-    except Exception as e:
-        logger.error(f"Source worker encountered an error for '{list_name}': {e}")
-        return []
+        # Deduplicate and Fetch full metadata
+        track_ids = list(dict.fromkeys(track_ids))
+        tracks = []
+        for track_id in track_ids:
+            try:
+                track = client.get_track(track_id)
+                tracks.append({
+                    'id': str(track.id),
+                    'title': track.title,
+                    'artist': track.artist.name if hasattr(track, 'artist') else 'Unknown',
+                    'album': track.album.title if hasattr(track, 'album') else 'Unknown',
+                    'duration': track.duration if hasattr(track, 'duration') else 0,
+                    'preview': track.preview if hasattr(track, 'preview') else None,
+                })
+            except Exception as e:
+                logger.debug(f"Could not fetch metadata for track {track_id}: {e}")
+            
+        
+        return tracks
+
+    # handle_cached_data will manage the file check, the fetch, and the write-to-disk
+    return handle_cached_data(cache_file,retention_hrs,logger,fetch_smart_list,"smarttracklist"
+    )

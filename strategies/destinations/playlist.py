@@ -4,7 +4,7 @@ import math
 import random
 from utils.deezer_auth import get_authenticated_session
 
-def run(client, config, logger, dest_data, track_ids):
+def run(client, config, logger, dest_data, tracks):
     """
     Synchronizes tracks to Deezer with high-fidelity browser emulation.
     """
@@ -27,10 +27,16 @@ def run(client, config, logger, dest_data, track_ids):
     try:
         playlist = client.get_playlist(target_id)
         
+        # Extract IDs from tracks
+        track_ids = []
+        for track in tracks:
+            track_id = str(track.get('id') if isinstance(track, dict) else track.id)
+            track_ids.append(track_id)
+        
         # Get current tracks from the playlist
         dst_ids = [str(t.id) for t in playlist.get_tracks()]
         current_set = set(dst_ids)
-        target_set = set(str(tid) for tid in track_ids)
+        target_set = set(track_ids)
 
         # Prepare for Writes
         session.headers.update({
