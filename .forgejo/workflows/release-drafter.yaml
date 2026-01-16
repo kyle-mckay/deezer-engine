@@ -2,13 +2,13 @@ name: Release Engine
 
 on:
   push:
-    branches:
-      - main
-      - test-release
+    branches: [main]
     paths-ignore:
       - '__version__.py'
       - 'CHANGELOG.md'
       - '.forgejo/**'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       branch:
@@ -31,7 +31,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Execute Release Drafter
+      - name: Validate Release Version
         env:
           RAW_LABELS: "${{ join(github.event.pull_request.labels.*.name, ',') || 'none' }}"
         run: |
@@ -42,36 +42,26 @@ jobs:
 
           CURRENT_TAG=${LATEST_RELEASE_TAG:-"v0.0.0"}
           
-          # extract metadata from commit
-          MSG="${{ github.event.head_commit.message }}"
-          AUTHOR="${{ github.actor }}"
-          PR_NUMBER=$(echo "$MSG" | grep -oE '#[0-9]+' | head -1 | sed 's/#//' || echo "0")
+          # run release drafter script
+          bash .forgejo/release-drafter.sh -m "${{ github.event.head_commit.message }}" -t "$CURRENT_TAG" -a "${{ github.actor }}" -l "$RAW_LABELS"
           
-          # run release-drafter script
-          bash .forgejo/release-drafter.sh -m "$MSG" -t "$CURRENT_TAG" -p "$PR_NUMBER" -a "$AUTHOR" -l "$RAW_LABELS"
+          NEW_TAG=$(grep "__version__ =" __version__.py | cut -d '"' -f 2)
+          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
 
-      - name: Commit and Push Changes
+      - name: Update and Commit Version
         id: git_push
         run: |
-          # read updated version from file
-          NEW_TAG=$(grep "__version__ =" __version__.py | cut -d '"' -f 2)
-          
-          git config user.name "kylemmkay"
-          git config user.email "kylemmkay@noreply.codeberg.org"
-          
+          git config user.name "forgejo-actions[bot]"
+          git config user.email "forgejo-actions[bot]@noreply.codeberg.org"
           git add __version__.py CHANGELOG.md
   
           if ! git diff --cached --quiet; then
             git commit -m "chore: release $NEW_TAG [release-draft]"
-
-            PUSH_OPTS="--verbose"
-            if [[ "${{ github.ref_name }}" != "main" ]]; then
-              echo ">>> NOT on main branch. Performing DRY RUN."
-              PUSH_OPTS="$PUSH_OPTS --dry-run"
+            if [[ "${{ github.ref_name }}" == "main" ]]; then
+              git push origin main
+            else
+              git push --dry-run
             fi
-            git push $PUSH_OPTS https://${{ secrets.REPO_PAT }}@codeberg.org/${{ github.repository }}.git ${{ github.ref_name }} 2>&1 | tee push_log.txt
-          else
-            echo "No changes to sync."
           fi
           
           # save version for release creation step
@@ -98,7 +88,7 @@ jobs:
         if: ${{ github.ref_name == 'main' }}
         with:
           base_url: https://codeberg.org
-          token: ${{ secrets.REPO_PAT }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ steps.git_push.outputs.final_tag }}
           name: "Release ${{ steps.git_push.outputs.final_tag }}"
           draft: true

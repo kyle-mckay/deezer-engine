@@ -2,6 +2,7 @@
 # We maintain the templates
 config.yml
 strategies.yml
+*.tmp
 
 # --- TEMP FILES ---
 cache/

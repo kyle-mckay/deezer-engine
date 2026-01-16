@@ -11,6 +11,14 @@ VERSION_FILE="__version__.py"
 
 usage() {
     echo "Usage: $0 -m '<message>' -t '<tag>' -p '<pr_ref>' -a '<author>' [-l '<labels>']"
+    echo "Required arguments:"
+    echo "   message: $COMMIT_MSG"
+    echo "   labels: $LABELS"
+    echo "   Author: $AUTHOR"
+    echo "Optional arguments:"
+    echo "   tag: $CURRENT_TAG"
+    echo "   pr_ref: $PR_NUMBER"
+
     exit 1
 }
 
@@ -27,15 +35,22 @@ while getopts "m:l:t:p:a:" opt; do
 done
 
 # ensure required fields are present
-if [[ -z "$COMMIT_MSG" || -z "$CURRENT_TAG" || -z "$PR_NUMBER" || -z "$AUTHOR" ]]; then
+if [[ -z "$COMMIT_MSG" || -z "$CURRENT_TAG" || -z "$AUTHOR" ]]; then
     usage
 fi
 
 # extract first line of message
 COMMIT_TITLE=$(echo "$COMMIT_MSG" | head -n 1)
 
-# format release line: feat: docker docs #19 (@kylemmkay)
-FORMATTED_LINE="$COMMIT_TITLE #$PR_NUMBER (@$AUTHOR)"
+# format release line
+PR_LOWER=$(echo "$PR_NUMBER" | tr '[:upper:]' '[:lower:]')
+if [[ -z "$PR_NUMBER" || "$PR_NUMBER" == "0" || "$PR_LOWER" == "nan" || "$PR_LOWER" == "null" ]]; then
+    # feat: docker docs (@kylemmkay)
+    FORMATTED_LINE="$COMMIT_TITLE (@$AUTHOR)"
+else
+    # feat: docker docs #19 (@kylemmkay)
+    FORMATTED_LINE="$COMMIT_TITLE #$PR_NUMBER (@$AUTHOR)"
+fi
 
 # --- functions ---
 
@@ -66,7 +81,7 @@ get_priority() {
 
     if [[ "$prefix" =~ ^major$ || "$input" =~ "major" || "$input" =~ "breaking" || "$input" =~ "!" ]]; then
         echo 3
-    elif [[ "$prefix" =~ ^(minor|feat) || "$input" =~ "feature" || "$input" =~ "enhancement" ]] || \
+    elif [[ "$prefix" =~ ^(minor|feat) || "$input" =~ "feature" || "$input" =~ "feat" || "$input" =~ "enhancement" ]] || \
          [[ "$prefix" == "" && "$input" =~ "minor" ]]; then
         echo 2
     elif [[ "$prefix" =~ ^(patch|fix) || "$input" =~ "bug" || "$input" =~ "patch" ]]; then
