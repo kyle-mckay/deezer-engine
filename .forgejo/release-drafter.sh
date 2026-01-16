@@ -42,14 +42,25 @@ fi
 # extract first line of message
 COMMIT_TITLE=$(echo "$COMMIT_MSG" | head -n 1)
 
+# Fallback if actor is redacting outputs
+if [[ "$AUTHOR" == "***" || -z "$AUTHOR" || "$AUTHOR" == "" || "$AUTHOR" == "null" || "$AUTHOR" == " " ]]; then
+    AUTHOR=$(git log -1 --pretty=%an)
+fi
+
 # format release line
 PR_LOWER=$(echo "$PR_NUMBER" | tr '[:upper:]' '[:lower:]')
-if [[ -z "$PR_NUMBER" || "$PR_NUMBER" == "0" || "$PR_LOWER" == "nan" || "$PR_LOWER" == "null" ]]; then
+
+# feat: docker docs
+FORMATTED_LINE="$COMMIT_TITLE" 
+if [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] && [[ "$PR_NUMBER" != "0" ]]; then
+    # feat: docker docs #42
+    FORMATTED_LINE="$FORMATTED_LINE #$PR_NUMBER"
+fi
+if [[ -n "$AUTHOR" && "$AUTHOR" != "***" ]]; then
     # feat: docker docs (@kylemmkay)
-    FORMATTED_LINE="$COMMIT_TITLE (@$AUTHOR)"
-else
-    # feat: docker docs #19 (@kylemmkay)
-    FORMATTED_LINE="$COMMIT_TITLE #$PR_NUMBER (@$AUTHOR)"
+    # or
+    # feat: docker docs #42 (@kylemmkay)
+    FORMATTED_LINE="$FORMATTED_LINE (@$AUTHOR)"
 fi
 
 # --- functions ---
