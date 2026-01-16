@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.4.0 - 2026-01-15
+## v0.4.0 - 2026-01-16
+
+### Enhancements
+
+- feat: collecting all track data and refactor functions' (#35) (@kylemmkay)
 
 ### Maintenance
 
