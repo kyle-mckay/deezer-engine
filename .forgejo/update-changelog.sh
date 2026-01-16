@@ -139,14 +139,48 @@ inject_changes() {
     mv "$tmp_file" "$dest_file"
 }
 
+extract_latest_changelog() {
+    local changelog_file="CHANGELOG.md"
+    local header_count=0
+    local content_count=0
+
+    # Read line by line
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Check if line starts with '## '
+        if [[ "$line" =~ ^##[[:space:]] ]]; then
+            ((header_count++))
+            
+            # If this is the second header, we are done
+            if [ "$header_count" -eq 2 ]; then
+                break
+            fi
+            continue
+        fi
+
+        # Start echoing lines on the first category
+        if [ "$header_count" -eq 1 ]; then
+            if [[ "$line" =~ ^###[[:space:]] || $content_count -gt 0 ]]; then
+                ((content_count++))
+            fi
+            echo "$line"
+        fi
+    done < "$changelog_file"
+}
+
 # --- main script ---
 
-if [ "$#" -ne 4 ]; then
+if [ "$1" != "changelog" ] && [ "$#" -ne 4 ]; then
     echo "Usage: $0 <OLD_TAG> <NEW_TAG> <CATEGORY> <COMMIT_MSG>"
     exit 1
 fi
 
 OLD_TAG="$1"
+
+if [[ "$OLD_TAG" == "changelog" ]]; then
+    extract_latest_changelog
+    exit 0
+fi
+
 NEW_TAG="$2"
 CATEGORY="$3"
 COMMIT_MSG="$4"

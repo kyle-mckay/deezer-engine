@@ -1,4 +1,4 @@
-name: Release Engine
+name: Determine Version and Update Changelog
 
 on:
   push:
@@ -20,7 +20,10 @@ on:
 jobs:
   draft-release:
     # Don't trigger yourself
-    if: "!endsWith(github.event.head_commit.message, '[release-draft]')"
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, '[release-draft]')) ||
+      (github.event_name == 'pull_request' && !contains(github.event.pull_request.title, '[release-draft]'))
     runs-on: docker
     permissions:
       contents: write
@@ -30,16 +33,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate Release Version
+        id: validator
         env:
           RAW_LABELS: "${{ join(github.event.pull_request.labels.*.name, ',') || 'none' }}"
           COMMIT_MSG: "${{ github.event.pull_request.title || github.event.head_commit.message || github.event.commits[0].message }}"
           PR_NUM: "${{ github.event.pull_request.number || '0' }}"
           AUTHOR_NAME: "${{ github.actor }}"
+          REPO_PAT: ${{ secrets.REPO_PAT }}
         run: |
           # extract current version
-          LATEST_RELEASE_TAG=$(curl -s -H "Authorization: token ${{ secrets.REPO_PAT }}" \
+          LATEST_RELEASE_TAG=$(curl -s -H "Authorization: token $REPO_PAT" \
             "https://codeberg.org/api/v1/repos/${{ github.repository }}/releases?draft=false&pre-release=false" \
             | grep -oE '"tag_name":"[^"]+"' | head -1 | cut -d'"' -f4)
 
@@ -62,7 +68,7 @@ jobs:
           fi
           CURRENT_TAG=${LATEST_RELEASE_TAG:-"v0.0.0"}
 
-
+          
           echo "Current Tag: $CURRENT_TAG"
           echo "Message: $COMMIT_MSG"
           echo "Author: $AUTHOR"
@@ -73,74 +79,28 @@ jobs:
           bash .forgejo/release-drafter.sh -m "$COMMIT_MSG" -t "$CURRENT_TAG" -a "$AUTHOR" -l "$RAW_LABELS" -p "$PR_NUM"
           
           NEW_TAG=$(grep "__version__ =" __version__.py | cut -d '"' -f 2)
-          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
+          echo "final_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
       - name: Update and Commit Version
-        id: git_push
         run: |
-          git config user.name "forgejo-actions[bot]"
-          git config user.email "forgejo-actions[bot]@noreply.codeberg.org"
+          git config user.name "forgejo-actions"
+          git config user.email "actions-user@noreply.codeberg.org"
           git add __version__.py CHANGELOG.md
   
           if ! git diff --cached --quiet; then
-            git commit -m "chore: release $NEW_TAG [release-draft]"
+            git commit -m "chore: release ${{ steps.validator.outputs.final_tag }} [release-draft]"
             if [[ "${{ github.ref_name }}" == "main" ]]; then
               git push origin main
             else
-              echo "Dry run push:"
+              #echo "Dry run push:"
               git push --dry-run origin HEAD:${{ github.head_ref }}
             fi
           fi
-          
-          # save version for release creation step
-          echo "final_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
       - name: Prepare Release Body
         id: body
         run: |
-          # use header.tmp to populate release body if available
-          if [ -f "./header.tmp" ]; then
-            echo "--- Release Body Content ---"
-            cat ./header.tmp
-            echo "----------------------------"
-            echo "content<<EOF" >> $GITHUB_OUTPUT
-            cat ./header.tmp >> $GITHUB_OUTPUT
-            echo "" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-          else
-            echo "content=Automated release for ${{ steps.git_push.outputs.final_tag }}" >> $GITHUB_OUTPUT
-          fi
+          # Output new header for debugging
+          echo "--- Release Body Content ---"
+          cat ./header.tmp
       
-      - name: Cleanup Old Drafts
-        env:
-          TOKEN: ${{ secrets.REPO_PAT }}
-        run: |
-          apt-get update
-          apt-get install -y jq
-
-          echo ">>> Fetching releases..."
-          # Get all releases and filter for IDs where draft is true
-          DRAFT_IDS=$(curl -s -H "Authorization: token $TOKEN" \
-            "https://codeberg.org/api/v1/repos/${{ github.repository }}/releases" \
-            | jq -r '.[] | select(.draft == true) | .id')
-
-          if [ -z "$DRAFT_IDS" ]; then
-            echo ">>> No drafts found to delete."
-          else
-            for ID in $DRAFT_IDS; do
-              echo ">>> Deleting old draft ID: $ID"
-              curl -s -X DELETE -H "Authorization: token $TOKEN" \
-                "https://codeberg.org/api/v1/repos/${{ github.repository }}/releases/$ID"
-            done
-          fi
-
-      - name: Create Draft Release
-        uses: https://gitea.com/actions/gitea-release-action@main
-        if: ${{ github.ref_name == 'main' }}
-        with:
-          base_url: https://codeberg.org
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ steps.git_push.outputs.final_tag }}
-          name: "Release ${{ steps.git_push.outputs.final_tag }}"
-          draft: true
-          body: ${{ steps.body.outputs.content }}
