@@ -1,6 +1,9 @@
 # Deezer Engine (Smart Playlists)
 
->Please note that this repository was built with AI 🤖 assistance.
+[![Source on Codeberg](https://img.shields.io/badge/Source-Codeberg-blue?logo=gitea)](https://codeberg.org/kylemmkay/deezer-engine) [![Docker Hub](https://img.shields.io/badge/docker-pull-blue.svg?logo=docker)](https://hub.docker.com/r/kylemmkay/deezer-engine)
+
+> [!NOTE]
+>This repository was built with AI 🤖 assistance.
 
 Inspired by [Goofy](https://github.com/Chimildic/goofy) and [Playlist Machinery / Smarter Playlists](http://www.playlistmachinery.com/), Deezer Engine is a Python script that allows you to create and maintain smart playlists within Deezer using a declarative configuration approach.
 
