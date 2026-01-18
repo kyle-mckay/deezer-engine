@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.0 - 2026-01-18
+
+### Enhancements
+
+- feat :add limit modifier (closes #10) (#44) (@kylemmkay)
+
 ## v0.5.1 - 2026-01-18
 
 ### Fixes
