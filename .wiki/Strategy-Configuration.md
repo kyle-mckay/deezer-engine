@@ -138,10 +138,8 @@ Modifiers is an **optional** section designed to transform the consolidated trac
 ```
 
 **Planned Modifiers** - Some modifiers are in the works or not yet documented here:
-- `sort`: [#9](https://codeberg.org/kylemmkay/deezer-engine/issues/9)
 - `limit`: [#10](https://codeberg.org/kylemmkay/deezer-engine/issues/10)
 - `artist-seperation`: [#11](https://codeberg.org/kylemmkay/deezer-engine/issues/11)
-- `randomize`: [#12](https://codeberg.org/kylemmkay/deezer-engine/issues/12)
 
 ### `dedupe`
 
@@ -152,9 +150,29 @@ Remove duplicate track IDs. Deezer does not allow the same track to be in the sa
       - type: "dedupe"
 ```
 
+### `shuffle`
+
+Shuffle the order of your tracks.
+
+> It is recommended that your destination strategy is `replace` with this modifier.
+
+```yaml
+    modifiers:
+      - type: "shuffle"
+        order: "random"
+
+```
+
+**Types of shuffle**:
+
+- **`smart`**: **Recommended.**Uses an interleaving algorithm to prevent "clustering." It groups tracks by artist and ensures that songs from the same artist are spread out as much as possible throughout the playlist.
+- **`random`**: A true Fisher-Yates randomization. It ignores metadata like artist or album, providing a completely unbiased sequence where tracks are placed in any order.
+
 ### `sort`
 
 Sort your tracks by a specific feild in the order of your choice.
+
+>It is recommended that your destination strategy is `replace` with this modifier.
 
 ```yaml
     modifiers:

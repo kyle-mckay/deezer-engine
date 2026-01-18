@@ -38,7 +38,7 @@ def run(client, config, logger, mod_data, current_tracks):
                 return current_tracks
 
     except Exception as e:
-        logger.error(f"Failed to sort order exclusion: {e}")
+        logger.error(f"Failed to sort tracks: {e}")
         logger.warn("Check your 'by' field is supported. Tracks will be returned without modification.")
         sorted_tracks = current_tracks
 

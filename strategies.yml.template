@@ -32,7 +32,6 @@ playlists:
         source: 
           type: "favorites" 
           retention: 23
-          modifiers:
       # Most popular first
       - type: "sort"
         order: "desc"
