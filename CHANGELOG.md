@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.1 - 2026-01-18
+
+### Fixes
+
+- fix: sort by rank was being treated as string (closes #42) (#43) (@kylemmkay)
+
 ## v0.5.0 - 2026-01-18
 
 ### Enhancements
