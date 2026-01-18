@@ -138,7 +138,6 @@ Modifiers is an **optional** section designed to transform the consolidated trac
 ```
 
 **Planned Modifiers** - Some modifiers are in the works or not yet documented here:
-- `limit`: [#10](https://codeberg.org/kylemmkay/deezer-engine/issues/10)
 - `artist-seperation`: [#11](https://codeberg.org/kylemmkay/deezer-engine/issues/11)
 
 ### `dedupe`
@@ -149,6 +148,26 @@ Remove duplicate track IDs. Deezer does not allow the same track to be in the sa
     modifiers:
       - type: "dedupe"
 ```
+
+### `limit`
+
+Slice your tracks to keep only a specific number of items from the start or end of the dataset.
+
+> It is recommended that your destination strategy is `replace` with this modifier.
+
+```yaml
+    modifiers:
+      - type: "limit"
+        order: "top"
+        count: 20
+
+```
+
+**Supported limit orders**:
+
+`top`, `head` or `first` - Retains the first `n` tracks from the beginning of the list.
+`tail`, `bottom` or `last` - Retains the last `n` tracks from the end of the list.
+
 
 ### `shuffle`
 
