@@ -71,7 +71,6 @@ jobs:
           echo "description=$DESC" >> $GITHUB_OUTPUT
 
       - name: Update Docker Hub Description
-        if: steps.check.outputs.needs_update == 'true'
         uses: https://github.com/peter-evans/dockerhub-description@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
