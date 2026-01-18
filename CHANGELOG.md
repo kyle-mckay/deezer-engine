@@ -1,9 +1,10 @@
 # Changelog
 
-## v0.4.0 - 2026-01-16
+## v0.4.0 - 2026-01-18
 
 ### Enhancements
 
+- feat: implement sort modifier (#9) (@kylemmkay)
 - feat: collecting all track data and refactor functions' (#35) (@kylemmkay)
 
 ### Maintenance
