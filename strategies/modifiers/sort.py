@@ -27,13 +27,19 @@ def run(client, config, logger, mod_data, current_tracks):
     logger.info(f"Sorting tracks by '{sort_field}' in '{sort_order}' order")
 
     try:
+        def sort_key(x):
+            val = x.get(sort_field)
+            if isinstance(val, str):
+                return val.lower()
+            return val
+
         match sort_order:
             case "ascending":
-                sorted_tracks = sorted(current_tracks, key=lambda x: x[sort_field].lower())
+                sorted_tracks = sorted(current_tracks, key=sort_key)
             case "descending":
-                sorted_tracks = sorted(current_tracks, key=lambda x: x[sort_field].lower(),reverse=True)
+                sorted_tracks = sorted(current_tracks, key=sort_key, reverse=True)
             case _:
-                logger.warn(f"Unable to sort by undefined sort order: '{sort_order}")
+                logger.warn(f"Unable to sort by undefined sort order: '{sort_order}'")
                 logger.warn("Skipping sort")
                 return current_tracks
 
