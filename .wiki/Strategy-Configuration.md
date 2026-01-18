@@ -145,13 +145,44 @@ Modifiers is an **optional** section designed to transform the consolidated trac
 
 ### `dedupe`
 
-Remove duplicate track IDs. Deezer does not allow the same track to be in the same playlists, so sources currently de-duplicate automatically when lists are consolidated. However this allows you to force this behaviour in the event future modifiers allow you to insert items after source collection.
+Remove duplicate track IDs. Deezer does not allow the same track to be in the same playlists, so sources currently de-duplicate by ID automatically when lists are consolidated. However this allows you to force this behaviour in the event future modifiers allow you to insert items after source collection.
 
 ```yaml
     modifiers:
-      # ... other modifiers
       - type: "dedupe"
 ```
+
+### `sort`
+
+Sort your tracks by a specific feild in the order of your choice.
+
+```yaml
+    modifiers:
+      - type: "sort"
+        order: "desc"
+        field: "title"
+```
+
+**Supported sort orders**:
+
+>Note: Fields are sorted with no case sensitivity.
+
+`asc` or `ascending` - Sorts by `field` in ascending order (A-Z)
+`desc` or `descending` - Sorts by `field` in descending order (Z-A)
+
+**Supported sort fields**:
+
+Currently the following fields are **always** fetched, though [more fields exist](https://deezer-python.readthedocs.io/en/stable/api_reference/resources/track.html#deezer.Track). This is currently due to the fetch API only returning *some* fields. Until an internal database is configured it would not be efficient to pull all info.
+
+| Name | Description | Type | 
+| --- | --- | --- |
+| `id` | The track's Deezer id | int |
+| `title` | The track's fulltitle | string |
+| `unseen` | The track unseen status | boolean |
+| `duration` | The track's duration in seconds | int |
+| `rank` | The track's Deezer rank (igger number = more popular) | int |
+| `artist` | [artist](https://developers.deezer.com/api/artist) object containing : id, name, link, share, picture, etc. | object |
+| `album` | [album](https://developers.deezer.com/api/album) object containing : id, title, link, cover, etc. | object |
 
 ### `exclude`
 
@@ -181,7 +212,7 @@ Define where the final track list saves to.
 ```
  
 **Types** (required) - Different methods in which your playlist is updated
-- `smart` or `smartreplace` - (Recommended over `replace`) Update playlist intelligently, preserving track dates by only adding/removing what changed
+- `smart` or `smartreplace` - Adds or removes tracks by only processing what's changed. **Does not care about sorting order**.
 - `replace` - Removes **all** tracks in destination library first, then adds songs from pipeline.
 - `insert` or `append` - Add tracks from pipeline to playlist without removing any
 

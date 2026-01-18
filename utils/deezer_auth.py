@@ -149,10 +149,11 @@ def get_tracks(client, logger, source_type, identifier, cache_file):
         tracks.append({
             'id': str(d.get('id')),
             'title': d.get('title'),
+            'unseen': d.get('unseen', False),
+            'duration': d.get('duration', 0),
+            'rank': d.get('rank', 0),
             'artist': d.get('artist', {}).get('name', 'Unknown'),
             'album': d.get('album', {}).get('title', 'Unknown'),
-            'duration': d.get('duration', 0),
-            'preview': d.get('preview'),
         })
 
         # Every 250 tracks, let the user know the progress

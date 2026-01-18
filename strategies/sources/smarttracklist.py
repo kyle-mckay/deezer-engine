@@ -75,11 +75,13 @@ def run(client, config, logger, source_data):
                 track = client.get_track(track_id)
                 tracks.append({
                     'id': str(track.id),
-                    'title': track.title,
+                    'title': getattr(track, 'title', 'Unknown'),
+                    'unseen': getattr(track, 'unseen', False),
+                    'duration': getattr(track, 'duration', 0),
+                    'rank': getattr(track, 'rank', 0),
+                    'explicit_lyrics': getattr(track, 'explicit_lyrics', False),
                     'artist': track.artist.name if hasattr(track, 'artist') else 'Unknown',
                     'album': track.album.title if hasattr(track, 'album') else 'Unknown',
-                    'duration': track.duration if hasattr(track, 'duration') else 0,
-                    'preview': track.preview if hasattr(track, 'preview') else None,
                 })
             except Exception as e:
                 logger.debug(f"Could not fetch metadata for track {track_id}: {e}")
