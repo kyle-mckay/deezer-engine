@@ -73,8 +73,8 @@ jobs:
       - name: Update Docker Hub Description
         uses: https://github.com/peter-evans/dockerhub-description@v4
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
           repository: ${{ github.repository }}
           short-description: ${{ steps.repo_data.outputs.description }}
           readme-filepath: ./README.md
