@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.5.0 - 2026-01-18
+
+### Enhancements
+
+- feat: implement shuffle modifier (closes #12) (#41) (@kylemmkay)
+
 ## v0.4.0 - 2026-01-18
 
 ### Enhancements
