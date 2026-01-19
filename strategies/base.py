@@ -4,6 +4,7 @@ import json
 import logging
 from pathlib import Path
 from utils.paths import get_data_dir
+from utils.config_loader import get_global_value
 
 class StrategyController:
     def __init__(self, client, config, logger, strategy_name):
@@ -157,17 +158,52 @@ class StrategyController:
             self.logger.error(f"Failed to apply modifier '{mod_type}': {e}")
             raise
 
+    def check_playlist_limit(self, dest_data, tracks):
+        """Checks if the track list is approaching the environment-defined playlist cap."""
+        # Now 'type' refers to the destination (playlist vs favorites)
+        dest_type = dest_data.get('type', '').lower()
+
+        try:
+            match dest_type:
+                case "playlist":
+                    cap = get_global_value('playlist_cap', default=5000)
+                case "favorites":
+                    cap = get_global_value('favorites_cap', default=10000)
+                case _:
+                    self.logger.warning(f"Destination type '{dest_type}' does not have a defined content limit.")
+                    return
+            
+            current_count = len(tracks)
+            warning_threshold = cap * 0.9
+            
+            if current_count >= warning_threshold:
+                self.logger.warning(
+                    f"Strategy '{self.strategy_name}' destination ({dest_type}) is at {current_count} tracks, "
+                    f"exceeding 90% of the defined cap ({cap})."
+                )
+        except Exception as e:
+            self.logger.error(f"Failed to check for a content limit on destination type '{dest_type}': {e}")
+
     def handle_destination(self, dest_data):
         """Dynamically loads the destination worker using the final tmp state."""
-        module_path = "strategies.destinations.playlist"
+        self.logger.debug("------ strategies.base.handle_destination START------")
+        dest_type = dest_data.get('type')
+        # Dynamically load module based on type (e.g., strategies.destinations.playlist)
+        module_path = f"strategies.destinations.{dest_type}"
         
-        # Read the final state of the pipeline after all sources and modifiers
+        # Read the final state of the pipeline
         current_tracks = self._read_tmp()
-        self.logger.info(f"Preparing destination for type '{dest_data.get('type')}' with {len(current_tracks)} tracks.")
         
+        self.logger.info(f"Preparing destination '{dest_type}' for ID '{dest_data.get('id')}' with {len(current_tracks)} tracks.")
+        
+        # Run the limit check
+        self.check_playlist_limit(dest_data, current_tracks)
+
         try:
             module = importlib.import_module(module_path)
+            # The destination module will now look at dest_data['order'] for 'replace'/'smart'
             module.run(self.client, self.config, self.logger, dest_data, current_tracks)
         except Exception as e:
-            self.logger.error(f"Failed to push to destination: {e}")
+            self.logger.error(f"Failed to push to destination '{dest_type}': {e}")
             raise
+        self.logger.debug("------ strategies.base.handle_destination END------")

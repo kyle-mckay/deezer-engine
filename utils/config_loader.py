@@ -4,6 +4,32 @@ from pathlib import Path
 import requests
 from utils.paths import get_data_dir
 
+def get_global_value(key, default=None):
+    """
+    Retrieves a configuration value. 
+    Checks environment variables (DEEZER_<KEY>) first, then falls back to config.yml.
+    """
+    env_key = f"DEEZER_{key.upper()}"
+    
+    # Check Environment Variables
+    if env_key in os.environ:
+        value = os.environ[env_key]
+        if value.isdigit():
+            return int(value)
+        if value.lower() in ('true', 'yes', '1'): return True
+        if value.lower() in ('false', 'no', '0'): return False
+        return value
+
+    # Check config.yml
+    data_dir = get_data_dir()
+    config_path = data_dir / 'config.yml'
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f) or {}
+            return config.get('config', {}).get(key, default)
+    except Exception:
+        return default
+
 def load_config_with_env_overrides():
     """
     Load config.yml and apply environment variable overrides.
@@ -39,19 +65,21 @@ def load_config_with_env_overrides():
         'DEEZER_LOG_LEVEL': 'log_level',
         'DEEZER_WRITE_LOGS': 'write_logs',
         'DEEZER_PRINT_BANNER': 'print_banner',
+        'DEEZER_PLAYLIST_CAP': 'playlist_cap',
+        'DEEZER_FAVORITES_CAP': 'favorites_cap'
     }
     
     for env_var, config_key in env_mappings.items():
         if env_var in os.environ:
             value = os.environ[env_var]
             
-            # Type conversion for specific keys
-            if config_key == 'batch_size':
+            # Type conversion
+            if config_key in ['batch_size', 'playlist_cap', 'favorites_cap']:
                 try:
                     value = int(value)
                 except ValueError:
                     pass
-            elif config_key == 'write_logs' or config_key == 'print_banner':
+            elif config_key in ['write_logs', 'print_banner']:
                 value = value.lower() in ('true', '1', 'yes', 'on')
             
             config['config'][config_key] = value

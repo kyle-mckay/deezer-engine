@@ -131,10 +131,13 @@ def main():
                     logger.debug(f"Pipeline size after modifier: {len(modified_tracks)} tracks.")
 
             # Destination Phase
-            destination = s_data.get('destination')
-            if destination:
-                logger.debug(f"Routing to destination: {destination.get('type')} (Target: {destination.get('target')})")
-                controller.handle_destination(destination)
+            destinations = s_data.get('destination', [])
+            if destinations:
+                for dest in destinations:
+                    dest_type = dest.get('type')
+                    dest_id = dest.get('id', 'Unknown')
+                    logger.debug(f"Routing to destination: {dest_type} (ID: {dest_id})")
+                    controller.handle_destination(dest)
             else:
                 logger.warning(f"Strategy '{strategy_name}' has no destination defined.")
 

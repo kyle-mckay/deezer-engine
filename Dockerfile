@@ -47,6 +47,8 @@ ENV CONTAINERIZED=true
 # - DEEZER_SCHEDULE: Cron schedule expression (default: "0 3 * * *" for daily at 3 AM UTC)
 # - TZ: Timezone for cron (e.g., "ETC/UTC")
 # - DEEZER_PRINT_BANNER: Print banner on startup - true/false (default: true)
+# - DEEZER_PLAYLIST_CAP: The maximum number of songs that can be put into a playlist (default: 5000)
+# - DEEZER_FAVORITES_CAP: The maximum number of songs that can be put into your favorites (default: 10000)
 
 # Use entrypoint script to handle cron and application
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
