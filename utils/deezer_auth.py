@@ -130,15 +130,17 @@ def get_tracks(client, logger, source_type, identifier, cache_file):
     logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
 
     display_name = identifier
-    playlist_id = identifier
+    item_id = identifier
 
-    # Parse internal variable string for playlists if provided
-    if isinstance(identifier, str) and identifier.startswith("playlist__"):
+    # Parse internal variable string for playlists or albums if provided
+    if isinstance(identifier, str) and (identifier.startswith("playlist__") or identifier.startswith("album__")):
         parts = identifier.split("__")
         if len(parts) >= 3:
+            item_type = parts[0] 
             display_name = parts[1].replace("_", " ")
-            playlist_id = parts[2]
-            logger.debug(f"Parsed identifier: Name='{display_name}', ID='{playlist_id}'")
+            item_id = parts[2]
+            
+            logger.debug(f"Parsed {item_type} identifier: Name='{display_name}', ID='{item_id}'")
 
     tracks = []
 
@@ -162,13 +164,15 @@ def get_tracks(client, logger, source_type, identifier, cache_file):
                 logger.info(f"Scanning favorites... processed {i} tracks.")
             elif identifier.startswith("playlist__"):
                 logger.info(f"Scanning '{display_name}'... processed {i} tracks.")
+            elif identifier.startswith("album__"):
+                logger.info(f"Scanning '{display_name}'... processed {i} tracks.")
             else:
                 logger.info(f"Scanning {source_type}... processed {i} tracks.")
     
     # Remove old files for this ID (e.g., if the playlist was renamed)
     try:
         from utils.cache_manager import _cleanup_old_caches
-        _cleanup_old_caches(source_type, playlist_id, cache_file, logger)
+        _cleanup_old_caches(source_type, item_id, cache_file, logger)
     except ImportError:
         pass
 

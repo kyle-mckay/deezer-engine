@@ -111,6 +111,17 @@ Gets songs from a specific playlist. Currently only supports playlist id: `https
 
 ```
 
+### `album`
+
+Gets songs from a specific album. Currently only supports album id: `https://www.deezer.com/us/album/<playlist_id>`
+
+```yaml
+    source:
+      - type: "album"
+        id: "12345678"
+
+```
+
 ### `smarttracklist`
 
 Deezer's curated lists: `https://www.deezer.com/us/smarttracklist/...`
