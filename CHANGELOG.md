@@ -4,6 +4,7 @@
 
 ### Enhancements
 
+- feat: add artist source (#53) (@kylemmkay)
 - feat: add album source (progress in #2) (#52) (@kylemmkay)
 - feat: add retention to config variables (cloeses #5) (#51) (@kylemmkay)
 - feat: enhance destination to allow for future multiple destinations and define limit warnings (closes #6) #47 (@kylemmkay)
