@@ -82,6 +82,20 @@ class StrategyController:
             # Run the worker logic
             new_tracks = module.run(self.client, self.config, self.logger, source_data)
             
+            # Check for source specific modifiers
+            local_modifiers = source_data.get('modifiers', [])
+            if local_modifiers:
+                self.logger.debug(f"Applying {len(local_modifiers)} local modifiers to source '{src_label}'")
+                for mod_data in local_modifiers:
+                    mod_type = mod_data.get('type')
+                    mod_module_path = f"strategies.modifiers.{mod_type}"
+                    try:
+                        mod_module = importlib.import_module(mod_module_path)
+                        new_tracks = mod_module.run(self.client, self.config, self.logger, mod_data, new_tracks)
+                        self.logger.debug(f"Local modifier '{mod_type}' applied. Source tracks: {len(new_tracks)}")
+                    except Exception as mod_e:
+                        self.logger.error(f"Failed to apply local modifier '{mod_type}' to source '{src_label}': {mod_e}")
+
             # Combine tracks
             seen_ids = set()
             combined = []
@@ -106,27 +120,39 @@ class StrategyController:
             self.logger.error(f"Failed to process source '{src_label}': {e}")
             raise
 
-    def handle_modifier(self, mod_data):
-        """Dynamically loads a modifier worker to transform the current track list."""
+    def handle_modifier(self, mod_data, tracks_override=None):
+        """
+        Dynamically loads a modifier worker to transform the current track list.
+        If tracks_override is provided, it processes those tracks instead of reading from tmp.
+        """
         mod_type = mod_data.get('type')
         module_path = f"strategies.modifiers.{mod_type}"
         
-        current_tracks = self._read_tmp()
+        # Determine if we are working on the global pipeline or an override (local)
+        if tracks_override is not None:
+            current_tracks = tracks_override
+        else:
+            current_tracks = self._read_tmp()
+            
         self.logger.debug(f"Applying modifier '{mod_type}' to {len(current_tracks)} tracks.")
         
         try:
             module = importlib.import_module(module_path)
-            # Modifiers are 'pure': they take tracks from tmp, modify them, and return results
+            # Modifiers are 'pure': they take tracks, modify them, and return results
             modified_tracks = module.run(self.client, self.config, self.logger, mod_data, current_tracks)
             
-            # Overwrite the strategy's tmp file with the modified results
-            self._write_tmp(modified_tracks)
-            current_length=len(current_tracks)
-            new_length=len(modified_tracks)
-            if current_length != new_length:
-                self.logger.info(f"Modifier '{mod_type}' applied. Pipeline changed from {len(current_tracks)} to {len(modified_tracks)} tracks.")
-            else:
-                self.logger.info(f"Modifer '{mod_type}' applied to {current_length} tracks")
+            # Only write to disk if we are in "Global" mode (no override)
+            if tracks_override is None:
+                self._write_tmp(modified_tracks)
+                current_length=len(current_tracks)
+                new_length=len(modified_tracks)
+                if current_length != new_length:
+                    self.logger.info(f"Modifier '{mod_type}' applied. Pipeline changed from {len(current_tracks)} to {len(modified_tracks)} tracks.")
+                else:
+                    self.logger.info(f"Modifier '{mod_type}' applied to {current_length} tracks")
+            
+            return modified_tracks
+
         except Exception as e:
             self.logger.error(f"Failed to apply modifier '{mod_type}': {e}")
             raise
