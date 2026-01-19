@@ -1,9 +1,10 @@
 # Changelog
 
-## v0.6.0 - 2026-01-18
+## v0.6.0 - 2026-01-19
 
 ### Enhancements
 
+- feat: add filter modifier (closes #39) (#45) (@kylemmkay)
 - feat :add limit modifier (closes #10) (#44) (@kylemmkay)
 
 ## v0.5.1 - 2026-01-18
