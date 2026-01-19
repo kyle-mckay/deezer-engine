@@ -6,6 +6,7 @@ import logging
 from utils.deezer_auth import get_authenticated_session
 from utils.paths import get_cache_dir
 from utils.cache_manager import handle_cached_data
+from utils.config_loader import get_global_value
 
 def run(client, config, logger, source_data):
     """
@@ -15,7 +16,7 @@ def run(client, config, logger, source_data):
       - retention: int (hours to keep cache, 0 for live)
     """
     list_name = source_data.get('name')
-    retention_hrs = source_data.get('retention', 0)
+    retention_hrs = source_data.get('retention', get_global_value('retention', default = 0))
     arl = config.get('config', {}).get('arl_token')
     
     cache_file = str(get_cache_dir() / f"smart_{list_name}.json")

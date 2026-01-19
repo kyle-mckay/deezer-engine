@@ -49,6 +49,7 @@ ENV CONTAINERIZED=true
 # - DEEZER_PRINT_BANNER: Print banner on startup - true/false (default: true)
 # - DEEZER_PLAYLIST_CAP: The maximum number of songs that can be put into a playlist (default: 5000)
 # - DEEZER_FAVORITES_CAP: The maximum number of songs that can be put into your favorites (default: 10000)
+# - DEEZER_RETENTION: The number of hours to use a source's copy of songs before fetching a fresh copy from deezer (default: 0)
 
 # Use entrypoint script to handle cron and application
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

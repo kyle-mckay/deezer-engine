@@ -87,7 +87,7 @@ Multiple sources can be combined in a single strategy.
 
 **Optional Parameters**: Parameters that all sources support but are not required.
 
-* `retention` (defaults to `0`): The number of hours to cache the source; 0 = always live.
+* `retention` (defaults to `0`): The number of hours to cache the source; 0 = always live. Default can be changed via the `retention` key in your config.
 * `modifiers` (optional): A list of **Local Modifiers** that apply only to this specific source before it is merged into the global pipeline.
 
 ### `favorites`

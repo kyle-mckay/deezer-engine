@@ -3,6 +3,7 @@ import logging
 from utils.paths import get_cache_dir 
 from utils.deezer_auth import get_tracks
 from utils.cache_manager import handle_cached_data
+from utils.config_loader import get_global_value
 
 def get_sanitized_name(title):
     return re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
@@ -15,7 +16,7 @@ def run(client, config, logger, source_data):
       - retention: int (hours to keep cache, 0 for live)
     """
     playlist_id = source_data.get('id')
-    retention_hrs = source_data.get('retention', 0)
+    retention_hrs = source_data.get('retention', get_global_value('retention', default = 0))
     
     if not playlist_id:
         logger.error("Source type 'playlist' requires an 'id'.")

@@ -78,12 +78,16 @@ def load_config_with_env_overrides():
         if env_var in os.environ:
             value = os.environ[env_var]
             
-            # Type conversion
-            if config_key in ['batch_size', 'playlist_cap', 'favorites_cap']:
+            # Type conversions
+
+            # Integers
+            if config_key in ['batch_size', 'playlist_cap', 'favorites_cap', 'retention']:
                 try:
                     value = int(value)
                 except ValueError:
                     pass
+            
+            # Booleans
             elif config_key in ['write_logs', 'print_banner']:
                 value = value.lower() in ('true', '1', 'yes', 'on')
             
