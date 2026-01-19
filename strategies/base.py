@@ -159,11 +159,11 @@ class StrategyController:
             raise
 
     def check_playlist_limit(self, dest_data, tracks):
-        """Checks if the track list is approaching the environment-defined playlist cap."""
-        # Now 'type' refers to the destination (playlist vs favorites)
+        """Checks if the track list is approaching the environment-defined playlist cap and shrinks it if necessary."""
         dest_type = dest_data.get('type', '').lower()
 
         try:
+            # Determine the cap based on destination type
             match dest_type:
                 case "playlist":
                     cap = get_global_value('playlist_cap', default=5000)
@@ -171,18 +171,34 @@ class StrategyController:
                     cap = get_global_value('favorites_cap', default=10000)
                 case _:
                     self.logger.warning(f"Destination type '{dest_type}' does not have a defined content limit.")
-                    return
+                    return tracks
             
             current_count = len(tracks)
             warning_threshold = cap * 0.9
             
-            if current_count >= warning_threshold:
+            # Shrink the tracks if they exceed the cap
+            if current_count > cap:
+                self.logger.warning(
+                    f"Strategy '{self.strategy_name}' destination ({dest_type}) is at {current_count} tracks, "
+                    f"exceeding the defined cap ({cap})."
+                )
+                self.logger.warning(f"Your tracks pipeline will shrink to '{cap}' tracks.")
+                
+                # This is the modification: slice the list to the cap
+                tracks = tracks[:cap]
+
+            # Log a warning if approaching the limit
+            elif current_count >= warning_threshold:
                 self.logger.warning(
                     f"Strategy '{self.strategy_name}' destination ({dest_type}) is at {current_count} tracks, "
                     f"exceeding 90% of the defined cap ({cap})."
                 )
+                
         except Exception as e:
             self.logger.error(f"Failed to check for a content limit on destination type '{dest_type}': {e}")
+        
+        # Always return the (potentially modified) tracks list
+        return tracks
 
     def handle_destination(self, dest_data):
         """Dynamically loads the destination worker using the final tmp state."""
@@ -197,7 +213,7 @@ class StrategyController:
         self.logger.info(f"Preparing destination '{dest_type}' for ID '{dest_data.get('id')}' with {len(current_tracks)} tracks.")
         
         # Run the limit check
-        self.check_playlist_limit(dest_data, current_tracks)
+        current_tracks = self.check_playlist_limit(dest_data, current_tracks)
 
         try:
             module = importlib.import_module(module_path)

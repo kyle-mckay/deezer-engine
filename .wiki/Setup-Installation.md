@@ -44,6 +44,8 @@ Deezer Engine is configured either through `config.yml` file or docker environme
 | `write_logs` | `DEEZER_WRITE_LOGS` | No | Boolean | `true` | Whether to write logs to file in `/app/data/logs/`. Accepts: `true`, `false`, `1`, `0`, `yes`, `no`. |
 | `batch_size` | `DEEZER_BATCH_SIZE` | No | Integer | `50` | Tracks will be chunked and processed in groups not exceeding this value when adding or removing from playlists. |
 | `print_banner` | `DEEZER_PRINT_BANNER` | No | Boolean | `true` | Whether to print the startup banner on launch. When run in docker mode, it prints on container start. When running locally it's printed on script execution while `log_level` is `INFO` or `DEBUG`. |
+| `playlist_cap` | `DEEZER_PLAYLIST_CAP` | No | Integer | `5000` | The maximum number of songs you want in **any** playlist (Deezer has a limit of 5000). Warns if current pipline > `playlist_cap` and if tracks exceed this value, shrinks the pipeline to this cap. |
+| `favorites_cap` | `DEEZER_FAVORITES_CAP` | No | Integer | `10000` | The maximum number of songs you want in your favorites (Deezer has a limit of 10,000). Warns if current pipline > `favorites_cap` and if tracks exceed this value, shrinks the pipeline to this cap. |
 
 ## Docker Compose
 
