@@ -137,9 +137,6 @@ Modifiers is an **optional** section designed to transform the consolidated trac
 # ... destination section
 ```
 
-**Planned Modifiers** - Some modifiers are in the works or not yet documented here:
-- `artist-seperation`: [#11](https://codeberg.org/kylemmkay/deezer-engine/issues/11)
-
 ### `dedupe`
 
 Remove duplicate track IDs. Deezer does not allow the same track to be in the same playlists, so sources currently de-duplicate by ID automatically when lists are consolidated. However this allows you to force this behaviour in the event future modifiers allow you to insert items after source collection.
@@ -168,6 +165,32 @@ Slice your tracks to keep only a specific number of items from the start or end 
 `top`, `head` or `first` - Retains the first `n` tracks from the beginning of the list.
 `tail`, `bottom` or `last` - Retains the last `n` tracks from the end of the list.
 
+### `filter`
+
+Include only the tracks that meet specific criteria based on their metadata.
+
+```yaml
+    modifiers:
+      - type: "filter"
+        field: "rank"
+        operator: "gt"
+        value: 400000
+
+```
+
+**Supported Operators**:
+
+> Note: String comparisons (equals, contains, starts_with, ends_with) are case-insensitive.
+
+`eq`, `equals`, `==` or `is` - Match the exact value (e.g., `unseen: true`).
+`ne`, `not`, `!=` or `is_not` - Exclude tracks matching the value.
+`gt`, `greater_than`, `>` - True if the field is greater than the value.
+`gte` or `>=` - True if the field is **greater than or equal** to the value.
+`lt`, `less_than`, `<` - True if the field is less than the value.
+`lte` or `<=` - True if the field is **less than or equal** to the value.
+`contains`, `in` or `like` - Checks if the value exists anywhere within the field.
+`starts_with`, `sw` or `startswith` - Checks if the field begins with the specified value.
+`ends_with`, `ew` or `endswith` - Checks if the field ends with the specified value.
 
 ### `shuffle`
 

@@ -121,7 +121,12 @@ class StrategyController:
             
             # Overwrite the strategy's tmp file with the modified results
             self._write_tmp(modified_tracks)
-            self.logger.info(f"Modifier '{mod_type}' applied. Pipeline now contains {len(modified_tracks)} tracks.")
+            current_length=len(current_tracks)
+            new_length=len(modified_tracks)
+            if current_length != new_length:
+                self.logger.info(f"Modifier '{mod_type}' applied. Pipeline changed from {len(current_tracks)} to {len(modified_tracks)} tracks.")
+            else:
+                self.logger.info(f"Modifer '{mod_type}' applied to {current_length} tracks")
         except Exception as e:
             self.logger.error(f"Failed to apply modifier '{mod_type}': {e}")
             raise
