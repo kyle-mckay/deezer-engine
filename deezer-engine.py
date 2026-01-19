@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from utils.logger import setup_logger
 from utils.paths import get_data_dir
-from utils.config_loader import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates
+from utils.config_loader import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates, get_global_value
 from utils.deezer_auth import get_authenticated_client
 from strategies.base import StrategyController
 from __version__ import __version__, __banner__
@@ -56,11 +56,13 @@ def main():
         logger.warning(f"Unsupported log level '{user_log_level}' found in config.yml. Defaulting to 'INFO'.")
     logger.debug("--- Starting Deezer Engine ---")
 
-    # Print banner if enabled and verbosity is info or higher
-    if  config.get('config', {}).get('print_banner', True) and logger.isEnabledFor(logging.INFO):
+    containerized = get_global_value('containerized', default=False)
+    print_banner = get_global_value('print_banner', default=True)
+    
+    # Print banner within script if not containerized, enabled and verbosity is info or higher
+    if  containerized == False and print_banner == True and logger.isEnabledFor(logging.INFO):
         print_startup()
 
-    containerized = os.getenv('CONTAINERIZED', 'false').lower()
     check_for_updates(__version__,containerized,logger)
 
     if containerized == 'true':

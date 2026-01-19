@@ -3,13 +3,18 @@ import yaml
 from pathlib import Path
 import requests
 from utils.paths import get_data_dir
+from utils.logger import setup_logger
 
 def get_global_value(key, default=None):
     """
     Retrieves a configuration value. 
     Checks environment variables (DEEZER_<KEY>) first, then falls back to config.yml.
     """
-    env_key = f"DEEZER_{key.upper()}"
+
+    if key.upper() == "CONTAINERIZED":
+        env_key=key.upper()
+    else:
+        env_key = f"DEEZER_{key.upper()}"
     
     # Check Environment Variables
     if env_key in os.environ:
@@ -26,7 +31,7 @@ def get_global_value(key, default=None):
     try:
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f) or {}
-            return config.get('config', {}).get(key, default)
+            return config.get('config', {}).get(key.lower(), default)
     except Exception:
         return default
 
