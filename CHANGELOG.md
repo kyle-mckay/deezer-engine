@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.7.0 - 2026-01-19
+
+### Enhancements
+
+- feat: allow modifiers to funciton only to specific source (closes #13) (#46) (@kylemmkay)
+
 ## v0.6.0 - 2026-01-19
 
 ### Enhancements
