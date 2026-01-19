@@ -94,9 +94,6 @@ def load_config_with_env_overrides():
 def load_strategies_with_env_overrides():
     """
     Load strategies.yml and apply environment variable overrides.
-    
-    Supported environment variables:
-    - DEEZER_SCHEDULE: Cron schedule expression (e.g., "0 2 * * *")
     """
     data_dir = get_data_dir()
     strategies_path = data_dir / 'strategies.yml'
@@ -108,38 +105,39 @@ def load_strategies_with_env_overrides():
     except FileNotFoundError:
         strategies = {}
     
-    # Note: DEEZER_SCHEDULE is used by the entrypoint script
-    # This function is here for consistency and future extensibility
-    
     return strategies
 
-def check_for_updates(current_version,containerized,logger):
+import requests
+
+def check_for_updates(current_version, containerized, logger):
     """
-    Checks the GitHub API for a newer release tag.
+    Checks the Codeberg API for a newer release tag.
     Provides context-aware advice for Docker users.
     """
-    dh_owner = "kylemmkay"
-    gh_owner = "kyle-mckay"
+    owner = "kylemmkay" 
     repo_name = "deezer-engine"
 
-    api_url = f"https://api.github.com/repos/{gh_owner}/{repo_name}/releases/latest"
+    # Updated to Codeberg/Gitea API v1 format
+    api_url = f"https://codeberg.org/api/v1/repos/{owner}/{repo_name}/releases/latest"
     
     try:
         response = requests.get(api_url, timeout=3)
         response.raise_for_status()
-        latest_version = response.json().get('tag_name')
+        
+        # Codeberg/Gitea uses 'name' for the tag/release title in the 'latest' endpoint
+        latest_version = response.json().get('name')
 
         if latest_version and latest_version != current_version:
             logger.warning("=" * 60)
             logger.warning(f"  UPDATE AVAILABLE: {current_version} -> {latest_version}")
             
             if containerized:
-                # Docker-specific advice
                 logger.warning("  Container detected: Please pull the latest image to update.")
-                logger.warning(f"  Run: docker pull {dh_owner}/{repo_name}:<tag number>")
+                # Update this if you move your image hosting to Codeberg as well
+                logger.warning(f"  Run: docker pull {owner}/{repo_name}:latest")
             else:
-                # Local execution advice
-                logger.warning(f"  Download: https://github.com/{gh_owner}/{repo_name}/releases/latest")
+                # Updated link to Codeberg
+                logger.warning(f"  Download: https://codeberg.org/{owner}/{repo_name}/releases")
                 logger.warning("  Or run 'git pull' if you cloned the repository.")
                 
             logger.warning("=" * 60 )
