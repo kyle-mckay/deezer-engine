@@ -1,5 +1,6 @@
 import time
 import json
+import os
 import math
 import random
 from utils.deezer_auth import get_authenticated_session
@@ -8,13 +9,13 @@ def run(client, config, logger, dest_data, tracks):
     """
     Synchronizes tracks to Deezer with high-fidelity browser emulation.
     """
-    target_id = str(dest_data.get('target'))
-    method = dest_data.get('type', 'smart')
+    target_id = str(dest_data.get('id'))
+    method = dest_data.get('order', 'smart')
     arl = config.get('config', {}).get('arl_token')
     user_id = str(config.get('config', {}).get('user_id'))
 
     if not target_id:
-        logger.error("Destination 'playlist' requires a 'target' ID.")
+        logger.error("Destination 'playlist' requires a playlist 'ID'.")
         return
 
     # Use Utility for Auth

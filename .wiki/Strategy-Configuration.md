@@ -21,8 +21,9 @@ playlists:
           id: "12345678"
           retention: 48
     destination:
-      type: "smart"
-      target: "99999999"
+      - type: "playlist"
+        id: "99999999"
+        order: "smart"
 
 ```
 
@@ -52,9 +53,11 @@ playlists:
         source:
           type: "favorites"
           retention: 48
+    
     destination:
-      type: "smart"
-      target: "88888888"
+      - type: "playlist"
+        id: "88888888"
+        order: "smart"
 
 ```
 
@@ -288,8 +291,9 @@ Define where the final track list saves to.
 # ... source section
 # ... modifiers section
     destination:
-      type: "smart"
-      target: "01234567"
+      - type: "playlist"
+        id: "01234567"
+        order: "smart"
 
 ```
  
@@ -298,4 +302,4 @@ Define where the final track list saves to.
 * `replace` - Removes **all** tracks in destination library first, then adds songs from pipeline.
 * `insert` or `append` - Add tracks from pipeline to playlist without removing any
 
-**Target** (required) - The playlist ID you wish to save to: `https://www.deezer.com/us/playlist/<playlist_id>`
+**ID** (required) - The playlist ID you wish to save to: `https://www.deezer.com/us/playlist/<playlist_id>`

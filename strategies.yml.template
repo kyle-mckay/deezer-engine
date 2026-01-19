@@ -38,5 +38,6 @@ playlists:
         field: "rank"
       - type: "dedupe"
     destination:
-      type: "smart"
-      target: "99998888"
+      - type: "playlist"
+        id: "99998888"
+        order: "smart"
