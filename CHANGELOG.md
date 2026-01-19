@@ -9,6 +9,7 @@
 
 ### Fixes
 
+- fix: update checker migrated to codeberg (#49) (@kylemmkay)
 - fix: added the limiters enforcing destination caps (#48) (@kylemmkay)
 
 ## v0.6.0 - 2026-01-19
