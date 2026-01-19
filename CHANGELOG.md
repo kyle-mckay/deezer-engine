@@ -4,6 +4,7 @@
 
 ### Enhancements
 
+- feat: enhance destination to allow for future multiple destinations and define limit warnings (closes #6) #47 (@kylemmkay)
 - feat: allow modifiers to funciton only to specific source (closes #13) (#46) (@kylemmkay)
 
 ## v0.6.0 - 2026-01-19
