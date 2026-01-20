@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from utils.paths import get_data_dir
 from utils.config_loader import get_global_value
+from utils.db_manager import sync_to_collections
 
 class StrategyController:
     def __init__(self, client, config, logger, strategy_name):
@@ -68,6 +69,7 @@ class StrategyController:
 
     def handle_source(self, source_data):
         """Dynamically loads a source worker and appends its results to the strategy's tmp file."""
+        self.logger.debug("------ strategies.base.handle_source START------")
         src_type = source_data.get('type')
         # Use 'name' if available (e.g. 'discovery'), otherwise fallback to type
         src_label = source_data.get('name', src_type) 
@@ -97,25 +99,12 @@ class StrategyController:
                     except Exception as mod_e:
                         self.logger.error(f"Failed to apply local modifier '{mod_type}' to source '{src_label}': {mod_e}")
 
-            # Combine tracks
-            seen_ids = set()
-            combined = []
-            for track in current_tracks + new_tracks:
-                track_id = str(track.get('id') if isinstance(track, dict) else track.id)
-                if track_id not in seen_ids:
-                    combined.append(track)
-                    seen_ids.add(track_id)
-            
-            self._write_tmp(combined)
+            # Log tracks and their source
+            sync_to_collections(new_tracks,self.logger)
             
             self.logger.info(f"Found {len(new_tracks)} songs in source: {src_label}")
             
-            # Detailed tracking for DEBUG
-            self.logger.debug(
-                f"Source '{src_label}' ({src_type}) resolved. "
-                f"Pipeline grew: {len(current_tracks)} -> {len(combined)} tracks. "
-                f"Net gain: +{len(combined) - len(current_tracks)} unique tracks."
-            )
+            self.logger.debug("------ strategies.base.handle_source END------")
 
         except Exception as e:
             self.logger.error(f"Failed to process source '{src_label}': {e}")
@@ -126,6 +115,7 @@ class StrategyController:
         Dynamically loads a modifier worker to transform the current track list.
         If tracks_override is provided, it processes those tracks instead of reading from tmp.
         """
+        self.logger.debug("------ strategies.base.handle_modifier START------")
         mod_type = mod_data.get('type')
         module_path = f"strategies.modifiers.{mod_type}"
         
@@ -152,6 +142,7 @@ class StrategyController:
                 else:
                     self.logger.info(f"Modifier '{mod_type}' applied to {current_length} tracks")
             
+            self.logger.debug("------ strategies.base.handle_modifier END------")
             return modified_tracks
 
         except Exception as e:
@@ -160,6 +151,7 @@ class StrategyController:
 
     def check_playlist_limit(self, dest_data, tracks):
         """Checks if the track list is approaching the environment-defined playlist cap and shrinks it if necessary."""
+        self.logger.debug("------ strategies.base.check_playlist_limit START------")
         dest_type = dest_data.get('type', '').lower()
 
         try:
@@ -198,6 +190,7 @@ class StrategyController:
             self.logger.error(f"Failed to check for a content limit on destination type '{dest_type}': {e}")
         
         # Always return the (potentially modified) tracks list
+        self.logger.debug("------ strategies.base.check_playlist_limit END------")
         return tracks
 
     def handle_destination(self, dest_data):

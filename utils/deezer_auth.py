@@ -3,10 +3,13 @@ import deezer
 import logging
 import requests
 import random
+import time
 import logging
 import json
+from datetime import datetime
 from utils.logger import setup_logger
 from utils.cache_manager import _cleanup_old_caches
+from utils.config_loader import get_global_value
 
 def get_authenticated_client(config, logger):
     """
@@ -123,7 +126,7 @@ def get_authenticated_session(arl, logger, warm_url=None):
         logger.error(f"Authentication utility error: {e}")
         return None, None
     
-def get_tracks(client, logger, source_type, identifier, cache_file):
+def get_tracks(client, logger, source_type, identifier, cache_file=None, track_ids=None):
     """
     Transforms Deezer API objects into a list of dictionaries.
     """
@@ -144,30 +147,79 @@ def get_tracks(client, logger, source_type, identifier, cache_file):
 
     tracks = []
 
-    # Extract full track metadata
-    for i, track in enumerate(client, 1):
-        d = track.as_dict()
-        
-        tracks.append({
-            'id': str(d.get('id')),
-            'title': d.get('title'),
-            'unseen': d.get('unseen', False),
-            'duration': d.get('duration', 0),
-            'rank': d.get('rank', 0),
-            'artist': d.get('artist', {}).get('name', 'Unknown'),
-            'album': d.get('album', {}).get('title', 'Unknown'),
-        })
+    # Decide if we are iterating a collection or fetching specific IDs
+    # If track_ids is provided, we fetch full objects for those IDs
+    iterable = track_ids if track_ids is not None else client
 
-        # Every 250 tracks, let the user know the progress
-        if i % 250 == 0:
-            if source_type == "favorites":
-                logger.info(f"Scanning favorites... processed {i} tracks.")
-            elif identifier.startswith("playlist__"):
-                logger.info(f"Scanning '{display_name}'... processed {i} tracks.")
-            elif identifier.startswith("album__"):
-                logger.info(f"Scanning '{display_name}'... processed {i} tracks.")
+    # Extract full track metadata
+    date_time=datetime.now().isoformat()
+    if source_type == "favorites":
+        collection = source_type
+    elif source_type != "database":
+        collection = f"{item_type}__{item_id}"
+    update_int = get_global_value('batch_size')
+    for i, track in enumerate(iterable, 1):
+        try:
+            if source_type == "database":
+                # Fetch full metadata only for database enrichment
+                t_id = track.get('id') if isinstance(track, dict) else track
+                track_obj = client.get_track(t_id)
+                d = track_obj.as_dict()
+                
+                tracks.append({
+                    'id': str(d.get('id')),
+                    'readable': d.get('readable'),
+                    'title': d.get('title'),
+                    'title_short': d.get('title_short'),
+                    'title_version': d.get('title_version'),
+                    'unseen': d.get('unseen', False),
+                    'isrc': d.get('isrc'),
+                    'link': d.get('link'),
+                    'share': d.get('share'),
+                    'duration': d.get('duration', 0),
+                    'track_position': d.get('track_position'),
+                    'disk_number': d.get('disk_number'),
+                    'rank': d.get('rank', 0),
+                    'release_date': d.get('release_date'),
+                    'explicit_lyrics': d.get('explicit_lyrics',False),
+                    'explicit_content_lyrics': d.get('explicit_content_lyrics',0),
+                    'explicit_content_cover': d.get('explicit_content_cover',0),
+                    'preview': d.get('preview'),
+                    'bpm': d.get('bpm',0),
+                    'gain': d.get('gain',0),
+                    'available_countries': json.dumps(d.get('available_countries', [])),
+                    'contributors': json.dumps(d.get('contributors', [])),
+                    'md5_image': d.get('md5_image'),
+                    'track_token': d.get('track_token'),
+                    'artist_id': d.get('artist', {}).get('id'),
+                    'album_id': d.get('album', {}).get('id'),
+                    'date_cached': date_time
+                })
             else:
-                logger.info(f"Scanning {source_type}... processed {i} tracks.")
+                # fetch for source ID collection
+                d = track.as_dict()
+                tracks.append({
+                    'id': str(d.get('id')),
+                    'collection': f"{collection}",
+                    'date_cached': date_time
+                })
+
+            # Give the user an update every n tracks, where n is their batch_size
+            if i % update_int == 0:
+                if source_type == "database":
+                    logger.info(f"Database enrichment: processed {i}/{len(iterable)} tracks.")
+                elif source_type == "favorites":
+                    logger.info(f"Scanning favorites... processed {i}/{len(iterable)} tracks.")
+                elif identifier.startswith("playlist__"):
+                    logger.info(f"Scanning '{display_name}'... processed {i}/{len(iterable)} tracks.")
+                elif identifier.startswith("album__"):
+                    logger.info(f"Scanning '{display_name}'... processed {i}/{len(iterable)} tracks.")
+                else:
+                    logger.info(f"Scanning {source_type}... processed {i}/{len(iterable)} tracks.")
+
+        except Exception as e:
+            logger.error(f"Error processing track at index {i}: {e}")
+            continue
     
     # Remove old files for this ID (e.g., if the playlist was renamed)
     try:
@@ -178,5 +230,6 @@ def get_tracks(client, logger, source_type, identifier, cache_file):
 
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(f"Successfully transformed {len(tracks)} tracks.")
-            
+    
+    time.sleep(0.5)
     return tracks

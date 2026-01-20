@@ -9,6 +9,7 @@ def run(client, config, logger, dest_data, tracks):
     """
     Synchronizes tracks to Deezer with high-fidelity browser emulation.
     """
+    logger.debug("------ destinations.playlist START------")
     target_id = str(dest_data.get('id'))
     method = dest_data.get('order', 'smart')
     arl = config.get('config', {}).get('arl_token')
@@ -85,6 +86,7 @@ def run(client, config, logger, dest_data, tracks):
                 _gateway_request(session, "playlist.addSongs", target_id, api_token, track_ids, client.batch_size, logger)
 
         logger.info(f"Strategy '{method}' complete for '{playlist.title}'.")
+        logger.debug("------ destinations.playlist END------")
 
     except Exception as e:
         logger.error(f"Sync failed: {e}")

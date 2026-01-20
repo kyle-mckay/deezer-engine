@@ -15,8 +15,10 @@ def run(client, config, logger, source_data):
       - id: str (The numeric playlist ID)
       - retention: int (hours to keep cache, 0 for live)
     """
-    playlist_id = source_data.get('id')
-    retention_hrs = source_data.get('retention', get_global_value('retention', default = 0))
+    logger.debug("------ sources.playlist START------")
+    for config in source_data:
+        playlist_id = config.get('id')
+        retention_hrs = config.get('retention', get_global_value('retention', default = 0))
     
     if not playlist_id:
         logger.error("Source type 'playlist' requires an 'id'.")
@@ -38,4 +40,7 @@ def run(client, config, logger, source_data):
         return get_tracks(playlist.get_tracks(), logger, playlist, context_name, cache_file)
 
     # handle_cached_data will manage the file check, the fetch, and the write-to-disk
-    return handle_cached_data(cache_file, retention_hrs, logger, fetch_playlist, "playlist")
+    tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_playlist, "playlist")
+
+    logger.debug("------ sources.playlist END------")
+    return tracks

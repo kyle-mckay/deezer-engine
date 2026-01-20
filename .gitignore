@@ -7,6 +7,8 @@ strategies.yml
 # --- TEMP FILES ---
 cache/
 tmp/
+db/
+deezer_engine.db
 
 # --- PYTHON SETTINGS ---
 # Byte-compiled / optimized / DLL files

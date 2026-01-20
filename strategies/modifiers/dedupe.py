@@ -4,6 +4,7 @@ def run(client, config, logger, mod_data, current_tracks):
     """
     Removes duplicate track IDs from the pipeline
     """
+    logger.debug("------ modifiers.dedupe START------")
     logger.info("Applying 'dedupe' modifier...")
 
     if not current_tracks:
@@ -38,6 +39,7 @@ def run(client, config, logger, mod_data, current_tracks):
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Final unique track count: {len(deduplicated_list)}")
 
+        logger.debug("------ modifiers.dedupe END------")
         return deduplicated_list
 
     except Exception as e:

@@ -6,8 +6,10 @@ from pathlib import Path
 from utils.logger import setup_logger
 from utils.paths import get_data_dir
 from utils.config_loader import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates, get_global_value
-from utils.deezer_auth import get_authenticated_client
+from utils.deezer_auth import get_authenticated_client, get_tracks
 from strategies.base import StrategyController
+from utils.database import initialize_all
+from utils.db_manager import get_unprocessed_track_ids, update_track_metadata,fetch_collection, is_collection_cached
 from __version__ import __version__, __banner__
 
 def load_configs():
@@ -79,6 +81,8 @@ def main():
         logger.debug(f"Configuration metadata: UserID={config.get('config', {}).get('user_id')}, "
                      f"BatchSize={config.get('config', {}).get('batch_size', 50)}")
 
+    # Initialize database
+    initialize_all(logger)
     
     # 3. Authenticate
     client = get_authenticated_client(config, logger)
@@ -104,25 +108,38 @@ def main():
         controller = StrategyController(client, config, logger, safe_name)
         
         try:
+            source_list = []
             # Source Phase
             sources = s_data.get('source', [])
             for src in sources:
                 logger.debug(f"Handling source type: {src.get('type')}")
-                controller.handle_source(src)
+                source_name=src.get('type')
+                if source_name == 'favorites':
+                    source_list.append(f"{source_name}")
+                elif source_name == "smarttracklist":
+                    source_list.append(f"{source_name}__{src.get('name')}")
+                else:
+                    source_list.append(f"{source_name}__{src.get('id')}")
+
+                # Get new tracklist if cache expired
+                if is_collection_cached(source_name,config,logger) == False:
+                    controller.handle_source(src)
                 
-                # Check for large dataset logging performance
-                if logger.isEnabledFor(logging.DEBUG):
-                    current_tracks = controller._read_tmp()
-                    logger.debug(f"Pipeline size after source: {len(current_tracks)} tracks.")
-                    # Only log the tracks if the list is manageable, or just head/tail
-                    if len(current_tracks) > 100:
-                        sample = [t.get('title', str(t))[:30] if isinstance(t, dict) else str(t.title)[:30] for t in current_tracks[:3]]
-                        logger.debug(f"Sample tracks: {sample}...")
-                    else:
-                        titles = [t.get('title', str(t)) if isinstance(t, dict) else t.title for t in current_tracks[:5]]
-                        logger.debug(f"Track titles: {titles}")
+                # Identify new tracks to fetch metadata for.
+                unprocessed = get_unprocessed_track_ids()
+                if len(unprocessed) > 0:
+                    logger.info(f"Fetching metadata for new {len(unprocessed)} new tracks... This may take a while")
+                    unprocessed = get_tracks(client,logger,"database","tracks","null",unprocessed)
+                    logger.debug(f"Metadata fetched, updating database.")
+                    update_track_metadata(unprocessed,logger)
             
+
             # Modifier Phase
+            tracks = []
+            for source in source_list:
+                tracks.extend(fetch_collection(source,logger))
+            controller._write_tmp(tracks)
+
             modifiers = s_data.get('modifiers', [])
             for mod in modifiers:
                 logger.debug(f"Applying modifier: {mod.get('type')}")

@@ -3,6 +3,7 @@ import json
 import re
 import random
 import logging
+from datetime import datetime
 from utils.deezer_auth import get_authenticated_session
 from utils.paths import get_cache_dir
 from utils.cache_manager import handle_cached_data
@@ -15,6 +16,7 @@ def run(client, config, logger, source_data):
       - id: str (The numeric playlist ID)
       - retention: int (hours to keep cache, 0 for live)
     """
+    logger.debug("------ sources.smarttracklist START------")
     list_name = source_data.get('name')
     retention_hrs = source_data.get('retention', get_global_value('retention', default = 0))
     arl = config.get('config', {}).get('arl_token')
@@ -71,23 +73,19 @@ def run(client, config, logger, source_data):
         # Deduplicate and Fetch full metadata
         track_ids = list(dict.fromkeys(track_ids))
         tracks = []
+        date_time=datetime.now().isoformat()
         for track_id in track_ids:
             try:
-                track = client.get_track(track_id)
+                #track = client.get_track(track_id)
                 tracks.append({
-                    'id': str(track.id),
-                    'title': getattr(track, 'title', 'Unknown'),
-                    'unseen': getattr(track, 'unseen', False),
-                    'duration': getattr(track, 'duration', 0),
-                    'rank': getattr(track, 'rank', 0),
-                    'explicit_lyrics': getattr(track, 'explicit_lyrics', False),
-                    'artist': track.artist.name if hasattr(track, 'artist') else 'Unknown',
-                    'album': track.album.title if hasattr(track, 'album') else 'Unknown',
+                    'id': str(track_id),
+                    'collection': f"{source_data.get('type')}__{list_name}",
+                    'date_cached': date_time
                 })
             except Exception as e:
                 logger.debug(f"Could not fetch metadata for track {track_id}: {e}")
             
-        
+        logger.debug("------ sources.smarttracklist END------")
         return tracks
 
     # handle_cached_data will manage the file check, the fetch, and the write-to-disk

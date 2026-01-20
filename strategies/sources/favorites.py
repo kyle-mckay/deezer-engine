@@ -11,6 +11,7 @@ def run(client, config, logger, source_data):
     source_data keys: 
       - retention: int (hours to keep cache, 0 for live)
     """
+    logger.debug("------ sources.favorites START------")
     user_id = config.get('config', {}).get('user_id')
     retention_hrs = source_data.get('retention', get_global_value('retention', default = 0))
     
@@ -27,4 +28,7 @@ def run(client, config, logger, source_data):
         return get_tracks(client.get_user_tracks(user_id), logger, "favorites", user_id, cache_file)
 
     # handle_cached_data will manage the file check, the fetch, and the write-to-disk
-    return handle_cached_data(cache_file, retention_hrs, logger, fetch_favorites, "favorites")
+    tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_favorites, "favorites")
+    
+    logger.debug("------ sources.favorites END------")
+    return tracks

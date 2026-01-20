@@ -3,6 +3,7 @@ import json
 import time
 import logging
 from utils.paths import get_cache_dir
+from utils.db_manager import sync_to_collections
 
 def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, context, fallback_on_error=True):
     """
@@ -26,10 +27,8 @@ def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, contex
     try:
         data = fetch_callback()
         if data: # Only cache if we actually got results
-            logger.debug(f"Caching fresh {context} data to {cache_file}.")
-            os.makedirs(os.path.dirname(cache_file), exist_ok=True)
-            with open(cache_file, 'w') as f:
-                json.dump(data, f)
+            logger.debug(f"Caching fresh {context} data to collections.")
+
         return data
     except Exception as e:
         logger.error(f"Failed to fetch data for {context}, checking for fallback: {e}")

@@ -1,4 +1,5 @@
 import os
+import re
 import yaml
 from pathlib import Path
 import requests
@@ -111,7 +112,41 @@ def load_strategies_with_env_overrides():
     
     return strategies
 
-import requests
+def version_to_int(version_str):
+    """
+    Equivalent to: sed 's/v//' | awk -F. '{ printf("%03d%03d%03d\n", $1,$2,$3); }'
+    Converts 'v1.2.3' or '1.2.3' into 1002003
+    """
+    if not version_str:
+        return 0
+    
+    clean_v = re.sub(r'^[^0-9]+', '', version_str)
+
+    parts = clean_v.split('.')
+    
+    while len(parts) < 3:
+        parts.append('0')
+        
+    try:
+        normalized_str = "{:03d}{:03d}{:03d}".format(
+            int(parts[0]), 
+            int(parts[1]), 
+            int(parts[2])
+        )
+        return normalized_str
+    except (ValueError, IndexError):
+        return 0
+
+def extract_version(version_str):
+    """
+    Extracts version numbers (e.g., 0.7.0) from a string.
+    """
+    if not version_str:
+        return ""
+    
+    # Matches sequences of digits and dots (e.g., 1.2.3)
+    match = re.search(r"(\d+\.\d+(?:\.\d+)?)", version_str)
+    return match.group(1) if match else version_str
 
 def check_for_updates(current_version, containerized, logger):
     """
@@ -124,14 +159,17 @@ def check_for_updates(current_version, containerized, logger):
     # Updated to Codeberg/Gitea API v1 format
     api_url = f"https://codeberg.org/api/v1/repos/{owner}/{repo_name}/releases/latest"
     
+    
+
     try:
         response = requests.get(api_url, timeout=3)
         response.raise_for_status()
         
         # Codeberg/Gitea uses 'name' for the tag/release title in the 'latest' endpoint
-        latest_version = response.json().get('name')
+        latest_version = extract_version(response.json().get('name'))
+        current_version = extract_version(current_version)
 
-        if latest_version and latest_version != current_version:
+        if latest_version and version_to_int(latest_version) > version_to_int(current_version):
             logger.warning("=" * 60)
             logger.warning(f"  UPDATE AVAILABLE: {current_version} -> {latest_version}")
             
