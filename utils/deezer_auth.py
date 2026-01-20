@@ -8,7 +8,6 @@ import logging
 import json
 from datetime import datetime
 from utils.logger import setup_logger
-from utils.cache_manager import _cleanup_old_caches
 from utils.config_loader import get_global_value
 
 def get_authenticated_client(config, logger):
@@ -220,13 +219,6 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
         except Exception as e:
             logger.error(f"Error processing track at index {i}: {e}")
             continue
-    
-    # Remove old files for this ID (e.g., if the playlist was renamed)
-    try:
-        from utils.cache_manager import _cleanup_old_caches
-        _cleanup_old_caches(source_type, item_id, cache_file, logger)
-    except ImportError:
-        pass
 
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(f"Successfully transformed {len(tracks)} tracks.")
