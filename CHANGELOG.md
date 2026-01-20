@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.0 - 2026-01-20
+
+### Enhancements
+
+- feat: implement SQLLite db (completes #14) (#54) (@kylemmkay)
+
 ## v0.7.0 - 2026-01-19
 
 ### Enhancements
