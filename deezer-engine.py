@@ -9,7 +9,7 @@ from utils.config_loader import load_config_with_env_overrides, load_strategies_
 from utils.deezer_auth import get_authenticated_client, get_tracks
 from strategies.base import StrategyController
 from utils.database import initialize_all
-from utils.db_manager import get_unprocessed_track_ids, update_track_metadata,fetch_collection, is_collection_cached
+from utils.db_manager import get_unprocessed_track_ids, update_track_metadata,fetch_collection, is_collection_cached, get_expired_track_ids, update_tracks_partial_batch
 from __version__ import __version__, __banner__
 
 def load_configs():
@@ -126,12 +126,18 @@ def main():
                     controller.handle_source(src)
                 
                 # Identify new tracks to fetch metadata for.
-                unprocessed = get_unprocessed_track_ids()
+                unprocessed = get_unprocessed_track_ids(logger)
                 if len(unprocessed) > 0:
                     logger.info(f"Fetching metadata for new {len(unprocessed)} new tracks... This may take a while")
                     unprocessed = get_tracks(client,logger,"database","tracks","null",unprocessed)
                     logger.debug(f"Metadata fetched, updating database.")
                     update_track_metadata(unprocessed,logger)
+                refresh_stats = get_expired_track_ids(logger)
+                if len(refresh_stats) > 0:
+                    logger.info(f"Fetching new stats (rank, unseen) for existing tracks... This should be quicker")
+                    refresh_stats = get_tracks(client, logger, "database", "stats", "null", refresh_stats)
+                    logger.debug(f"New stats fetched, updating database.")
+                    update_tracks_partial_batch(refresh_stats)
             
 
             # Modifier Phase

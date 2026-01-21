@@ -14,9 +14,6 @@ def _get_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-import sqlite3
-import json
-
 def fetch_collection(source_name, logger=None):
     """
     Retrieves all tracks and their full metadata associated with a specific source.
@@ -147,6 +144,44 @@ def get_unprocessed_track_ids(logger=None):
             logger.error(f"Failed to fetch unprocessed track IDs: {e}")
         return []
 
+def update_tracks_partial_batch(track_list, logger=None):
+    """
+    Updates multiple tracks using the keys present in the first dictionary.
+    All dictionaries in track_list must have the same keys.
+    """
+    if not track_list:
+        return
+
+    # Use the first item to define which columns we are updating
+    sample_track = track_list[0]
+    # Filter out 'id' from the SET clause because it's used in the WHERE clause
+    update_keys = [k for k in sample_track.keys() if k != 'id']
+    
+    # Build the dynamic query
+    # Result: "UPDATE tracks SET rank = ?, unseen = ? WHERE id = ?;"
+    set_clause = ", ".join([f"{k} = ?" for k in update_keys])
+    query = f"UPDATE tracks SET {set_clause} WHERE id = ?;"
+
+    # 3. Prepare the data tuples
+    # Each tuple must be (val1, val2, ..., track_id)
+    data_tuples = []
+    for t in track_list:
+        row_values = [t.get(k) for k in update_keys]
+        row_values.append(t.get('id'))
+        data_tuples.append(tuple(row_values))
+
+    try:
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.executemany(query, data_tuples)
+            conn.commit()
+            if logger:
+                logger.info(f"Updated {len(track_list)} tracks with fields: {update_keys}")
+    except Exception as e:
+        if logger:
+            logger.error(f"Batch partial update failed: {e}")
+        raise
+
 def update_track_metadata(track_list, logger=None):
     """
     Updates the tracks table with full metadata fetched from the Deezer API.
@@ -235,6 +270,33 @@ def update_track_metadata(track_list, logger=None):
             logger.error(f"Database metadata update failed: {e}")
         raise
 
+def get_expired_track_ids(logger=None):
+    """
+    Returns a list of track IDs where date_cached is older than n days.
+    """
+    # SQLite logic: find records where date_cached is less than 'now' minus 7 days
+    track_stats_refresh=get_global_value("track_stats_refresh",default = 7)
+    query = f"""
+    SELECT id 
+    FROM tracks 
+    WHERE date_cached < datetime('now', '-{track_stats_refresh} days');
+    """
+    
+    try:
+        with _get_connection() as conn:
+            # We want a flat list of IDs, not a list of row objects
+            cursor = conn.execute(query)
+            expired_ids = [row[0] for row in cursor.fetchall()]
+            
+            if logger:
+                logger.info(f"Found {len(expired_ids)} expired tracks.")
+                
+            return expired_ids
+            
+    except Exception as e:
+        if logger:
+            logger.error(f"Error fetching expired track IDs: {e}")
+        return []
 
 def is_collection_cached(source_name, config, logger=None):
     """

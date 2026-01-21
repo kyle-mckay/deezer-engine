@@ -159,7 +159,7 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     update_int = get_global_value('batch_size')
     for i, track in enumerate(iterable, 1):
         try:
-            if source_type == "database":
+            if source_type == "database" and identifier == "tracks":
                 # Fetch full metadata only for database enrichment
                 t_id = track.get('id') if isinstance(track, dict) else track
                 track_obj = client.get_track(t_id)
@@ -194,6 +194,22 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                     'album_id': d.get('album', {}).get('id'),
                     'date_cached': date_time
                 })
+            elif source_type == "database" and identifier == "stats":
+                # dynamic fields
+                t_id = track.get('id') if isinstance(track, dict) else track
+                track_obj = client.get_track(t_id)
+                d = track_obj.as_dict()
+                tracks.append({
+                    'id': str(d.get('id')),
+                    'readable': d.get('readable'),
+                    'unseen': d.get('unseen', False),
+                    'rank': d.get('rank', 0),
+                    'bpm': d.get('bpm',0),
+                    'gain': d.get('gain',0),
+                    'available_countries': json.dumps(d.get('available_countries', [])),
+                    'contributors': json.dumps(d.get('contributors', [])),
+                    'date_cached': date_time
+                })
             else:
                 # fetch for source ID collection
                 d = track.as_dict()
@@ -206,7 +222,7 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
             # Give the user an update every n tracks, where n is their batch_size
             if i % update_int == 0:
                 if source_type == "database":
-                    logger.info(f"Database enrichment: processed {i}/{len(iterable)} tracks.")
+                    logger.info(f"Database '{identifier}' enrichment: processed {i}/{len(iterable)} tracks.")
                 elif source_type == "favorites":
                     logger.info(f"Scanning favorites... processed {i}/{len(iterable)} tracks.")
                 elif identifier.startswith("playlist__"):
