@@ -3,6 +3,7 @@ import logging
 def normalize_compariter(logger, operator):
     """Maps various string aliases to a compariter"""
     op = str(operator).lower().strip()
+    logger.debug(f"Normalizing filter operator: '{operator}'")
     match op:
         case "==" | "equals" | "eq" | "is":
             return "=="
@@ -23,23 +24,24 @@ def normalize_compariter(logger, operator):
         case "ends_with" | "endswith" | "ew":
             return "ends_with"
         case _:
-            logger.warning(f"Unknown operator: '{operator}'")
+            logger.warning(f"Unknown filter operator: '{operator}'")
             return "unknown"
 
 def run(client, config, logger, mod_data, current_tracks):
     """
     Filters tracks based on a field, operator, and value.
     """
-    logger.debug("------ modifiers.filter START ------")
+    logger.debug(">>> START: strategies.modifiers.filter.run")
     
     field = mod_data.get('field')
     operator = normalize_compariter(logger, mod_data.get('operator', '=='))
     value = mod_data.get('value')
 
     if operator == "unknown":
+        logger.debug(f"Skipping filter due to invalid operator.")
         return current_tracks
 
-    logger.info(f"Filtering tracks where '{field}' {operator} {value}")
+    logger.debug(f"Filter Criteria: {field} {operator} {value} (Targeting {len(current_tracks)} tracks)")
     filtered_tracks = []
 
     for track in current_tracks:
@@ -48,11 +50,13 @@ def run(client, config, logger, mod_data, current_tracks):
             
             # If the field doesn't exist on this track, skip it
             if track_val is None:
+                logger.debug(f"Track {track.get('id')} excluded: Field '{field}' missing.")
                 continue
 
             # Force type alignment
             compare_value = value
             if isinstance(track_val, (int, float)) and not isinstance(value, (int, float)):
+                logger.debug(f"Casting filter value '{value}' to numeric for field '{field}'")
                 compare_value = float(value) if "." in str(value) else int(value)
             elif isinstance(track_val, str):
                 track_val = track_val.lower()
@@ -85,6 +89,6 @@ def run(client, config, logger, mod_data, current_tracks):
             logger.debug(f"Skipping track {track.get('id')} - comparison error: {e}")
             continue
 
-    logger.info(f"Filter complete. Kept {len(filtered_tracks)} of {len(current_tracks)} tracks.")
-    logger.debug("------ modifiers.filter END ------")
+    logger.info(f"Filter applied: '{field} {operator} {value}'. Kept {len(filtered_tracks)}/{len(current_tracks)} tracks.")
+    logger.debug("<<< END: strategies.modifiers.filter.run")
     return filtered_tracks

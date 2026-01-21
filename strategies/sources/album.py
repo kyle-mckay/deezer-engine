@@ -6,40 +6,62 @@ from utils.cache_manager import handle_cached_data
 from utils.config_loader import get_global_value
 
 def get_sanitized_name(title):
+    # Internal logic tracing for string manipulation
     return re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
 
 def run(client, config, logger, source_data):
     """
     Fetches tracks from a specific Deezer album with local caching.
-    source_data:
-      - id: str (The numeric album ID)
-      - retention: int (hours to keep cache, 0 for live)
     """
-    logger.debug("------ sources.album START ------")
-    album_id = source_data.get('id')
-    retention_hrs = source_data.get('retention', get_global_value('retention', default = 0))
+    logger.debug(">>> START: strategies.sources.album.run")
     
-    if not album_id:
-        logger.error("Source type 'album' requires an 'id'.")
-        return []
-
-    # Get album name and data
     try:
-        album = client.get_album(album_id)
-        clean_name = get_sanitized_name(album.title)
-        cache_file = str(get_cache_dir() / f"album_{album_id}_{clean_name}.json")
+        # Configuration Extraction
+        album_id = source_data.get('id')
+        retention_hrs = source_data.get('retention', get_global_value('retention', default=0))
+        
+        if not album_id:
+            logger.error("Source type 'album' failed: missing 'id' in configuration.")
+            return []
+
+        # Logic Tracing: Metadata retrieval
+        logger.debug(f"Targeting Album ID: {album_id} | Retention: {retention_hrs}h")
+
+        try:
+            album = client.get_album(album_id)
+            clean_name = get_sanitized_name(album.title)
+            cache_file = str(get_cache_dir() / f"album_{album_id}_{clean_name}.json")
+            
+            logger.debug(f"Resolved Album: '{album.title}' | Cache Key: {clean_name}")
+        except Exception as e:
+            logger.error(f"Error fetching album metadata for {album_id}: {e}")
+            logger.debug("Stack trace:", exc_info=True)
+            return []
+
+        def fetch_album():
+            """Closure triggered only if cache is invalid or missing."""
+            logger.debug(f"Initiating live API fetch for album: {album.id}")
+            context_name = f"album__{album.title}__{album.id}"
+            # get_tracks handles the heavy lifting of API interaction
+            return get_tracks(album.get_tracks(), logger, album, context_name, cache_file)
+
+        # Execution via Cache Manager
+        tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_album, "album")
+
+        # Consolidated INFO: Single summary line
+        logger.info(f"Loaded {len(tracks)} tracks from album '{album.title}'.")
+
+        # Data Samples for Debugging
+        if tracks:
+            sample_ids = [t.get('id') for t in tracks[:5]]
+            logger.debug(f"Sample Track IDs from source: {sample_ids}")
+
+        return tracks
+
     except Exception as e:
-        logger.error(f"Error fetching album metadata for {album_id}: {e}")
+        logger.error(f"Critical failure in album source: {e}")
+        logger.debug("Stack trace:", exc_info=True)
         return []
-
-    def fetch_album():
-        # called by handle_cached_data if cache is invalid/missing
-        logger.info(f"Fetching tracks from album: '{album.title}'")
-        context_name = f"album__{album.title}__{album.id}"
-        return get_tracks(album.get_tracks(), logger, album, context_name, cache_file)
-
-    # handle_cached_data will manage the file check, the fetch, and the write-to-disk
-    tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_album, "album")
-    
-    logger.debug("------ sources.album START ------")
-    return tracks
+        
+    finally:
+        logger.debug("<<< END: strategies.sources.album.run")

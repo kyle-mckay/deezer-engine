@@ -10,7 +10,7 @@ def run(client, config, logger, mod_data, current_tracks):
     2. Compares them against 'current_tracks' (the pipeline from ./tmp/).
     3. Returns the filtered list to the Controller to overwrite ./tmp/.
     """
-    logger.info("Applying 'exclude' modifier...")
+    logger.debug(">>> START: strategies.modifiers.exclude.run")
 
     # 1. Resolve the exclude source dynamically
     source_info = mod_data.get('source')
@@ -20,18 +20,17 @@ def run(client, config, logger, mod_data, current_tracks):
 
     for src in source_info:
         source_type = src.get('type')
-        source_id = src.get('id')
+        source_id = src.get('id', 'N/A')
         
-        logger.debug(f"Applying modifier to source: {source_type}__{source_id}")
+        logger.debug(f"Targeting exclusion source: {source_type} (ID: {source_id})")
     
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"Exclusion logic started. Target source type: {source_type}")
-            logger.debug(f"Current pipeline size: {len(current_tracks)} tracks.")
+            logger.debug(f"Pipeline size before exclusion: {len(current_tracks)}")
 
         try:
             # We reuse the source workers to get the list of IDs to exclude.
             module_path = f"strategies.sources.{source_type}"
-            logger.debug(f"Loading exclusion source worker: {module_path}")
+            logger.debug(f"Importing source worker: {module_path}")
             
             source_worker = importlib.import_module(module_path)
             exclude_tracks = source_worker.run(client, config, logger, source_info)
@@ -44,14 +43,11 @@ def run(client, config, logger, mod_data, current_tracks):
                 exclude_set.add(track_id)
             
             if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Exclusion list loaded: {len(exclude_set)} unique tracks to filter out.")
+                logger.debug(f"Loaded {len(exclude_set)} IDs to exclude.")
                 # Verify if there is any overlap at all before filtering
-                current_ids = set()
-                for track in current_tracks:
-                    track_id = str(track.get('id') if isinstance(track, dict) else track.id)
-                    current_ids.add(track_id)
+                current_ids = {str(t.get('id') if isinstance(t, dict) else t.id) for t in current_tracks}
                 intersection = current_ids.intersection(exclude_set)
-                logger.debug(f"Intersection found: {len(intersection)} tracks in pipeline match the exclusion list.")
+                logger.debug(f"Match found: {len(intersection)} tracks from current pipeline exist in exclusion source.")
 
             starting_count = len(current_tracks)
             
@@ -61,18 +57,19 @@ def run(client, config, logger, mod_data, current_tracks):
                 track_id = str(track.get('id') if isinstance(track, dict) else track.id)
                 if track_id not in exclude_set:
                     result.append(track)
+                else:
+                    logger.debug(f"Excluding Track ID: {track_id}")
             
             removed_count = starting_count - len(result)
-            logger.info(f"Exclusion complete: Removed {removed_count} matching tracks.")
+            logger.info(f"Exclusion applied: Removed {removed_count} tracks based on {source_type}.")
             
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Final pipeline count after exclusion: {len(result)}")
+            logger.debug(f"Final pipeline count: {len(result)}")
+            logger.debug("<<< END: strategies.modifiers.exclude.run")
                 
             return result
 
         except Exception as e:
             logger.error(f"Failed to apply exclusion: {e}")
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.exception("Traceback for exclusion failure:")
+            logger.debug("Traceback for exclusion failure:", exc_info=True)
             # On failure, return the original list to avoid breaking the pipeline
             return current_tracks

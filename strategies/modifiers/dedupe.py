@@ -4,15 +4,14 @@ def run(client, config, logger, mod_data, current_tracks):
     """
     Removes duplicate track IDs from the pipeline
     """
-    logger.debug("------ modifiers.dedupe START------")
-    logger.info("Applying 'dedupe' modifier...")
+    logger.debug(">>> START: strategies.modifiers.dedupe.run")
 
     if not current_tracks:
-        logger.warning("Dedupe modifier received an empty track list.")
+        logger.debug("Dedupe modifier received an empty track list. Skipping.")
         return []
 
     if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(f"Dedupe phase started. Initial pipeline count: {len(current_tracks)}")
+        logger.debug(f"Scanning {len(current_tracks)} tracks for duplicate IDs.")
 
     try:
         # Use a set to track what we've seen, but iterate through the list and keep order
@@ -28,23 +27,19 @@ def run(client, config, logger, mod_data, current_tracks):
                 seen.add(track_id)
             else:
                 duplicate_count += 1
-                if logger.isEnabledFor(logging.DEBUG) and duplicate_count <= 5:
-                    logger.debug(f"Found duplicate track ID: {track_id}")
+                logger.debug(f"Duplicate found and removed: {track_id}")
 
         if duplicate_count > 0:
-            logger.info(f"Dedupe complete: Removed {duplicate_count} duplicate songs.")
+            logger.info(f"Dedupe applied: Removed {duplicate_count} duplicate tracks.")
         else:
-            logger.info("Dedupe complete: No duplicates found.")
+            logger.info("Dedupe applied: No duplicates found.")
 
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"Final unique track count: {len(deduplicated_list)}")
-
-        logger.debug("------ modifiers.dedupe END------")
+        logger.debug(f"Final pipeline count: {len(deduplicated_list)}")
+        logger.debug("<<< END: strategies.modifiers.dedupe.run")
         return deduplicated_list
 
     except Exception as e:
         logger.error(f"Failed to perform deduplication: {e}")
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.exception("Traceback for dedupe failure:")
+        logger.debug("Traceback for dedupe failure:", exc_info=True)
         # Return original list as safety net
         return current_tracks

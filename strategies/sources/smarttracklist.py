@@ -12,82 +12,95 @@ from utils.config_loader import get_global_value
 def run(client, config, logger, source_data):
     """
     Fetches tracks from a specific Deezer smarttracklists with local caching.
-    source_data:
-      - id: str (The numeric playlist ID)
-      - retention: int (hours to keep cache, 0 for live)
     """
-    logger.debug("------ sources.smarttracklist START------")
-    list_name = source_data.get('name')
-    retention_hrs = source_data.get('retention', get_global_value('retention', default = 0))
-    arl = config.get('config', {}).get('arl_token')
+    logger.debug(">>> START: strategies.sources.smarttracklist.run")
     
-    cache_file = str(get_cache_dir() / f"smart_{list_name}.json")
-
-    def fetch_smart_list():
-        # called by handle_cached_data if cache is invalid/missing
-        warm_url = f"https://www.deezer.com/us/smarttracklist/{list_name}"
-        session, api_token = get_authenticated_session(arl, logger, warm_url)
+    try:
+        list_name = source_data.get('name')
+        retention_hrs = source_data.get('retention', get_global_value('retention', default=0))
+        arl = config.get('config', {}).get('arl_token')
         
-        if not session or not api_token:
-            logger.error(f"Authentication utility failed to provide a session for {list_name}")
-            return []
-        # Identify the Internal ID via Scrape
-        page_response = session.get(warm_url)
-        page_text = page_response.text
-        
-        real_id_match = re.search(r'"SMART_TRACKLIST":\{.*?"id":"([^"]+)"', page_text)
-        target_id = real_id_match.group(1) if real_id_match else list_name.replace('-', '_')
+        # Security: Mask ARL in debug logs
+        masked_arl = f"{arl[:6]}...{arl[-6:]}" if arl else "None"
+        logger.debug(f"Params: name='{list_name}', retention={retention_hrs}h, arl={masked_arl}")
 
-        # Universal Fetch Strategies
-        fetch_strategies = [
-            ("deezer.pageSmartTracklist", {"smartTracklist_id": target_id, "tab": 0}),
-            ("song.getListData", {"sng_ids": [], "type": "smarttracklist", "id": target_id})
-        ]
+        cache_file = str(get_cache_dir() / f"smart_{list_name}.json")
 
-        logger.info(f"Fetching songs for '{list_name}'...")
-        track_ids = []
-        for method, payload in fetch_strategies:
-            cid = random.randint(100000000, 999999999)
-            gw_url = f"https://www.deezer.com/ajax/gw-light.php?method={method}&input=3&api_version=1.0&api_token={api_token}&cid={cid}"
-            try:
-                r = session.post(gw_url, data=json.dumps(payload)).json()
-                items = r.get('results', {}).get('data', [])
-                if items:
-                    track_ids = [str(i.get('SNG_ID') or i.get('id')) for i in items]
-                    if track_ids:
-                        logger.debug(f"Successfully retrieved tracks using {method}")
-                        break
-            except Exception:
-                continue
+        def fetch_smart_list():
+            """Internal logic for live retrieval when cache is invalid."""
+            logger.debug(f"Cache miss for smarttracklist '{list_name}'. Starting live retrieval...")
+            
+            warm_url = f"https://www.deezer.com/us/smarttracklist/{list_name}"
+            session, api_token = get_authenticated_session(arl, logger, warm_url)
+            
+            if not session or not api_token:
+                logger.error(f"Auth failed for {list_name}: Session or API token missing.")
+                return []
 
-        # FAILSAFE: Direct HTML Scrape
-        if not track_ids:
-            logger.debug(f"Gateway methods returned empty for {list_name}, attempting direct HTML regex scrape...")
-            # This searches for "SNG_ID":"12345" inside the raw page HTML
-            track_ids = re.findall(r'"SNG_ID":"?(\d+)"?', page_text)
+            # Logic Tracing: Scraping for internal IDs
+            page_response = session.get(warm_url)
+            page_text = page_response.text
+            
+            real_id_match = re.search(r'"SMART_TRACKLIST":\{.*?"id":"([^"]+)"', page_text)
+            target_id = real_id_match.group(1) if real_id_match else list_name.replace('-', '_')
+            logger.debug(f"Resolved Internal ID for {list_name}: {target_id}")
 
-        if not track_ids:
-            logger.error(f"Could not find any tracks for '{list_name}'")
-            return []
+            fetch_strategies = [
+                ("deezer.pageSmartTracklist", {"smartTracklist_id": target_id, "tab": 0}),
+                ("song.getListData", {"sng_ids": [], "type": "smarttracklist", "id": target_id})
+            ]
 
-        # Deduplicate and Fetch full metadata
-        track_ids = list(dict.fromkeys(track_ids))
-        tracks = []
-        date_time=datetime.now().isoformat()
-        for track_id in track_ids:
-            try:
-                #track = client.get_track(track_id)
+            track_ids = []
+            for method, payload in fetch_strategies:
+                cid = random.randint(100000000, 999999999)
+                gw_url = f"https://www.deezer.com/ajax/gw-light.php?method={method}&input=3&api_version=1.0&api_token={api_token}&cid={cid}"
+                try:
+                    logger.debug(f"Attempting Gateway method: {method}")
+                    r = session.post(gw_url, data=json.dumps(payload)).json()
+                    items = r.get('results', {}).get('data', [])
+                    if items:
+                        track_ids = [str(i.get('SNG_ID') or i.get('id')) for i in items]
+                        if track_ids:
+                            logger.debug(f"Success: {len(track_ids)} tracks found via {method}")
+                            break
+                except Exception as e:
+                    logger.debug(f"Method {method} failed: {e}")
+                    continue
+
+            # FAILSAFE: Direct HTML Scrape
+            if not track_ids:
+                logger.debug(f"AJAX methods failed for {list_name}. Falling back to Regex scrape.")
+                track_ids = re.findall(r'"SNG_ID":"?(\d+)"?', page_text)
+
+            if not track_ids:
+                logger.error(f"Failed to find any tracks for '{list_name}' after trying all strategies.")
+                return []
+
+            # Deduplicate and format
+            track_ids = list(dict.fromkeys(track_ids))
+            tracks = []
+            date_time = datetime.now().isoformat()
+            
+            for tid in track_ids:
                 tracks.append({
-                    'id': str(track_id),
-                    'collection': f"{source_data.get('type')}__{list_name}",
+                    'id': str(tid),
+                    'collection': f"smarttracklist__{list_name}",
                     'date_cached': date_time
                 })
-            except Exception as e:
-                logger.debug(f"Could not fetch metadata for track {track_id}: {e}")
             
-        logger.debug("------ sources.smarttracklist END------")
-        return tracks
+            logger.debug(f"Sample Track IDs from source: {track_ids[:5]}")
+            return tracks
 
-    # handle_cached_data will manage the file check, the fetch, and the write-to-disk
-    return handle_cached_data(cache_file,retention_hrs,logger,fetch_smart_list,"smarttracklist"
-    )
+        # Execute via Cache Manager
+        results = handle_cached_data(cache_file, retention_hrs, logger, fetch_smart_list, "smarttracklist")
+        
+        # Consolidated INFO: One line for the user
+        logger.info(f"Loaded {len(results)} tracks from SmartTracklist '{list_name}'.")
+        return results
+
+    except Exception as e:
+        logger.error(f"SmartTracklist execution failed for '{list_name}': {e}")
+        logger.debug("Stack trace:", exc_info=True)
+        return []
+    finally:
+        logger.debug("<<< END: strategies.sources.smarttracklist.run")
