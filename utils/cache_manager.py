@@ -15,13 +15,13 @@ def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, contex
     logger.debug(f"Handling cache for context '{context}' with retention {retention_hrs} hours.")
     logger.debug(f"Target cache file: {os.path.abspath(cache_file)}")
     
-    # 1. Load Valid Cache
-    if retention_hrs > 0 and os.path.exists(cache_file):
-        file_age = (time.time() - os.path.getmtime(cache_file)) / 3600
-        if file_age < retention_hrs:
-            with open(cache_file, 'r') as f:
-                logger.debug(f"Valid {context} cache found (age: {file_age:.2f} hrs). Loading from cache.")
-                return json.load(f)
+    ## 1. Load Valid Cache
+    #if retention_hrs > 0 and os.path.exists(cache_file):
+    #    file_age = (time.time() - os.path.getmtime(cache_file)) / 3600
+    #    if file_age < retention_hrs:
+    #        with open(cache_file, 'r') as f:
+    #            logger.debug(f"Valid {context} cache found (age: {file_age:.2f} hrs). Loading from cache.")
+    #            return json.load(f)
 
     # 2. Fetch Fresh Data
     try:
