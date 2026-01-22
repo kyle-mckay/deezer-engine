@@ -13,12 +13,14 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
     logger.debug(">>> START: strategies.modifiers.exclude.run")
 
     # 1. Resolve the exclude source dynamically
-    source_info = mod_data.get('source')
-    if not source_info:
+    source_data = mod_data.get('source')
+    if not source_data:
         logger.error("Exclude modifier missing 'source' definition.")
         return current_tracks
-
-    for src in source_info:
+    
+    if isinstance(source_data, dict):
+            source_data = [source_data]
+    for src in source_data:
         source_type = src.get('type')
         source_id = src.get('id', 'N/A')
         
@@ -33,7 +35,7 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
             logger.debug(f"Importing source worker: {module_path}")
             
             source_worker = importlib.import_module(module_path)
-            exclude_tracks = source_worker.run(client, config, logger, source_info)
+            exclude_tracks = source_worker.run(client, config, logger, source_data)
             
             # 2. Perform the subtraction
             # Build set of IDs to exclude

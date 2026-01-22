@@ -16,8 +16,11 @@ def run(client, config, logger, source_data):
     logger.debug(">>> START: strategies.sources.smarttracklist.run")
     
     try:
-        list_name = source_data.get('name')
-        retention_hrs = source_data.get('retention', get_global_value('retention', default=0))
+        if isinstance(source_data, dict):
+            source_data = [source_data]
+        # Extract configuration
+        retention_hrs = source_data[0].get('retention', get_global_value('retention', default=0))
+        list_name = source_data[0].get('name')
         arl = config.get('config', {}).get('arl_token')
         
         # Security: Mask ARL in debug logs

@@ -21,9 +21,8 @@ def run(client, config, logger, source_data):
         retention_hrs = 0
         if isinstance(source_data, dict):
             source_data = [source_data]
-        for item in source_data:
-            playlist_id = item.get('id')
-            retention_hrs = item.get('retention', get_global_value('retention', default=0))
+        playlist_id = source_data[0].get('id')
+        retention_hrs = source_data[0].get('retention', get_global_value('retention', default=0))
         
         if not playlist_id:
             logger.error("Source type 'playlist' failed: missing 'id' in configuration.")

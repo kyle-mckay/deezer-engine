@@ -16,9 +16,11 @@ def run(client, config, logger, source_data):
     logger.debug(">>> START: strategies.sources.album.run")
     
     try:
-        # Configuration Extraction
-        album_id = source_data.get('id')
-        retention_hrs = source_data.get('retention', get_global_value('retention', default=0))
+        if isinstance(source_data, dict):
+            source_data = [source_data]
+        # Extract configuration
+        retention_hrs = source_data[0].get('retention', get_global_value('retention', default=0))
+        album_id = source_data[0].get('id')
         
         if not album_id:
             logger.error("Source type 'album' failed: missing 'id' in configuration.")
