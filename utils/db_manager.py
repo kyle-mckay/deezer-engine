@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta
 from utils.database import get_db_path
 from utils.config_loader import get_global_value
+from utils.deezer_auth import get_tracks
 
 # Centralized static path
 DB_PATH = get_db_path() 
@@ -99,10 +100,30 @@ def sync_to_collections(tracklist, logger):
                 track_entries
             )
             
+            # Clear 'collections' table
+            unique_collections = sorted(list(set(item[1] for item in unique_pairs)))
+            stale_collection_tracks = []
+
+            for collection in unique_collections:
+                stale_collection_tracks.extend(fetch_collection(collection))
+            
+            track_ids_to_delete = [
+                (str(item['id']),) for item in stale_collection_tracks 
+                if isinstance(item, dict) and 'id' in item
+            ]
+
+            if track_ids_to_delete:
+                logger.debug(f"DB: Removing {len(track_ids_to_delete)} stale tracks from {unique_collections}")
+                cursor.executemany(
+                    "DELETE FROM collections WHERE track_id = ?", 
+                    track_ids_to_delete
+                )
+
             # Update 'collections' table
+
             collection_entries = [(tid, source, timestamp) for tid, source, timestamp in unique_pairs]
             cursor.executemany(
-                "INSERT OR IGNORE INTO collections (track_id, source_name, date_cached) VALUES (?, ?, ?)", 
+                "INSERT OR REPLACE INTO collections (track_id, source_name, date_cached) VALUES (?, ?, ?)", 
                 collection_entries
             )
 
@@ -144,6 +165,15 @@ def get_unprocessed_track_ids(logger=None):
     finally:
         if logger:
             logger.debug("<<< END: utils.db_manager.get_unprocessed_track_ids")
+
+def update_unprocessed(client,logger):
+    """Identify tracks in the database that need metadata"""
+    unprocessed = get_unprocessed_track_ids(logger)
+    if len(unprocessed) > 0:
+        logger.info(f"Fetching metadata for {len(unprocessed)} new tracks...")
+        unprocessed = get_tracks(client,logger,"database","tracks","null",unprocessed)
+        logger.debug(f"Metadata fetched, updating database with {len(unprocessed)} records.")
+        update_track_metadata(unprocessed,logger)
 
 def update_tracks_partial_batch(track_list, logger=None):
     """
@@ -261,6 +291,14 @@ def get_expired_track_ids(logger=None):
     finally:
         if logger:
             logger.debug("<<< END: utils.db_manager.get_expired_track_ids")
+
+def refresh_stats(client, logger):
+    refresh_stats = get_expired_track_ids(logger)
+    if len(refresh_stats) > 0:
+        logger.info(f"Refreshing stats for {len(refresh_stats)} existing tracks...")
+        refresh_stats = get_tracks(client, logger, "database", "stats", "null", refresh_stats)
+        logger.debug(f"Stats fetched, updating database.")
+        update_tracks_partial_batch(refresh_stats)
 
 def is_collection_cached(source_name, config, logger=None):
     """

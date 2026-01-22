@@ -13,7 +13,7 @@ def normalize_order(logger, order):
             order = "top"
     return order
 
-def run(client, config, logger, mod_data, current_tracks):
+def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """
     Slices the track list to return only the top or bottom N tracks.
     """

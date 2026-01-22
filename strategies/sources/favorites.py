@@ -12,9 +12,11 @@ def run(client, config, logger, source_data):
     logger.debug(">>> START: strategies.sources.favorites.run")
     
     try:
+        if isinstance(source_data, dict):
+            source_data = [source_data]
         # Extract configuration
         user_id = config.get('config', {}).get('user_id')
-        retention_hrs = source_data.get('retention', get_global_value('retention', default=0))
+        retention_hrs = source_data[0].get('retention', get_global_value('retention', default=0))
         
         # Define cache path based on user_id
         cache_file = str(get_cache_dir() / f"favorites_{user_id}.json")

@@ -16,7 +16,7 @@ def normalize_sort(logger, sort_order):
     logger.debug(f"Normalized sort order: '{sort_order}'")
     return sort_order
 
-def run(client, config, logger, mod_data, current_tracks):
+def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """
     Sorts the tracks by a defined field and order before returing them to the next stage in the pipeline
     """

@@ -53,8 +53,20 @@ def run(client, config, logger, source_data):
             tracks = album_strategy.run(client, config, logger, album_payload)
             artist_tracks.extend(tracks)
 
-        # Consolidated INFO: Final result report
         logger.info(f"Successfully aggregated {len(artist_tracks)} tracks from artist '{artist.name}'.")
+
+        # Duplicate tracks and create copy with `artist__<artist name>`
+        logger.debug(f"Created duplicate record of tracks for arist collection")
+        tracks = []
+        sanitized_name = f"artist__{artist_id}"
+
+        tracks = [
+            {**track, 'collection': sanitized_name} 
+            for track in artist_tracks
+        ]
+        artist_tracks.extend(tracks)
+
+        # Consolidated INFO: Final result report
 
         # Data Samples
         if artist_tracks:

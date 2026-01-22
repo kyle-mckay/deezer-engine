@@ -5,7 +5,7 @@ import logging
 from pathlib import Path
 from utils.paths import get_data_dir
 from utils.config_loader import get_global_value
-from utils.db_manager import sync_to_collections
+from utils.db_manager import sync_to_collections, update_unprocessed, is_collection_cached
 
 class StrategyController:
     def __init__(self, client, config, logger, strategy_name):
@@ -68,7 +68,7 @@ class StrategyController:
             self.logger.debug(f"Processing batch { (i // n) + 1} of {(len(data_list) + n - 1) // n}")
             yield data_list[i:i + n]
 
-    def handle_source(self, source_data):
+    def handle_source(self, source_data, source_name = None):
         """Dynamically loads a source worker and appends its results to the strategy's tmp file."""
         self.logger.debug(">>> START: strategies.base.handle_source")
         src_type = source_data.get('type')
@@ -85,23 +85,17 @@ class StrategyController:
             
             # Run the worker logic
             self.logger.debug(f"Executing {src_type}.run()")
-            new_tracks = module.run(self.client, self.config, self.logger, source_data)
-            
-            # Check for source specific modifiers
-            local_modifiers = source_data.get('modifiers', [])
-            if local_modifiers:
-                self.logger.debug(f"Applying {len(local_modifiers)} inline modifiers for source '{src_label}'")
-                for mod_data in local_modifiers:
-                    mod_type = mod_data.get('type')
-                    mod_module_path = f"strategies.modifiers.{mod_type}"
-                    try:
-                        self.logger.debug(f"Loading inline modifier: {mod_module_path}")
-                        mod_module = importlib.import_module(mod_module_path)
-                        new_tracks = mod_module.run(self.client, self.config, self.logger, mod_data, new_tracks)
-                        self.logger.debug(f"Inline modifier '{mod_type}' successful. Current source count: {len(new_tracks)}")
-                    except Exception as mod_e:
-                        self.logger.error(f"Failed to apply local modifier '{mod_type}' to source '{src_label}': {mod_e}")
 
+            # Get new tracklist if cache expired
+            if is_collection_cached(source_name, self.config, self.logger) == False:
+                self.logger.debug(f"Cache expired or missing for {source_name}. Fetching from API.")
+                #controller.handle_source(src)
+                new_tracks = module.run(self.client, self.config, self.logger, source_data)
+            else:
+                self.logger.debug(f"Using cached data for {source_name}.")
+
+
+            
             # Log tracks and their source
             self.logger.debug(f"Syncing {len(new_tracks)} tracks from '{src_label}' to local collection database.")
             sync_to_collections(new_tracks,self.logger)
@@ -114,7 +108,7 @@ class StrategyController:
             self.logger.error(f"Critical failure processing source '{src_label}': {e}")
             raise
 
-    def handle_modifier(self, mod_data, tracks_override=None):
+    def handle_modifier(self, mod_data, tracks_override=None, source_name=None):
         """
         Dynamically loads a modifier worker to transform the current track list.
         If tracks_override is provided, it processes those tracks instead of reading from tmp.
@@ -137,7 +131,7 @@ class StrategyController:
             self.logger.debug(f"Importing modifier module: {module_path}")
             module = importlib.import_module(module_path)
             # Modifiers are 'pure': they take tracks, modify them, and return results
-            modified_tracks = module.run(self.client, self.config, self.logger, mod_data, current_tracks)
+            modified_tracks = module.run(self.client, self.config, self.logger, mod_data, current_tracks,source_name)
             
             # Only write to disk if we are in "Global" mode (no override)
             if tracks_override is None:

@@ -1,7 +1,7 @@
 import importlib
 import logging
 
-def run(client, config, logger, mod_data, current_tracks):
+def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """
     Subtracts tracks found in a specific source from the current pipeline.
     

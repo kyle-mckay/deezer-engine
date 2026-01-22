@@ -39,7 +39,7 @@ playlists:
           - type: "filter"
             field: "rank"
             operator: "gt"
-            value: 700000 # Only keep very popular tracks
+            value: 500000 # Only keep very popular tracks
       - type: "smarttracklist"
         name: "inspired-by-1"
       - type: "smarttracklist"
@@ -71,7 +71,7 @@ playlists:
       - type: "filter"
         field: "unseen"
         operator: "eq"
-        value: true
+        value: 1
       - type: "limit"
         count: 20
         order: "top"
@@ -91,7 +91,7 @@ playlists:
   - name: "Fresh Favorites"
     source:
       - type: "album"
-        id: "534125742" # Britpop by Robbie Williams
+        id: "897621962" # Britpop by Robbie Williams
       - type: "favorites"
     modifiers:
       - type: "exclude"
@@ -297,7 +297,7 @@ Include only the tracks that meet specific criteria based on their metadata.
 
 > Note: String comparisons (equals, contains, starts_with, ends_with) are case-insensitive.
 
-`eq`, `equals`, `==` or `is` - Match the exact value (e.g., `unseen: true`).
+`eq`, `equals`, `==` or `is` - Match the exact value (e.g., `unseen: 1`).
 `ne`, `not`, `!=` or `is_not` - Exclude tracks matching the value.
 `gt`, `greater_than`, `>` - True if the field is greater than the value.
 `gte` or `>=` - True if the field is **greater than or equal** to the value.

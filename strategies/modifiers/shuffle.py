@@ -58,7 +58,7 @@ def random_shuffle(logger, current_tracks):
     return shuffled_list
 
 
-def run(client, config, logger, mod_data, current_tracks):
+def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """
     Shuffle tracks by trying to ensure an artist repeats as infrequently as possible. 
     """

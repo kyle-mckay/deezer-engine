@@ -19,7 +19,8 @@ def run(client, config, logger, source_data):
         # Configuration extraction logic
         playlist_id = None
         retention_hrs = 0
-
+        if isinstance(source_data, dict):
+            source_data = [source_data]
         for item in source_data:
             playlist_id = item.get('id')
             retention_hrs = item.get('retention', get_global_value('retention', default=0))

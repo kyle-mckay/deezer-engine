@@ -1,6 +1,6 @@
 import logging
 
-def run(client, config, logger, mod_data, current_tracks):
+def run(client, config, logger, mod_data, current_tracks,source_name=None):
     """
     Removes duplicate track IDs from the pipeline
     """

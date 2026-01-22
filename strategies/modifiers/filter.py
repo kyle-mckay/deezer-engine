@@ -27,7 +27,7 @@ def normalize_compariter(logger, operator):
             logger.warning(f"Unknown filter operator: '{operator}'")
             return "unknown"
 
-def run(client, config, logger, mod_data, current_tracks):
+def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """
     Filters tracks based on a field, operator, and value.
     """
