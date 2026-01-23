@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.8.1 - 2026-01-23
+
+### Maintenance
+
+- chore: reduce-log-noise (closes #56) (#63) (@kylemmkay)
+
 ## v0.8.0 - 2026-01-20
 
 ### Enhancements
