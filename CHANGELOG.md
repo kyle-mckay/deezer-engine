@@ -2,6 +2,10 @@
 
 ## v0.8.1 - 2026-01-23
 
+### Fixes
+
+- fix: typo and wrong variable for count (@kylemmkay)
+
 ### Maintenance
 
 - chore: reduce-log-noise (closes #56) (#63) (@kylemmkay)
