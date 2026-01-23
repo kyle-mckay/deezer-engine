@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.8.1 - 2026-01-23
+## v0.9.0 - 2026-01-23
+
+### Enhancements
+
+- feat: add history source (closes #65) (#66) (@kylemmkay)
 
 ### Fixes
 
