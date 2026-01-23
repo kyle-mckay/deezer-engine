@@ -103,7 +103,6 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
         except (ValueError, TypeError) as e:
             logger.debug(f"Skipping track {track.get('id')} - comparison error: {e}")
             continue
-
-    logger.info(f"Filter applied: '{field} {operator} {value}'. Kept {len(filtered_tracks)}/{len(current_tracks)} tracks.")
+    logger.info(f"Action: Filtered '{field} {operator} {value}': Kept {len(filtered_tracks)}/{len(current_tracks)} tracks.")
     logger.debug("<<< END: strategies.modifiers.filter.run")
     return filtered_tracks

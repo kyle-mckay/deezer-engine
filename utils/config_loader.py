@@ -201,7 +201,7 @@ def load_strategies_with_env_overrides(logger):
     data_dir = get_data_dir()
     strategies_path = data_dir / 'strategies.yml'
     
-    logger.info(f"Attempting to load strategies from {strategies_path}")
+    logger.debug(f"Attempting to load strategies from {strategies_path}")
     
     try:
         with open(strategies_path, 'r') as f:

@@ -95,7 +95,7 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
                     logger.debug(f"Excluding Track ID: {track_id}")
             
             removed_count = starting_count - len(result)
-            logger.info(f"Exclusion applied: Removed {removed_count} tracks based on {source_type}.")
+            logger.info(f"Action: Excluded {removed_count}/{starting_count} tracks based on {source_type}.")
             
             logger.debug(f"Final pipeline count: {len(result)}")
             logger.debug("<<< END: strategies.modifiers.exclude.run")

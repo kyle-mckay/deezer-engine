@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 import re
+import time
+from datetime import timedelta
 import logging
 from utils.paths import get_cache_dir 
 from utils.deezer_auth import get_tracks
@@ -56,22 +58,45 @@ def run(client, config, logger, source_data):
         artist_tracks = []
         
         # Throttled Progress: We log a single INFO line before starting the loop
-        logger.info(f"Processing {total_albums} albums for artist '{artist.name}'...")
-
+        logger.info(f"Fetching tracks for Artist: '{artist.name}' (ID {artist_id}). Found {total_albums} albums...")
+        start_log_time = time.time()
+        last_log_time = start_log_time
+        log_interval = get_global_value('log_interval',120)
         for i, album_obj in enumerate(albums, start=1):
-            # Granular DEBUG: High-resolution trace for developer
             logger.debug(f"[{i}/{total_albums}] Dispatching to album strategy: '{album_obj.title}' (ID: {album_obj.id})")
             
+            # Inform user during long waits
+            current_time = time.time()
+            if current_time - last_log_time >= log_interval:
+                # 1. Calculate progress
+                elapsed_time = current_time - start_log_time
+                items_remaining = total_albums - i
+                
+                # 2. Calculate average time and ETA
+                time_per_item = elapsed_time / i
+                eta_seconds = items_remaining * time_per_item
+                
+                # 3. Format seconds
+                eta_str = str(timedelta(seconds=int(eta_seconds)))
+                percent = f"{i/total_albums:.1%}"
+
+                # 4. Create suffix
+                suffix = f"{percent} complete (ETA: {eta_str})..."
+
+                logger.info(f"Processing '{artist.name}': {suffix}")
+                last_log_time = current_time 
+
             album_payload = {
                 'id': album_obj.id,
-                'retention': retention_hrs
+                'retention': retention_hrs,
+                'source': 'artist'
             }
             
             # Delegate to existing logic
             tracks = album_strategy.run(client, config, logger, album_payload)
             artist_tracks.extend(tracks)
 
-        logger.info(f"Successfully aggregated {len(artist_tracks)} tracks from artist '{artist.name}'.")
+        logger.debug(f"Successfully aggregated {len(artist_tracks)} tracks from artist '{artist.name}'.")
 
         # Duplicate tracks and create copy with `artist__<artist name>`
         logger.debug(f"Created duplicate record of tracks for arist collection")

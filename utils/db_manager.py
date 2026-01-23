@@ -169,7 +169,7 @@ def get_unprocessed_track_ids(logger=None):
             tracks_payload = [{'id': row['id']} for row in rows]
             
             if logger and len(tracks_payload) > 0:
-                logger.info(f"Database: {len(tracks_payload)} tracks found requiring enrichment.")
+                logger.debug(f"Database: {len(tracks_payload)} tracks found requiring enrichment.")
             
             return tracks_payload
             
@@ -266,7 +266,7 @@ def update_track_metadata(track_list, logger=None):
             cursor.executemany(query, data_tuples)
             conn.commit()
             if logger:
-                logger.info(f"Metadata enrichment complete for {len(track_list)} tracks.")
+                logger.debug(f"Metadata enrichment complete for {len(track_list)} tracks.")
     except Exception as e:
         if logger:
             logger.error(f"DB Error: Metadata update failed: {e}")

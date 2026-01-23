@@ -14,11 +14,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 import time
+from datetime import timedelta
 import json
 import os
 import math
 import random
 from utils.deezer_auth import get_authenticated_session
+from utils.config_loader import get_global_value
 
 def run(client, config, logger, dest_data, tracks):
     """
@@ -35,7 +37,8 @@ def run(client, config, logger, dest_data, tracks):
         return
 
     # Use Utility for Auth
-    logger.debug(f"Authenticating for playlist {target_id} using ARL and UserID: {user_id}")
+    masked_id = f"{user_id[0]}...{user_id[-1]}" if len(user_id) > 2 else "***"
+    logger.debug(f"Authenticating for playlist {target_id} using ARL and UserID: {masked_id}")
     warm_url = f"https://www.deezer.com/us/playlist/{target_id}"
     session, api_token = get_authenticated_session(arl, logger, warm_url)
     
@@ -69,32 +72,32 @@ def run(client, config, logger, dest_data, tracks):
 
         # --- SMART STRATEGY ---
         if method in ['smartreplace', 'smart']:
-            logger.info(f"Syncing '{playlist.title}' (Smart Sync)")
+            logger.info(f"Syncing {len(tracks)} to '{playlist.title}' (Smart Sync)")
             to_add = [tid for tid in track_ids if str(tid) not in current_set]
             to_remove = [tid for tid in dst_ids if str(tid) not in target_set]
             
             if not to_add and not to_remove:
-                logger.info(f"Playlist '{playlist.title}' is already up to date.")
+                logger.info(f"Successfully completed: {playlist.title}")
                 return
 
             logger.debug(f"Smart Sync - To Add: {to_add}")
             logger.debug(f"Smart Sync - To Remove: {to_remove}")
             
             if to_remove:
-                logger.info(f"Removing {len(to_remove)} tracks...")
+                logger.debug(f"Removing {len(to_remove)} tracks...")
                 _gateway_request(session, "playlist.deleteSongs", target_id, api_token, to_remove, client.batch_size, logger)
             if to_add:
-                logger.info(f"Adding {len(to_add)} tracks...")
+                logger.debug(f"Adding {len(to_add)} tracks...")
                 _gateway_request(session, "playlist.addSongs", target_id, api_token, to_add, client.batch_size, logger)
 
         # --- APPEND / INSERT STRATEGY ---
         elif method in ['append', 'insert']:
-            logger.info(f"Syncing '{playlist.title}' (Appending {len(track_ids)} tracks)")
+            logger.info(f"Syncing {len(tracks)} to '{playlist.title}' (Appending)")
             _gateway_request(session, "playlist.addSongs", target_id, api_token, track_ids, client.batch_size, logger)
 
         # --- REPLACE STRATEGY ---
         else:
-            logger.info(f"Syncing '{playlist.title}' (Full Replace)")
+            logger.info(f"Syncing {len(tracks)} tracks to '{playlist.title}' (Full Replace)")
             if dst_ids:
                 logger.debug(f"Wiping existing {len(dst_ids)} tracks for clean replace.")
                 _gateway_request(session, "playlist.deleteSongs", target_id, api_token, dst_ids, client.batch_size, logger)
@@ -105,7 +108,7 @@ def run(client, config, logger, dest_data, tracks):
                 time.sleep(wait_time)
             
             if track_ids:
-                logger.info(f"Injecting {len(track_ids)} tracks...")
+                logger.debug(f"Injecting {len(track_ids)} tracks...")
                 _gateway_request(session, "playlist.addSongs", target_id, api_token, track_ids, client.batch_size, logger)
 
         logger.info(f"Sync complete for '{playlist.title}'.")
@@ -122,7 +125,12 @@ def _gateway_request(session, method, playlist_id, token, ids, batch_size, logge
     total = len(ids)
     count = 0
     verb = "Removed" if "delete" in method else "Added"
-
+    
+    current_time = time.time()
+    start_log_time = time.time()
+    last_log_time = start_log_time
+    log_interval = get_global_value('log_interval',120)
+    total_tracks = len(batch_size)
     for i in range(0, len(ids), batch_size):
         batch = ids[i:i + batch_size]
         cid = random.randint(100000000, 999999999)
@@ -154,6 +162,28 @@ def _gateway_request(session, method, playlist_id, token, ids, batch_size, logge
         except Exception as e:
             logger.error(f"Network request failed during {method}: {e}")
         
+        # Inform user during long waits
+        current_time = time.time()
+        if current_time - last_log_time >= log_interval:
+            # 1. Calculate progress
+            elapsed_time = current_time - start_log_time
+            items_remaining = total_tracks - i
+            
+            # 2. Calculate average time and ETA
+            time_per_item = elapsed_time / i
+            eta_seconds = items_remaining * time_per_item
+            
+            # 3. Format seconds
+            eta_str = str(timedelta(seconds=int(eta_seconds)))
+            percent = f"{i/total_tracks:.1%}"
+
+            # 4. Create suffix
+            suffix = f"{percent} complete (ETA: {eta_str})..."
+            if verb == "Added":
+                logger.info(f"Addign {total_tracks} to playlist': {suffix}")
+            elif verb == "Removed":
+                logger.info(f"Removing {total_tracks} from playlist: {suffix}")
+            last_log_time = current_time 
         time.sleep(0.5)
     
-    logger.info(f"Done: {verb} {count} tracks.")
+    logger.debug(f"Done: {verb} {count} tracks.")

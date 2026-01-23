@@ -39,7 +39,7 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
     sort_order=normalize_sort(logger,mod_data.get('order').lower())
     sort_field=mod_data.get('field').lower()
 
-    logger.info(f"Sorting by: {sort_field} ({sort_order})")
+    logger.info(f"Action: Sorting by {sort_field} ({sort_order})")
 
     try:
         if not current_tracks:

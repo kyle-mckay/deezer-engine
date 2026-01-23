@@ -44,6 +44,8 @@ def run(client, config, logger, source_data):
 
         cache_file = str(get_cache_dir() / f"smart_{list_name}.json")
 
+        logger.info(f"Fetching tracks for smarttracklist: '{list_name}'...")
+
         def fetch_smart_list():
             """Internal logic for live retrieval when cache is invalid."""
             logger.debug(f"Cache miss for smarttracklist '{list_name}'. Starting live retrieval...")
@@ -113,7 +115,7 @@ def run(client, config, logger, source_data):
         results = handle_cached_data(cache_file, retention_hrs, logger, fetch_smart_list, "smarttracklist")
         
         # Consolidated INFO: One line for the user
-        logger.info(f"Loaded {len(results)} tracks from SmartTracklist '{list_name}'.")
+        logger.debug(f"Loaded {len(results)} tracks from SmartTracklist '{list_name}'.")
         return results
 
     except Exception as e:

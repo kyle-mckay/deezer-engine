@@ -32,20 +32,21 @@ def run(client, config, logger, source_data):
         # Extract configuration
         user_id = config.get('config', {}).get('user_id')
         retention_hrs = source_data[0].get('retention', get_global_value('retention', default=0))
+        if not user_id:
+            logger.warning("No User ID found in config; favorites fetch may fail or return empty.")
         
         # Define cache path based on user_id
         cache_file = str(get_cache_dir() / f"favorites_{user_id}.json")
 
         # Logic Tracing: Parameters
-        logger.debug(f"Source parameters: UserID={user_id}, Retention={retention_hrs}h")
+        masked_id = f"{user_id[0]}...{user_id[-1]}" if len(user_id) > 2 else "***"
+        logger.debug(f"Source parameters: UserID={masked_id}, Retention={retention_hrs}h")
         logger.debug(f"Resolved cache path: {cache_file}")
-
-        if not user_id:
-            logger.warning("No User ID found in config; favorites fetch may fail or return empty.")
+        logger.info(f"Fetching tracks from favorites...")
 
         def fetch_favorites():
             """Called by handle_cached_data only if cache is invalid/missing."""
-            logger.debug(f"Cache miss/expiry for User {user_id}. Initiating live API fetch.")
+            logger.debug(f"Cache miss/expiry for User {masked_id}. Initiating live API fetch.")
             context_name = f"favorites__{user_id}"
             return get_tracks(client.get_user_tracks(user_id), logger, "favorites", user_id, cache_file)
 

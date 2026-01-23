@@ -82,7 +82,7 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
     shuffle_type = mod_data.get('order', 'random').lower()
 
     try:
-        logger.info(f"Applying '{shuffle_type}' shuffle.")
+        logger.info(f"Action: Shuffling with '{shuffle_type}' shuffle.")
         match shuffle_type:
             case "smart":
                 shuffled_tracks = smart_shuffle(logger, current_tracks)

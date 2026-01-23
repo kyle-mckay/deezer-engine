@@ -128,7 +128,7 @@ def process_destinations(s_data, controller, logger, strategy_name):
             dest_id = dest.get('id', 'Unknown')
             logger.debug(f"Routing to destination: {dest_type} (ID: {dest_id})")
             controller.handle_destination(dest)
-        logger.info(f"Successfully completed: {strategy_name}")
+        logger.debug(f"Successfully completed: {strategy_name}")
     else:
         logger.warning(f"Strategy '{strategy_name}' has no destination defined.")
 
@@ -157,7 +157,6 @@ def main():
     # Issue the warning if config was bad
     if warning_needed:
         logger.warning(f"Unsupported log level '{user_log_level}' found in config.yml. Defaulting to 'INFO'.")
-    logger.debug("--- Starting Deezer Engine ---")
 
     strategies_config = load_configs("strategy", logger)
 
@@ -171,19 +170,12 @@ def main():
     check_for_updates(__version__, containerized, logger)
 
     if containerized == 'true':
-        logger.info("Environment: Docker")
+        logger.debug("Environment: Docker")
         logger.debug("Defaulting paths to '/app/data/'")
     else:
-        logger.info("Environment: Local")
+        logger.debug("Environment: Local")
         logger.debug("Deezer Engine is running in LOCAL mode.")
         logger.debug(f"Using standard paths './'")
-    
-        
-    
-    # Log Config Metadata (Debug Only )
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(f"Configuration metadata: UserID={config.get('config', {}).get('user_id')}, "
-                     f"BatchSize={config.get('config', {}).get('batch_size', 50)}")
 
     # Initialize database
     logger.debug("Initializing database components...")
@@ -198,15 +190,15 @@ def main():
         logger.warning("No strategies found in strategies.yml.")
         return
 
-    logger.info(f"Loaded {len(strategies_config['playlists'])} strategies.")
+    total_strategies = len(strategies_config['playlists'])
 
-    for s_data in strategies_config['playlists']:
+    for i, s_data in enumerate(strategies_config['playlists'],1):
         strategy_name = s_data.get('name', 'unnamed_strategy')
         
         # Sanitize the name for the temp filename
         safe_name = strategy_name.lower().replace(" ", "_")
         
-        logger.info(f">>> START: Processing Strategy: {strategy_name}")
+        logger.info(f">>> START {i}/{total_strategies}: Processing Strategy: {strategy_name}")
         
         # Log Strategy Definition (Debug Only)
         if logger.isEnabledFor(logging.DEBUG):

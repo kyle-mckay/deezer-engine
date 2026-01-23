@@ -44,10 +44,7 @@ def run(client, config, logger, mod_data, current_tracks,source_name=None):
                 duplicate_count += 1
                 logger.debug(f"Duplicate found and removed: {track_id}")
 
-        if duplicate_count > 0:
-            logger.info(f"Dedupe applied: Removed {duplicate_count} duplicate tracks.")
-        else:
-            logger.info("Dedupe applied: No duplicates found.")
+        logger.info(f"Action: Deduplicated {duplicate_count} tracks")
 
         logger.debug(f"Final pipeline count: {len(deduplicated_list)}")
         logger.debug("<<< END: strategies.modifiers.dedupe.run")

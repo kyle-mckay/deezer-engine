@@ -49,7 +49,7 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
     # Perform the slice
     try:
         if count >= total_available:
-            logger.info(f"Limit ({count}) exceeds track count ({total_available}). No limiting required.")
+            logger.info(f"Action: Limit not required")
             return current_tracks
 
         if order == "top":
@@ -61,7 +61,7 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
             logger.debug(f"Slicing tracks from index {start_index} to {total_available}")
             limited_tracks = current_tracks[start_index:]
             
-        logger.info(f"Limit applied: Kept {order} {len(limited_tracks)} tracks.")
+        logger.info(f"Action: Limited to '{order}' {len(limited_tracks)} tracks.")
             
     except Exception as e:
         logger.error(f"Failed to limit tracks: {e}")

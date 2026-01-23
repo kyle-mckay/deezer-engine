@@ -157,7 +157,7 @@ def initialize_all(logger=None):
     init_tracks_table(logger)
     init_collections_table(logger)
     if logger:
-        logger.info(f"Database: Initialized")
+        logger.debug(f"Database: Initialized")
         logger.debug("<<< END: utils.database.initialize_all")
 
 if __name__ == "__main__":

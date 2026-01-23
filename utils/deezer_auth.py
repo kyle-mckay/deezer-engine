@@ -21,7 +21,7 @@ import random
 import time
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from utils.logger import setup_logger
 from utils.config_loader import get_global_value
 
@@ -69,7 +69,8 @@ def get_authenticated_client(config, logger):
             logger.debug(f"Testing connection for User ID: {user_id}")
                 
             user = client.get_user(user_id)
-            logger.info(f"Authenticated successfully as: {user.name}")
+            masked_name = f"{user.name[0]}...{user.name[-1]}" if len(user.name) > 2 else "***"
+            logger.info(f"Authenticated successfully as: {masked_name}")
             
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(f"User Metadata: Name='{user.name}', "
@@ -150,6 +151,7 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     """
     Transforms Deezer API objects into a list of dictionaries with rate-limiting protection.
     """
+    from utils.db_manager import update_track_metadata
     logger.debug(f">>> START: utils.deezer_auth.get_tracks ({source_type})")
     logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
 
@@ -208,13 +210,14 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     elif source_type != "database":
         collection = f"{item_type}__{item_id}"
     
-    if logger.isEnabledFor(logging.DEBUG):
-        update_int = 1
-    else:
-        update_int = get_global_value('batch_size', default=50)
-    
-    total_len = len(iterable) if hasattr(iterable, '__len__') else "unknown"
+    update_int = get_global_value('batch_size', default=50)
+    cached_tracks = []
 
+    total_len = len(iterable) if hasattr(iterable, '__len__') else "unknown"
+    start_log_time = time.time()
+    last_log_time = start_log_time
+    log_interval = get_global_value('log_interval',120)
+    
     for i, track in enumerate(iterable, 1):
         try:
             # Every 40 requests, take a longer pause to prevent sustained high-load triggers
@@ -285,25 +288,60 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                 })
 
             # Progress logging
-            if i % update_int == 0 | logger.isEnabledFor(logging.DEBUG):
-                progress_str = f"{i}/{total_len}"
-
-            if i % update_int == 0:
-                if source_type == "database":
-                    logger.info(f"Database '{identifier}' enrichment: processed {progress_str} tracks.")
-                elif source_type == "favorites":
-                    logger.info(f"Scanning favorites: processed {progress_str} tracks.")
-                elif identifier.startswith("playlist__") or identifier.startswith("album__"):
-                    logger.info(f"Scanning '{display_name}': processed {progress_str} tracks.")
-                else:
-                    logger.info(f"Scanning {source_type}: processed {progress_str} tracks.")
             if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Processed track {track}: {progress_str}")
+                logger.debug(f"Processed track {track}: {i}/{total_len}")
+            
+            current_time = time.time()
+            if current_time - last_log_time >= log_interval:
+                # 1. Calculate progress
+                elapsed_time = current_time - start_log_time
+                items_remaining = total_len - i
+                
+                # 2. Calculate average time and ETA
+                time_per_item = elapsed_time / i
+                eta_seconds = items_remaining * time_per_item
+                
+                # 3. Format seconds 
+                eta_str = str(timedelta(seconds=int(eta_seconds)))
+                percent = f"{i/total_len:.1%}"
+
+                # 4. Create suffix
+                suffix = f"{percent} complete (ETA: {eta_str})..."
+
+                if source_type == "database":
+                    logger.info(f"Database '{identifier}' enrichment: {suffix}")
+                elif source_type == "favorites":
+                    logger.info(f"Fetching '{source_type}': {suffix}")
+                elif identifier.startswith("playlist__"):
+                    logger.info(f"Fetching playlist '{display_name}': {suffix}")
+                elif identifier.startswith("album__"):
+                    logger.info(f"Fetching album '{display_name}': {suffix}")
+                else:
+                    logger.info(f"Fetching '{source_type}': {suffix}")
+                last_log_time = current_time 
+
+            # If performing database enrichment, perform periodic checkpoint at batch_size
+            if source_type == "database" and identifier == "tracks" and i % update_int == 0:
+                logger.debug(f"Database Checkpoint: Pushing batch of {len(tracks)} tracks to database")
+                update_track_metadata(tracks,logger)
+
+                # Merge to total result and reset working batch
+                cached_tracks.extend(tracks)
+                tracks = []
 
         except Exception as e:
             logger.debug(f"Non-critical loop error at index {i} (Track {track}): {e}")
             time.sleep(1)
             continue
+    
+    # Database enrichment cleanup
+    if source_type == "database" and identifier == "tracks":
+        if tracks:
+            logger.debug(f"Database Cleanup: Saving remaining {len(tracks)} tracks...")
+            update_track_metadata(tracks,logger)
+            cached_tracks.extend(tracks)
+    
+        tracks = cached_tracks
 
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(f"Successfully transformed {len(tracks)} tracks.")

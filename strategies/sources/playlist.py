@@ -57,6 +57,8 @@ def run(client, config, logger, source_data):
             logger.debug("Stack trace:", exc_info=True)
             return []
 
+        logger.info(f"Fetching tracks for playlist: '{playlist.title}' (ID {playlist_id})...")
+
         def fetch_playlist():
             # This logic is triggered only if cache is invalid
             logger.debug(f"Cache miss or expired. Initiating live fetch for '{playlist.title}'")

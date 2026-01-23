@@ -36,6 +36,7 @@ def run(client, config, logger, source_data):
         # Extract configuration
         retention_hrs = source_data[0].get('retention', get_global_value('retention', default=0))
         album_id = source_data[0].get('id')
+        is_artist = source_data[0].get('source',None)
         
         if not album_id:
             logger.error("Source type 'album' failed: missing 'id' in configuration.")
@@ -50,11 +51,15 @@ def run(client, config, logger, source_data):
             cache_file = str(get_cache_dir() / f"album_{album_id}_{clean_name}.json")
             
             logger.debug(f"Resolved Album: '{album.title}' | Cache Key: {clean_name}")
+
+            if not is_artist:
+                logger.info(f"Fetching tracks for album: '{album.title}' (ID {album_id})...")
+
         except Exception as e:
             logger.error(f"Error fetching album metadata for {album_id}: {e}")
             logger.debug("Stack trace:", exc_info=True)
             return []
-
+        
         def fetch_album():
             """Closure triggered only if cache is invalid or missing."""
             logger.debug(f"Initiating live API fetch for album: {album.id}")
@@ -66,7 +71,7 @@ def run(client, config, logger, source_data):
         tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_album, "album")
 
         # Consolidated INFO: Single summary line
-        logger.info(f"Loaded {len(tracks)} tracks from album '{album.title}'.")
+        logger.debug(f"Loaded {len(tracks)} tracks from album '{album.title}'.")
 
         # Data Samples for Debugging
         if tracks:

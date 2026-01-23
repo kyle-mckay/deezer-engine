@@ -115,7 +115,7 @@ class StrategyController:
             self.logger.debug(f"Syncing {len(new_tracks)} tracks from '{src_label}' to local collection database.")
             sync_to_collections(new_tracks,self.logger)
             
-            self.logger.info(f"Source '{src_label}': Found {len(new_tracks)} tracks.")
+            self.logger.debug(f"Source '{src_label}': Found {len(new_tracks)} tracks.")
             
             self.logger.debug("<<< END: strategies.base.handle_source")
 
@@ -154,9 +154,9 @@ class StrategyController:
                 current_length=len(current_tracks)
                 new_length=len(modified_tracks)
                 if current_length != new_length:
-                    self.logger.info(f"Applied '{mod_type}': Pipeline changed from {current_length} to {new_length} tracks.")
+                    self.logger.debug(f"Applied '{mod_type}': Pipeline changed from {current_length} to {new_length} tracks.")
                 else:
-                    self.logger.info(f"Applied '{mod_type}': Processed {current_length} tracks.")
+                    self.logger.debug(f"Applied '{mod_type}': Processed {current_length} tracks.")
             
             self.logger.debug("<<< END: strategies.base.handle_modifier")
             return modified_tracks
@@ -218,7 +218,7 @@ class StrategyController:
         # Read the final state of the pipeline
         current_tracks = self._read_tmp()
         
-        self.logger.info(f"Syncing {len(current_tracks)} tracks to {dest_type} (ID: {dest_data.get('id')}).")
+        self.logger.debug(f"Syncing {len(current_tracks)} tracks to {dest_type} (ID: {dest_data.get('id')}).")
         
         # Run the limit check
         current_tracks = self.check_playlist_limit(dest_data, current_tracks)
