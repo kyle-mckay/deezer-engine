@@ -4,6 +4,7 @@
 
 ### Enhancements
 
+- feat: add file destination (progress towards #25) (@kylemmkay)
 - feat: add history source (closes #65) (#66) (@kylemmkay)
 
 ### Fixes
