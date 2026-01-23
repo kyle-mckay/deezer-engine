@@ -1,0 +1,34 @@
+name: Feature Request
+description: Suggest a new smart playlist rule or engine improvement
+title: "feat: <Short description of the feature>"
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: What is the goal?
+      description: "Example: I want to be able to filter tracks by 'Date Added' to create a 'Recent Discoveries' playlist."
+    validations:
+      required: true
+  - type: textarea
+    id: logic
+    attributes:
+      label: Proposed Logic / Filtering Rules
+      description: "Describe how the engine should handle this. Should it be a new key in `strategy.yml`? What parameters should it take?"
+      placeholder: "Example: Add a 'range' filter that accepts [min, max] values."
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Impact Area
+      options:
+        - label: New Playlist Strategy (Logic change)
+        - label: CLI / UI improvement
+        - label: Docker / Deployment change
+        - label: Metadata / API handling
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: "Any specific artists, albums, or Deezer URLs that help illustrate why this feature is needed."

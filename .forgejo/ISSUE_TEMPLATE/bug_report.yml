@@ -1,0 +1,41 @@
+name: Bug Report
+description: File a structured bug report
+title: "bug: <Short description of the issue>"
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version/Commit
+      description: "You can find this in the `__version__.py` file, or by checking the banner in your terminal with `python3 deezer-engine.py` or through stdout in docker."
+      placeholder: e.g., v1.0.2
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected vs. Actual Behavior
+      description: What did you expect to happen, and what happened instead?
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Troubleshooting
+      options:
+        - label: I have checked the logs for errors.
+          required: true
+        - label: I am running the latest version.
+          required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs
+      description: Please paste any error output here.
+      render: shell
+  - type: textarea
+    id: strategy
+    attributes:
+      label: Strategy Configuration
+      description: Please paste your `strategy.yml` contents here.
+      render: yml

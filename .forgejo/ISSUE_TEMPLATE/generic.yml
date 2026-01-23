@@ -1,0 +1,34 @@
+name: General Question / Setup Help
+description: For questions about DeezNg configuration or general usage
+title: "misc: "
+body:
+  - type: dropdown
+    id: topic
+    attributes:
+      label: What do you need help with?
+      options:
+        - Syncing issues
+        - Strategy.yml configuration help
+        - Docker / Self-hosting setup
+        - General Question
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Details
+      description: "Please describe your question. If it's about a specific playlist, providing the Deezer URL is very helpful."
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: Host
+      description: "What kind of machine or operating system is the host computer?"
+      placeholder: "e.g., Synology NAS, Ubuntu 22.04, Windows xyz"
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: "How is the engine running?"
+      placeholder: "e.g., Containerized, Docker, Local/From source"
