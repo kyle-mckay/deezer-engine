@@ -82,7 +82,7 @@ def get_collection_name(logger, type, name=None, id=None):
             logger.debug("name '{name}' IS empty")
             return False
     match type:
-        case "favorites":
+        case "favorites" | "history":
             collection = f"{type}"
         case "playlist" | "album" | "artist":
             if _is_id_empty():

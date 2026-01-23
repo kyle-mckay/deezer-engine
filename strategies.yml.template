@@ -1,43 +1,86 @@
 # See for more examples: https://codeberg.org/kylemmkay/deezer-engine/wiki/Configuration#examples
 playlists:
-  - name: "Normie Songs"
-    # Take songs from my Library
-    # Exclude my playlist with Anime Songs
-    # Update my 'Normie Songs' playlist with smart replace
+  - name: "Taylor Swift: The Timeline"
     source:
-      - type: "favorites"
-        retention: 23 # Pull after a day
+      - type: "artist"
+        id: "12246" # Taylor Swift
     modifiers:
-      - type: "exclude"
-        source:
-          type: "playlist"
-          id: "12345678"  # Exclude these songs from source
-          retention: 23
+      - type: "sort"
+        field: "release_date"
+        order: "asc"
     destination:
-      type: "smart"
-      target: "01234567" # Playlist that will contain songs
-  - name: "Discovery Mix"
-    # Take my discovery list and new releases
-    # Exclude songs in my favorites & dedupe
-    # Add to my 'Daily Discovery' playlist with smart replace
+      - type: "playlist"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
+  - name: "High-Rank Discovery"
     source:
       - type: "smarttracklist"
         name: "discovery"
-        retention: 23
+        modifiers:
+          - type: "filter"
+            field: "rank"
+            operator: "gt"
+            value: 500000 # Only keep very popular tracks
       - type: "smarttracklist"
-        name: "new-releases"
-        retention: 23
+        name: "inspired-by-1"
+      - type: "smarttracklist"
+        name: "inspired-by-2"
+      - type: "smarttracklist"
+        name: "inspired-by-3"
     modifiers:
-      - type: "exclude"
-        source: 
-          type: "favorites" 
-          retention: 23
-      # Most popular first
-      - type: "sort"
-        order: "desc"
-        field: "rank"
       - type: "dedupe"
+      - type: "shuffle"
+        order: "smart" # Spread out artists for a better mix
     destination:
       - type: "playlist"
-        id: "99998888"
-        order: "smart"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
+  - name: "Unseen Global Hits"
+    source:
+      - type: "playlist"
+        id: "10064140302" # Top 50 Global 2026
+    modifiers:
+      - type: "exclude"
+        source:
+          - type: "favorites"
+      - type: "sort"
+        field: "rank"
+        order: "desc"
+      - type: "limit"
+        count: 20
+        order: "top"
+    destination:
+      - type: "playlist"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
+  - name: "Fresh Favorites"
+    source:
+      - type: "album"
+        id: "897621962" # Britpop by Robbie Williams
+      - type: "favorites"
+    modifiers:
+      - type: "exclude"
+        source:
+          type: "favorites"
+      - type: "shuffle"
+        order: "random"
+    destination:
+      - type: "playlist"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
+  - name: "Fast-Paced House"
+    source:
+      - type: "playlist"
+        id: "10064138682" # Using Top 50 USA as a base
+    modifiers:
+      - type: "filter"
+        field: "duration"
+        operator: "lt"
+        value: 180 # Tracks shorter than 3 mins
+      - type: "limit"
+        count: 30
+        order: "first"
+    destination:
+      - type: "playlist"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"

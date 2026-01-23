@@ -89,6 +89,7 @@ class StrategyController:
         src_type = source_data.get('type')
         # Use 'name' if available (e.g. 'discovery'), otherwise fallback to type
         src_label = source_data.get('name', src_type) 
+        src_retention = source_data.get('retention',get_global_value('retention',0))
         module_path = f"strategies.sources.{src_type}"
         
         self.logger.debug(f"Targeting source module: {module_path}")
@@ -102,7 +103,7 @@ class StrategyController:
             self.logger.debug(f"Executing {src_type}.run()")
 
             # Get new tracklist if cache expired
-            if is_collection_cached(source_name, self.config, self.logger) == False:
+            if src_retention == 0 or not is_collection_cached(source_name, self.config, self.logger) == False:
                 self.logger.debug(f"Cache expired or missing for {source_name}. Fetching from API.")
                 #controller.handle_source(src)
                 new_tracks = module.run(self.client, self.config, self.logger, source_data)
@@ -112,10 +113,10 @@ class StrategyController:
 
             
             # Log tracks and their source
-            self.logger.debug(f"Syncing {len(new_tracks)} tracks from '{src_label}' to local collection database.")
-            sync_to_collections(new_tracks,self.logger)
-            
-            self.logger.debug(f"Source '{src_label}': Found {len(new_tracks)} tracks.")
+            if new_tracks:
+                self.logger.debug(f"Syncing {len(new_tracks)} tracks from '{src_label}' to local collection database.")
+                sync_to_collections(new_tracks,self.logger)
+                self.logger.debug(f"Source '{src_label}': Found {len(new_tracks)} tracks.")
             
             self.logger.debug("<<< END: strategies.base.handle_source")
 

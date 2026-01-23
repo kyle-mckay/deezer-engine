@@ -67,6 +67,7 @@ def process_sources(s_data, controller, config, client, logger, strategy_name):
     for src in sources:
         logger.debug(f"Handling source type: {src.get('type')}")
         source_type = src.get('type')
+        source_retention = src.get('retention',get_global_value('retention',0))
         source_modifiers = src.get('modifiers', []) # Capture child modifiers
 
         source_name = get_collection_name(logger,source_type,src.get('name',None),src.get('id',None))
@@ -75,7 +76,7 @@ def process_sources(s_data, controller, config, client, logger, strategy_name):
         source_metadata.append((source_name, source_modifiers))
 
         # Get new tracklist if cache expired
-        if is_collection_cached(source_name, config, logger) == False:
+        if source_retention == 0 or not is_collection_cached(source_name, config, logger) == False:
             logger.debug(f"Cache expired or missing for {source_name}. Fetching from API.")
             controller.handle_source(src,source_name)
         else:
