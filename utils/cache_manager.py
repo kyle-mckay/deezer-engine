@@ -39,3 +39,48 @@ def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, contex
         else:
             logger.warn(f"No cache available to fall back on for {context}.")
         return []
+
+def get_collection_name(logger, type, name=None, id=None):
+    """Using the provided variables, attempts to determine the expected 'source_name' in the collections table for cache matching"""
+    _log_tag = "utils.cache_manager.get_collection_name"
+    logger.debug(f">>> START: {_log_tag}")
+    if not type:
+        logger.warning(f"Unable to determine collection name, source type is empty.")
+        return "unknown"
+    else:
+        type = type.lower()
+        prefix = f"{type}__"
+
+    def _is_id_empty():
+        if id:
+            logger.debug("id '{id}' is NOT empty")
+            return True
+        else:
+            logger.debug("id '{id}' IS empty")
+            return False
+
+    def _is_name_empty():
+        if name:
+            logger.debug("name '{name}' is NOT empty")
+            return True
+        else:
+            logger.debug("name '{name}' IS empty")
+            return False
+    match type:
+        case "favorites":
+            collection = f"{type}"
+        case "playlist" | "album" | "artist":
+            if _is_id_empty():
+                collection = f"{prefix}{id}"
+            else:
+                collection = "unknown"
+        case "smarttracklist":
+            if _is_name_empty():
+                collection = f"{prefix}{name}"
+            else:
+                collection = "unknown"
+    
+    logger.debug(f"Collection name identified as: '{collection}'")
+
+    logger.debug(f"<<< END: {_log_tag}")
+    return collection

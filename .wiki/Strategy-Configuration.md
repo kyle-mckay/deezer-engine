@@ -193,7 +193,7 @@ Gets songs from a specific album. Currently only supports album id: `https://www
 
 ```
 
-### `album`
+### `artist`
 
 Gets all songs from a specific artist by itterating through their albums. Currently only supports album id: `https://www.deezer.com/us/artist/<playlist_id>`
 

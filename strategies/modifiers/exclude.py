@@ -1,5 +1,7 @@
 import importlib
 import logging
+from utils.cache_manager import get_collection_name
+from utils.db_manager import is_collection_cached, fetch_collection, sync_to_collections
 
 def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """
@@ -22,20 +24,35 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
             source_data = [source_data]
     for src in source_data:
         source_type = src.get('type')
-        source_id = src.get('id', 'N/A')
-        
-        logger.debug(f"Targeting exclusion source: {source_type} (ID: {source_id})")
-    
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"Pipeline size before exclusion: {len(current_tracks)}")
+        source_id = src.get('id', None)
+        source_name = src.get('name', None)
+
+        if source_id:
+            logger.debug(f"Targeting exclusion source: {source_type} (ID: {source_id})")
+        elif source_name:
+            logger.debug(f"Targeting exclusion source: {source_type} (Name: {source_name})")
+        else:
+            logger.debug(f"Targeting exclusion source: {source_type}")
+
+        collection_name = get_collection_name(logger, source_type, source_name, source_id)
+
+        logger.debug(f"Pipeline size before exclusion: {len(current_tracks)}")
 
         try:
-            # We reuse the source workers to get the list of IDs to exclude.
-            module_path = f"strategies.sources.{source_type}"
-            logger.debug(f"Importing source worker: {module_path}")
-            
-            source_worker = importlib.import_module(module_path)
-            exclude_tracks = source_worker.run(client, config, logger, source_data)
+            # Check if cache exists
+ 
+            if collection_name != "unknown" and is_collection_cached(collection_name, config, logger):
+                logger.debug(f"Tracks for source {collection_name} are cached. Pulling from cache")
+                exclude_tracks = fetch_collection(collection_name, logger)
+            else:
+                logger.debug(f"Cached tracks are not available, pulling live track data.")
+                # Reuse source worker
+                module_path = f"strategies.sources.{source_type}"
+                logger.debug(f"Importing source worker: {module_path}")
+                source_worker = importlib.import_module(module_path)
+                exclude_tracks = source_worker.run(client, config, logger, source_data)
+                # Push to collections for future reference
+                sync_to_collections(exclude_tracks,logger)
             
             # 2. Perform the subtraction
             # Build set of IDs to exclude

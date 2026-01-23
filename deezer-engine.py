@@ -10,6 +10,7 @@ from utils.config_loader import load_config_with_env_overrides, load_strategies_
 from utils.deezer_auth import get_authenticated_client, get_tracks
 from strategies.base import StrategyController
 from utils.database import initialize_all
+from utils.cache_manager import get_collection_name
 from utils.db_manager import get_unprocessed_track_ids, update_track_metadata,fetch_collection, is_collection_cached, get_expired_track_ids, update_tracks_partial_batch, update_unprocessed, refresh_stats
 from __version__ import __version__, __banner__
 
@@ -50,15 +51,7 @@ def process_sources(s_data, controller, config, client, logger, strategy_name):
         source_type = src.get('type')
         source_modifiers = src.get('modifiers', []) # Capture child modifiers
 
-        match source_type:
-            case "favorites":
-                source_name = source_type
-            case "smarttracklist":
-                source_name = f"{source_type}__{src.get('name')}"
-            case "artist":
-                source_name = f"{source_type}__{src.get('id')}"
-            case _:
-                source_name = f"{source_type}__{src.get('id')}"
+        source_name = get_collection_name(logger,source_type,src.get('name',None),src.get('id',None))
         
         # Track the name and its specific modifiers
         source_metadata.append((source_name, source_modifiers))
