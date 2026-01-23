@@ -1,176 +1,174 @@
-# Prerequisites
+# 🚀 Setup & Installation
 
-- A Deezer account
-- An ARL token
-- (If building from source) Python 3.7 or higher
+This guide covers everything you need to get **Deezer Engine** running, from gathering your credentials to deploying via Docker or Python.
 
-## Obtaining ARL token
+## 🔑 1. Prerequisites & Authentication
 
-To authenticate the engine, you need an `arl` token from your active Deezer session. Follow these steps for your specific browser:
+Before installing, you must have an active Deezer account and a valid **ARL Token**. This token allows the engine to act on your behalf.
 
-1. Open your browser and go to [deezer.com](https://www.deezer.com/).
-2. **Log in** to your account.
-3. Press `F12` (or right-click anywhere and select **Inspect**) to open the **Developer Tools**.
+### Obtaining your ARL Token
 
-### **Using Google Chrome / Brave / Edge**
+1. Open [deezer.com](https://www.deezer.com/) in your browser and **Log in**.
+2. Press `F12` to open **Developer Tools**.
+3. Follow the steps for your browser:
 
-4. Navigate to the **Application** tab at the top. (If you don't see it, click the `>>` arrows).
-5. In the left sidebar, find the **Storage** section and expand **Cookies** and select `https://www.deezer.com`.
-6. In the list of cookies, find the entry named **`arl`**.
-7. Copy the text in the **Value** column. 
+| Browser | Path to Token |
+| --- | --- |
+| **Chrome / Edge / Brave** | **Application** tab → **Storage** → **Cookies** → `https://www.deezer.com` |
+| **Mozilla Firefox** | **Storage** tab → **Cookies** → `https://www.deezer.com` |
 
-### **Using Mozilla Firefox**
+4. Locate the cookie named **`arl`**.
+5. Copy the string in the **Value** column.
 
-4. Click on the **Storage** tab.
-5. Expand **Cookies** in the left sidebar and select `https://www.deezer.com`.
-6. In the list of cookies, find the entry named **`arl`**.
-7. Double-click the **Value** field for that row and copy it.
+> [!CAUTION]
+> **Keep this token secret.** It is your active session. Anyone with this token has full access to your Deezer account.
 
-> [!WARNING]
-> **Keep this token secret.** Your ARL token is essentially your login session. Anyone with this token can access your Deezer account.
+## ⚙️ 2. Configuration Reference
 
-# Installation
+Deezer Engine can be configured via a `config.yml` file or **Environment Variables**.
 
-## Configuration
+> [!TIP]
+> **Precedence:** Environment variables will always override values found in your `config.yml`.
 
+| Config Key (`config.yml`) | Environment Variable | Req. | Default | Description |
+| --- | --- | --- | --- | --- |
+| `arl_token` | `DEEZER_ARL_TOKEN` | **Yes** | N/A | Your Deezer ARL authentication token. See [Obtaining ARL token](https://www.google.com/search?q=%23obtaining-arl-token). |
+| `user_id` | `DEEZER_USER_ID` | **Yes** | N/A | Your numeric Deezer user ID (found in profile URL). |
+| `log_level` | `DEEZER_LOG_LEVEL` | No | `INFO` | Verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
+| `write_logs` | `DEEZER_WRITE_LOGS` | No | `true` | Whether to write logs to `/app/data/logs/`. |
+| `batch_size` | `DEEZER_BATCH_SIZE` | No | `50` | Max tracks processed in a single API batch operation. |
+| `print_banner` | `DEEZER_PRINT_BANNER` | No | `true` | Toggle the startup license/brand banner. |
+| `playlist_cap` | `DEEZER_PLAYLIST_CAP` | No | `5000` | Max tracks allowed in **any** destination playlist (Deezer limit is 5k). |
+| `favorites_cap` | `DEEZER_FAVORITES_CAP` | No | `10000` | Max tracks allowed in your "Favorites" (Deezer limit is 10k). |
+| `retention` | `DEEZER_RETENTION` | No | `0` | Hours to use cached 'source' data before fetching live. |
+| `track_stats_refresh` | `DEEZER_TRACK_STATS_REFRESH` | No | `7` | Days before refreshing dynamic metadata like track rank. |
 
-Deezer Engine is configured either through `config.yml` file or docker environment variables. Environment variables take precedence over file values.
+### Logic Hierarchy
 
-| Config Name | Environment Variable | Required | Type | Default | Description |
-|---|---|---|---|---|---|
-| `arl_token` | `DEEZER_ARL_TOKEN` | Yes | String | N/A | Your Deezer ARL authentication token. Required to authenticate with Deezer API. See [Obtaining ARL token](#obtaining-arl-token) section. |
-| `user_id` | `DEEZER_USER_ID` | Yes | String | N/A | Your numeric Deezer user ID. Found in your profile URL: `https://www.deezer.com/us/profile/123456789` |
-| `log_level` | `DEEZER_LOG_LEVEL` | No | String | `INFO` | Logging verbosity level. Options: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
-| `write_logs` | `DEEZER_WRITE_LOGS` | No | Boolean | `true` | Whether to write logs to file in `/app/data/logs/`. Accepts: `true`, `false`, `1`, `0`, `yes`, `no`. |
-| `batch_size` | `DEEZER_BATCH_SIZE` | No | Integer | `50` | Tracks will be chunked and processed in groups not exceeding this value when adding or removing from playlists. |
-| `print_banner` | `DEEZER_PRINT_BANNER` | No | Boolean | `true` | Whether to print the startup banner on launch. When run in docker mode, it prints on container start. When running locally it's printed on script execution while `log_level` is `INFO` or `DEBUG`. |
-| `playlist_cap` | `DEEZER_PLAYLIST_CAP` | No | Integer | `5000` | The maximum number of songs you want in **any** playlist (Deezer has a limit of 5000). Warns if current pipline > `playlist_cap` and if tracks exceed this value, shrinks the pipeline to this cap. |
-| `favorites_cap` | `DEEZER_FAVORITES_CAP` | No | Integer | `10000` | The maximum number of songs you want in your favorites (Deezer has a limit of 10,000). Warns if current pipline > `favorites_cap` and if tracks exceed this value, shrinks the pipeline to this cap. |
-| `retention` | `DEEZER_RETENTION` | No | Integer | `0` | The number of hours to use a cached copy of a source before fetching live from deezer. |
-| `track_stats_refresh` | `DEEZER_TRACK_STATS_REFRESH` | No | Integer | `7` | The number of days you would like dynamic information such as rank to refresh. |
+The engine follows a specific priority when loading settings. This allows you to have a base configuration in a file while overriding specific keys (like tokens) via Docker secrets or environments.
 
-## Docker Compose
+1. **Environment Variables:** Checked first (highest priority).
+2. **`config.yml`:** Checked if environment variables are not set.
+3. **Hardcoded Defaults:** Used if neither of the above provides a value.
 
-> Note: `config.yml` and `strategies.yml` can be bind mounted directly into the containers `/app/data/` folder.
-> If you decide to bind mount these, ensure you create the file on your host first.
+## 🐳 3. Installation: Docker (Recommended)
 
-> If you do not provide a `strategies.yml` file, the container will generate a copy in the `/app/data` for you from the template.
+Docker is the easiest way to run the engine without managing Python dependencies manually.
 
-```yml
+### Option A: Docker Compose
+
+Create a `docker-compose.yml` file. You can run in **Standard mode** (one-time sync) or **Cron mode** (scheduled).
+
+```yaml
 services:
     deezer-engine:
         image: kylemmkay/deezer-engine:latest
         container_name: deezer-engine
         volumes:
-            #- './strategies.yml:/app/data/strategies.yml' # If bind mounting file only
-            - './data:/app/data' # Contains cache/ tmp/ and logs/ folders, will create strategies if not present
+            - './data:/app/data' # Stores ./db, ./logs, and ./strategies.yml
         environment:
             - DEEZER_USER_ID="123456789"
-            - DEEZER_ARL_TOKEN="TOKEN_STRING_HERE"
-            - DEEZER_LOG_LEVEL=INFO # Log level - DEBUG, INFO, WARNING, ERROR
-```
-
-### Command Modes
-
-You can control how the script executes by specifying a `command:` option in Docker Compose or as a command argument in `docker run`. The supported modes are:
-
-- **`run`** (default if `DEEZER_SCHEDULE` not set): Execute the engine once and exit. Useful for one-time operations or scheduled external triggers.
-- **`cron`**: Run the engine on a forced schedule defined by the `DEEZER_SCHEDULE` environment variable (default: `0 3 * * *`). The container will stay running and execute the script at each scheduled interval.
-- **`shell`**: Start an interactive bash shell for debugging or manual operations.
-
->[!WARNING]
->Cron behaviour is still under assessment
-
-#### Docker Compose Example with Cron
-
-
-```yml
-services:
-    deezer-engine:
-        image: kylemmkay/deezer-engine:latest
-        container_name: deezer-engine
-        volumes:
-            - './strategies.yml:/app/data/strategies.yml'
-            - './data:/app/data'
-        environment:
-            - DEEZER_USER_ID="123456789"
-            - DEEZER_ARL_TOKEN="TOKEN_STRING_HERE"
-            - DEEZER_SCHEDULE="0 3 * * *" # Run daily at 3 AM UTC
+            - DEEZER_ARL_TOKEN="YOUR_ARL_HERE"
+            - DEEZER_LOG_LEVEL=INFO
             - TZ=UTC
-        command: cron
+            #- DEEZER_SCHEDULE="0 3 * * *" # Optional: Daily at 3 AM (Based off env TZ)
+        command: run
+
 ```
 
+> [!TIP]
+> If you do not want to mount the `/app/data` directory, you can create and bind mount `./strategies.yml:/app/data/strategies.yml` instead.
 
-## Source
+### Execution Modes
 
-1. Clone and open the repository.
+| Mode | Command | Behavior |
+| --- | --- | --- |
+| **Run** | `command: run` / not included | (Default) Dynamically executes strategies: runs once and exits unless `DEEZER_SCHEDULE` defined. |
+| **Cron** | `command: cron` | Container stays alive and runs on your `DEEZER_SCHEDULE`. |
+| **Shell** | `command: shell` | Starts an interactive bash shell for debugging. |
+
+### Docker Run (CLI)
+
+For quick testing or one-off syncs without a Compose file:
+
+```bash
+# Standard One-time Run
+docker run --rm \
+  -v $(pwd)/data:/app/data \
+  -e DEEZER_USER_ID="123456789" \
+  -e DEEZER_ARL_TOKEN="YOUR_TOKEN" \
+  kylemmkay/deezer-engine:latest run
+
+# Scheduled Cron (stays running)
+docker run -d \
+  --name deezer-cron \
+  -e DEEZER_SCHEDULE="0 3 * * *" \
+  -v $(pwd)/data:/app/data \
+  kylemmkay/deezer-engine:latest cron
+
+```
+
+### 🏗️ Build & Development
+
+If you are modifying the source code and want to test your changes within the Docker environment, follow these steps to build locally.
+
+>![NOTE]
+>This assumes you have already cloned the repository and are within the working directory.
+
+**1. Build the image:**
+From the root of the repository:
+
+```bash
+docker build -t deezer-engine:dev .
+
+```
+
+**2. Run your dev build:**
+Use your local image tag to verify changes:
+
+```bash
+docker run --rm \
+  -v $(pwd)/data:/app/data \
+  -e DEEZER_USER_ID="123456789" \
+  -e DEEZER_ARL_TOKEN="YOUR_TOKEN" \
+  deezer-engine:dev run
+
+```
+
+**3. Development Tips:**
+
+* **Entrypoint:** The image uses `docker-entrypoint.sh`. If you modify this script, you **must** rebuild the image.
+
+## 🐍 4. Deployment: Manual Python
+
+Best for developers or running directly on a host machine (Python 3.11+ required).
+
+1. **Clone & Setup:**
+
 ```bash
 git clone https://codeberg.org/kylemmkay/deezer-engine.git
 cd deezer-engine
-```
-
-### Docker Run
-
-2. Build the container.
-```bash
-# Build the image
-docker build -t deezer-engine .
-```
-
-3.1 Run the container with Docker (single execution).
-```bash
-# Example with mounted config directory
-docker run --rm \
-  -v $(pwd)/config.yml:/app/config.yml \
-  -v $(pwd)/strategies.yml:/app/strategies.yml \
-  deezer-engine run
-```
-
-3.2 Run the container with cron scheduling.
-```bash
-# Run on a schedule (daily at 3 AM UTC)
-docker run --rm \
-  -e DEEZER_USER_ID="123456789" \
-  -e DEEZER_ARL_TOKEN="TOKEN_STRING_HERE" \
-  -e DEEZER_SCHEDULE="0 3 * * *" \
-  -e TZ=UTC \
-  -v $(pwd)/strategies.yml:/app/data/strategies.yml \
-  -v $(pwd)/data:/app/data \
-  deezer-engine cron
-```
-
-3.3 Debug with interactive shell.
-```bash
-# Start an interactive shell for debugging
-docker run --rm -it \
-  -v $(pwd)/config.yml:/app/config.yml \
-  -v $(pwd)/strategies.yml:/app/strategies.yml \
-  deezer-engine shell
-```
-
-### Python
-
-2. Set up a Python virtual environment (recommended).
-```bash
 python3 -m venv venv
-source venv/bin/activate
-```
-> On Windows: `venv\Scripts\activate`
-
-3. Install dependencies.
-```bash
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
+
 ```
 
-4. Copy the template files to create your local configuration.
+2. **Configure:**
+
 ```bash
 cp config.yml.template config.yml
 cp strategies.yml.template strategies.yml
+
 ```
 
-5. Edit `config.yml` and `strategies.yml` with your settings. See [./Configuration.md](Configuration) for more details.
+*Edit these files with your specific settings.*
 
-6. Run the engine.
+3. **Run:**
+
 ```bash
 python3 deezer-engine.py
+
 ```
+
+**Next Step:** Once installed, head over to the [Strategy Configuration](https://www.google.com/search?q=Strategy-Configuration) page to define your first smart playlist.

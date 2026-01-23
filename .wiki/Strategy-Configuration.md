@@ -1,10 +1,259 @@
-This page provides details on each of the strategies supported by *Deezer Engine*.
+# 🛠️ Strategy Configuration
+
+This guide details how to build and maintain smart playlists using the pipeline-based YAML configuration.
+
+## 📂 Sources
+
+Sources fetch tracks from Deezer. You can combine multiple sources into a single pipeline.
+
+```yaml
+    source:
+      - type: "smarttracklist"
+        name: "new-releases"
+        retention: 23
+      - type: "favorites"
+        retention: 12
+```
+
+### General Source Parameters
+
+Every source entry supports these optional fields:
+
+* `retention`: (Int) Hours to cache data. `0` (default) means fetch live.
+* `modifiers`: (List) **Local Modifiers** that apply *only* to this source before merging.
+
+### Supported Types
+
+| Type | Required Field | Description |
+| --- | --- | --- |
+| `favorites` | None | Tracks from your "Loved Tracks" profile. |
+| `playlist` | `id` | All tracks from a specific playlist ID. |
+| `album` | `id` | All tracks from a specific album ID. |
+| `artist` | `id` | Iterates through an artist's discography. |
+| `smarttracklist` | `name` | Curated: `discovery`, `new-releases`, `inspired-by-1` to `5`. |
+
+#### `favorites`
+
+Gets songs from your favorite tracks: `https://www.deezer.com/us/profile/<user_id>/loved`
+
+```yaml
+    source:
+      - type: "favorites"
+
+```
+
+#### `playlist`
+
+Gets songs from a specific playlist. Currently only supports playlist id: `https://www.deezer.com/us/playlist/<playlist_id>`
+
+```yaml
+    source:
+      - type: "playlist"
+        id: "12345678"
+
+```
+
+#### `album`
+
+Gets songs from a specific album. Currently only supports album id: `https://www.deezer.com/us/album/<album_id>`
+
+```yaml
+    source:
+      - type: "album"
+        id: "12345678"
+
+```
+
+#### `artist`
+
+Gets all songs from a specific artist by itterating through their albums. Currently only supports album id: `https://www.deezer.com/us/artist/<artist_id>`
+
+```yaml
+    source:
+      - type: "artist"
+        id: "123"
+
+```
+
+#### `smarttracklist`
+
+Deezer's curated lists: `https://www.deezer.com/us/smarttracklist/<list name>`
+
+* `discovery`: "Discover some brand new tracks and music that's just brand new to you."
+* `new-releases`: "Every week get your friday releases playlist based on the artists, albums and tracks you favorite."
+* `inspired-by-` `1` through `5`: "Discover music similar to the artists you've been listening to lately."
+
+```yaml
+    source:
+      - type: "smarttracklist"
+        name: "discovery"
+      - type: "smarttracklist"
+        name: "new-releases"
+      - type: "smarttracklist"
+        name: "inspired-by-1"
+      # leaving out 2-4 for example
+      - type: "smarttracklist"
+        name: "inspired-by-5"
+```
+
+## 🔧 Modifiers
+
+Modifiers is an *optional* section that allows you to transform your track list (should you decide to add them). They can be **Global** (applied after all sources are merged) or **Local** (applied within a source).
+
+| Modifier | Primary Purpose |
+| --- | --- |
+| **`dedupe`** | Removes duplicate track IDs from the pipeline. |
+| **`limit`** | Slices the list to keep only a specific number of tracks. |
+| **`filter`** | Includes only tracks that meet specific metadata criteria. |
+| **`shuffle`** | Randomizes the track order (Smart or Random). |
+| **`sort`** | Organizes tracks by fields like Rank, Title, or Date. |
+| **`exclude`** | Removes tracks found in a secondary source. |
+
+### Global vs Local
+
+**Local Modifier**: Exclude all songs in your favorites if they also exist in the defined playlist.
+
+```yaml
+    source:
+      - type: "favorites"
+        modifiers: 
+          - type: "exclude"
+            source:
+              - type: "playlist"
+                id: "PLAYLIST_ID"
+```
+
+**Global**: Applies to the **all** tracks gathered.
+
+```yaml
+    modifiers:
+      - type: "dedupe"
+
+```
+
+### Supported Modifiers
+
+#### `dedupe`
+
+Removes duplicate track IDs. Note that sources already de-duplicate by ID during consolidation, but this forces the behavior at specific pipeline stages.
+
+```yaml
+modifiers:
+  - type: "dedupe"
+
+```
+
+#### `limit`
+
+Slices the list to keep only a specific number of items.
+
+* **Orders:** `top`/`head`/`first` or `tail`/`bottom`/`last`.
+
+```yaml
+modifiers:
+  - type: "limit"
+    order: "top"
+    count: 20
+
+```
+
+#### `filter`
+
+Includes only tracks meeting metadata criteria. String comparisons are case-insensitive.
+
+```yaml
+modifiers:
+  - type: "filter"
+    field: "rank"
+    operator: "gt"
+    value: 400000
+  - type: "filter"
+    field: "contains"
+    operator: "gt"
+    value: "cool"
+  - type: "filter"
+    field: "unseen"
+    operator: "eq"
+    value: 1
+
+```
+
+For available filter fields, see the official [deezer documentation for tracks](https://deezer-python.readthedocs.io/en/stable/api_reference/resources/track.html#deezer.Track).
+
+> [!NOTE]
+> Fields that are boolean are stored as `0` (false) and `1` (true) in the database.
+
+**Supported Operators:**
+
+> [!NOTE]
+> Text comparrisons are case insensitive.
+
+* `eq`, `equals`, `==`, `is`
+* `ne`, `not`, `!=`, `is_not`
+* `gt`, `greater_than`, `>` | `gte`, `>=`
+* `lt`, `less_than`, `<` | `lte`, `<=`
+* `contains`, `in`, `like`
+* `starts_with`, `sw` | `ends_with`, `ew`
+
+### `shuffle`
+
+Randomizes the order. **Recommended:** Use `replace` as your destination mode when shuffling.
+
+* **`smart`**: Uses an interleaving algorithm to prevent artist clustering.
+* **`random`**: Traditional Fisher-Yates randomization.
+
+```yaml
+modifiers:
+  - type: "shuffle"
+    order: "smart"
+
+```
+
+### `sort`
+
+Organizes tracks by a specific field. **Recommended:** Use `replace` destination mode.
+
+* **Orders:** `asc` (A-Z) or `desc` (Z-A).
+
+```yaml
+modifiers:
+  - type: "sort"
+    order: "desc"
+    field: "release_date"
+
+```
+
+For available sort fields, see the official [deezer documentation for tracks](https://deezer-python.readthedocs.io/en/stable/api_reference/resources/track.html#deezer.Track).
+
+## 🎯 Destinations
+
+Define where the final list is saved. Currently, only **playlists** are supported.
+
+### Destination Modes
+
+| Mode | Behavior |
+| --- | --- |
+| `smart` | Compares the pipeline to the playlist; only adds/removes changes. |
+| `replace` | Wipes the playlist entirely and adds the new pipeline (Preserves sort order). |
+| `insert` | Appends tracks to the existing playlist without removing anything. |
+
+**ID** (required) - The playlist ID you wish to save to: `https://www.deezer.com/us/playlist/<playlist_id>`
+
+```yaml
+destination:
+  - type: "playlist"
+    id: "01234567"
+    order: "smart"
+
+```
+
+
 
 # Examples
 
-This section provides examples of different configurations that are possible.
+This page provides examples of different configurations that are possible.
 
-## The "Artist Super-Fan" Chronological Archive
+## The "Artist Super-Fan"
 
 This strategy pulls every track from a specific artist's career and organizes them strictly by the date they were released. By using `release_date` with an ascending order, the resulting playlist functions as a musical timeline, starting with the artist's earliest work and ending with their most recent hits.
 
@@ -131,268 +380,3 @@ playlists:
         order: "replace"
 
 ```
-
-# Specifics
-
-This section provides information on how each modifier is structured and used.
-
-## Sources
-
-Sources fetch track lists from Deezer. Will be combined into a single list of tracks for processing in [Modifiers](#modifiers).
-
-### Usage
-
-Multiple sources can be combined in a single strategy.
-
-```yaml
-    source:
-      - type: "smarttracklist"
-        name: "new-releases"
-        retention: 23
-      - type: "smarttracklist"
-        name: "discovery"
-        retention: 23
-# ... rest of strategy
-
-```
-
-**Optional Parameters**: Parameters that all sources support but are not required.
-
-* `retention` (defaults to `0`): The number of hours to cache the source; 0 = always live. Default can be changed via the `retention` key in your config.
-* `modifiers` (optional): A list of **Local Modifiers** that apply only to this specific source before it is merged into the global pipeline.
-
-### `favorites`
-
-Gets songs from your favorite tracks: `https://www.deezer.com/us/profile/<user_id>/loved`
-
-```yaml
-    source:
-      - type: "favorites"
-
-```
-
-### `playlist`
-
-Gets songs from a specific playlist. Currently only supports playlist id: `https://www.deezer.com/us/playlist/<playlist_id>`
-
-```yaml
-    source:
-      - type: "playlist"
-        id: "12345678"
-
-```
-
-### `album`
-
-Gets songs from a specific album. Currently only supports album id: `https://www.deezer.com/us/album/<playlist_id>`
-
-```yaml
-    source:
-      - type: "album"
-        id: "12345678"
-
-```
-
-### `artist`
-
-Gets all songs from a specific artist by itterating through their albums. Currently only supports album id: `https://www.deezer.com/us/artist/<playlist_id>`
-
-```yaml
-    source:
-      - type: "artist"
-        id: "123"
-
-```
-
-### `smarttracklist`
-
-Deezer's curated lists: `https://www.deezer.com/us/smarttracklist/...`
-
-* `discovery`: "Discover some brand new tracks and music that's just brand new to you."
-* `new-releases`: "Every week get your friday releases playlist based on the artists, albums and tracks you favorite."
-* `inspired-by-` `1` through `5`: "Discover music similar to the artists you've been listening to lately."
-
-```yaml
-    source:
-      - type: "smarttracklist"
-        name: "discovery"
-      - type: "smarttracklist"
-        name: "new-releases"
-      - type: "smarttracklist"
-        name: "inspired-by-1"
-      # leaving out 2-4 for example
-      - type: "smarttracklist"
-        name: "inspired-by-5"
-```
-
-## Modifiers
-
-Modifiers is an **optional** section designed to transform a track list. They can be applied **Globally** (to the whole pipeline) or **Locally** (within a specific source).
-
-### Usage
-
-**Global Modifiers**:
-Applied after all sources have been collected.
-
-```yaml
-    modifiers:
-      - type: "dedupe"
-
-```
-
-**Local Modifiers**:
-Applied to a specific source before merging.
-
-```yaml
-    source:
-      - type: "playlist"
-        id: "12345"
-        modifiers:
-          - type: "shuffle"
-            order: "random"
-
-```
-
-### `dedupe`
-
-Remove duplicate track IDs. Deezer does not allow the same track to be in the same playlists, so sources currently de-duplicate by ID automatically when lists are consolidated. However, this allows you to force this behavior in the event future modifiers allow you to insert items after source collection.
-
-```yaml
-    modifiers:
-      - type: "dedupe"
-
-```
-
-### `limit`
-
-Slice your tracks to keep only a specific number of items from the start or end of the dataset.
-
-```yaml
-    modifiers:
-      - type: "limit"
-        order: "top"
-        count: 20
-
-```
-
-**Supported limit orders**:
-
-`top`, `head` or `first` - Retains the first `n` tracks from the beginning of the list.
-`tail`, `bottom` or `last` - Retains the last `n` tracks from the end of the list.
-
-### `filter`
-
-Include only the tracks that meet specific criteria based on their metadata.
-
-```yaml
-    modifiers:
-      - type: "filter"
-        field: "rank"
-        operator: "gt"
-        value: 400000
-
-```
-
-**Supported Operators**:
-
-> Note: String comparisons (equals, contains, starts_with, ends_with) are case-insensitive.
-
-`eq`, `equals`, `==` or `is` - Match the exact value (e.g., `unseen: 1`).
-`ne`, `not`, `!=` or `is_not` - Exclude tracks matching the value.
-`gt`, `greater_than`, `>` - True if the field is greater than the value.
-`gte` or `>=` - True if the field is **greater than or equal** to the value.
-`lt`, `less_than`, `<` - True if the field is less than the value.
-`lte` or `<=` - True if the field is **less than or equal** to the value.
-`contains`, `in` or `like` - Checks if the value exists anywhere within the field.
-`starts_with`, `sw` or `startswith` - Checks if the field begins with the specified value.
-`ends_with`, `ew` or `endswith` - Checks if the field ends with the specified value.
-
-### `shuffle`
-
-Shuffle the order of your tracks.
-
-> It is recommended that your destination strategy is `replace` when using this as a global modifier.
-
-```yaml
-    modifiers:
-      - type: "shuffle"
-        order: "random"
-
-```
-
-**Types of shuffle**:
-
-* **`smart`**: **Recommended.** Uses an interleaving algorithm to prevent "clustering." It groups tracks by artist and ensures that songs from the same artist are spread out as much as possible throughout the playlist.
-* **`random`**: A true Fisher-Yates randomization. It ignores metadata like artist or album, providing a completely unbiased sequence.
-
-### `sort`
-
-Sort your tracks by a specific field in the order of your choice.
-
-> It is recommended that your destination strategy is `replace` when using this as a global modifier.
-
-```yaml
-    modifiers:
-      - type: "sort"
-        order: "desc"
-        field: "title"
-
-```
-
-**Supported sort orders**:
-
-> Note: Fields are sorted with no case sensitivity.
-
-`asc` or `ascending` - Sorts by `field` in ascending order (A-Z)
-`desc` or `descending` - Sorts by `field` in descending order (Z-A)
-
-**Supported sort fields**:
-
-Currently the following fields are **always** fetched, though [more fields exist](https://deezer-python.readthedocs.io/en/stable/api_reference/resources/track.html#deezer.Track). This is currently due to the fetch API only returning *some* fields. Until an internal database is configured it would not be efficient to pull all info.
-
-| Name | Description | Type |
-| --- | --- | --- |
-| `id` | The track's Deezer id | int |
-| `title` | The track's full title | string |
-| `unseen` | The track unseen status | boolean |
-| `duration` | The track's duration in seconds | int |
-| `rank` | The track's Deezer rank (bigger number = more popular) | int |
-| `artist` | artist object (name, id, etc.) | object |
-| `album` | album object (title, id, etc.) | object |
-
-### `exclude`
-
-Pull tracks from an additional [Source](#source) with the intent to remove them if present in the current track pipeline. Support's non-modifier optional parameters such as `retention`.
-
-```yaml
-    modifiers:
-      - type: "exclude"
-        source:
-          type: "favorites"
-
-```
-
-## Destinations
-
-Define where the final track list saves to.
-
-### Usage
-
-> Currently only supports output to playlists.
-
-```yaml
-# ... source section
-# ... modifiers section
-    destination:
-      - type: "playlist"
-        id: "01234567"
-        order: "smart"
-
-```
- 
-**Types** (required) - Different methods in which your playlist is updated
-* `smart` or `smartreplace` - Adds or removes tracks by only processing what's changed. **Does not care about sorting order**.
-* `replace` - Removes **all** tracks in destination library first, then adds songs from pipeline.
-* `insert` or `append` - Add tracks from pipeline to playlist without removing any
-
-**ID** (required) - The playlist ID you wish to save to: `https://www.deezer.com/us/playlist/<playlist_id>`

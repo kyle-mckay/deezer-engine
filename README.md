@@ -3,91 +3,98 @@
 [![Source on Codeberg](https://img.shields.io/badge/Source-Codeberg-blue?logo=gitea)](https://codeberg.org/kylemmkay/deezer-engine) [![Docker Hub](https://img.shields.io/badge/docker-pull-blue.svg?logo=docker)](https://hub.docker.com/r/kylemmkay/deezer-engine)
 
 > [!NOTE]
->This repository was built with AI 🤖 assistance.
+> This repository was built with AI 🤖 assistance.
 
-Inspired by [Goofy](https://github.com/Chimildic/goofy) and [Playlist Machinery / Smarter Playlists](http://www.playlistmachinery.com/), Deezer Engine is a Python script that allows you to create and maintain smart playlists within Deezer using a declarative configuration approach.
-
-> [!WARNING]
-> **This script can delete songs from your playlists.** This goes without saying, but be aware that running this script with an incorrect configuration may result in permanently lost or broken playlists. At this time there is no backup functionality.
+Deezer Engine is a Python-based pipeline system that allows you to create and maintain smart playlists using a declarative YAML configuration. Inspired by [Goofy](https://github.com/Chimildic/goofy).
 
 > [!WARNING]
-> **Second Warning!.** This repository is under heavy revision. Any change has the potential of being a breaking change until a stable release is out. Until this time, limited support will be provided in setting this up. 
+> **DATA LOSS RISK:** This script can delete songs from your playlists. Running this with an incorrect configuration may result in permanently lost playlists. It is under heavy revision; breaking changes are expected.
 
-## Getting Started
+## 🚀 Quick Links
 
-- [Setup/Installation](https://codeberg.org/kylemmkay/deezer-engine/wiki/Setup-Installation)
-  - [Docker Compose](https://codeberg.org/kylemmkay/deezer-engine/wiki/Setup-Installation#docker-compose)
-- [Environment Variables](https://codeberg.org/kylemmkay/deezer-engine/wiki/Setup-Installation#configuration)
-- [Strategy Setup](https://codeberg.org/kylemmkay/deezer-engine/wiki/Strategy-Configuration)
+- **[Installation Guide](https://codeberg.org/kylemmkay/deezer-engine/wiki/Setup-Installation)** (Docker & Environment Variables)
+- **[Strategy Configuration](https://codeberg.org/kylemmkay/deezer-engine/wiki/Strategy-Configuration)** (How to build your pipelines and examples)
+- **[Full Documentation](https://codeberg.org/kylemmkay/deezer-engine/wiki)**
 
-## Overview
+## 🛠️ How it Works
 
-This project implements a pipeline-based system for managing playlists. You define strategies in a YAML configuration file that specify:
-- Which sources to pull tracks from (your library, playlists, discovery mixes, etc.)
-- How to transform the track list (exclude certain songs, remove duplicates, etc.)
-- Where to send the final results (create or update playlists)
-
-The engine handles caching, 'API' interactions, and batch operations for you.
-
-**Example**:
+1. **Sources:** Pull tracks from your library, discovery mixes, or existing playlists.
+2. **Transform:** Apply modifiers like `exclude`, `dedupe`, or `sort`.
+3. **Destinations:** Sync the results back to a Deezer playlist automatically.
 
 ```log
-2026-01-12 20:08:40 - [DeezerEngine] [INFO] - --- Starting Deezer Engine ---
-2026-01-12 20:08:41 - [DeezerEngine] [INFO] - Authenticated successfully as: (redacted)
-2026-01-12 20:08:41 - [DeezerEngine] [INFO] - --- Executing Strategy: No Sad Boy ---
-2026-01-12 20:08:41 - [DeezerEngine] [INFO] - Fetching live favorites from Deezer API for User (redacted)...
-2026-01-12 20:08:44 - [DeezerEngine] [INFO] - Looking through your library... found 250 songs so far.
-...
-2026-01-12 20:09:12 - [DeezerEngine] [INFO] - Looking through your library... found 2750 songs so far.
-2026-01-12 20:09:12 - [DeezerEngine] [INFO] - Found 2767 songs in source: favorites
-2026-01-12 20:09:12 - [DeezerEngine] [INFO] - Applying 'exclude' modifier...
-2026-01-12 20:09:13 - [DeezerEngine] [INFO] - Fetching live tracks from playlist: 'Depresso'
-2026-01-12 20:09:16 - [DeezerEngine] [INFO] - Exclusion complete: Removed 212 matching tracks.
-2026-01-12 20:09:16 - [DeezerEngine] [INFO] - Modifier 'exclude' applied. Pipeline now contains 2555 tracks.
-2026-01-12 20:09:16 - [DeezerEngine] [INFO] - Preparing destination for type 'smart' with 2555 tracks.
-2026-01-12 20:09:47 - [DeezerEngine] [INFO] - Connected to 'No Sad Boi'. Running Smart Sync...
-2026-01-12 20:09:47 - [DeezerEngine] [INFO] - 'No Sad Boi' is already in sync.
-2026-01-12 20:09:47 - [DeezerEngine] [INFO] - --- Executing Strategy: Daily Discovery Mix ---
-2026-01-12 20:09:49 - [DeezerEngine] [INFO] - Fetching songs for 'discovery'...
-2026-01-12 20:09:49 - [DeezerEngine] [INFO] - Found 40 songs in source: discovery
-2026-01-12 20:09:51 - [DeezerEngine] [INFO] - Fetching songs for 'new-releases'...
-2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Found 40 songs in source: new-releases
-2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Applying 'exclude' modifier...
-2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Exclusion complete: Removed 0 matching tracks.
-2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Modifier 'exclude' applied. Pipeline now contains 80 tracks.
-2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Applying 'dedupe' modifier...
-2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Dedupe complete: No duplicates found.
-2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Modifier 'dedupe' applied. Pipeline now contains 80 tracks.
-2026-01-12 20:09:52 - [DeezerEngine] [INFO] - Preparing destination for type 'smart' with 80 tracks.
-2026-01-12 20:09:54 - [DeezerEngine] [INFO] - Connected to 'Daily Discover Mix'. Running Smart Sync...
-2026-01-12 20:09:54 - [DeezerEngine] [INFO] - 'Daily Discover Mix' is already in sync.
+
+░█▀▄░█▀▀░█▀▀░▀▀█░█▀▀░█▀▄░░░█▀▀░█▀█░█▀▀░▀█▀░█▀█░█▀▀
+░█░█░█▀▀░█▀▀░▄▀░░█▀▀░█▀▄░░░█▀▀░█░█░█░█░░█░░█░█░█▀▀
+░▀▀░░▀▀▀░▀▀▀░▀▀▀░▀▀▀░▀░▀░░░▀▀▀░▀░▀░▀▀▀░▀▀▀░▀░▀░▀▀▀
+
+Running Deezer-Engine v0.8.0
+This is free software under the GNU GPL v3.0.
+For more details, see https://codeberg.org/kylemmkay/deezer-engine
+2026-01-22 19:27:35 - [DeezerEngine] [INFO] - Environment: Local
+2026-01-22 19:27:35 - [DeezerEngine] [INFO] - Database: Initialized
+2026-01-22 19:27:35 - [DeezerEngine] [INFO] - Authenticated successfully as: xyz
+2026-01-22 19:27:35 - [DeezerEngine] [INFO] - Loaded 1 strategies.
+2026-01-22 19:27:35 - [DeezerEngine] [INFO] - >>> START: Processing Strategy: High-Rank Discovery
+2026-01-22 19:27:35 - [DeezerEngine] [INFO] - Filter applied: 'rank > 500000'. Kept 14/40 tracks.
+2026-01-22 19:27:35 - [DeezerEngine] [INFO] - Dedupe applied: No duplicates found.
+2026-01-22 19:27:35 - [DeezerEngine] [INFO] - Applied 'dedupe': Processed 171 tracks.
+2026-01-22 19:27:35 - [DeezerEngine] [INFO] - Applying 'smart' shuffle.
+2026-01-22 19:27:35 - [DeezerEngine] [INFO] - Applied 'shuffle': Processed 171 tracks.
+2026-01-22 19:27:35 - [DeezerEngine] [INFO] - Syncing 171 tracks to playlist (ID: 123... ).
+2026-01-22 19:27:40 - [DeezerEngine] [INFO] - Syncing 'High-Rank Discovery' (Full Replace)
+2026-01-22 19:27:41 - [DeezerEngine] [INFO] - Done: Removed 170 tracks.
+2026-01-22 19:27:46 - [DeezerEngine] [INFO] - Injecting 171 tracks...
+2026-01-22 19:27:47 - [DeezerEngine] [INFO] - Done: Added 171 tracks.
+2026-01-22 19:27:47 - [DeezerEngine] [INFO] - Sync complete for 'High-Rank Discovery'.
+2026-01-22 19:27:47 - [DeezerEngine] [INFO] - Successfully completed: High-Rank Discovery
 ```
 
-Here is a professionally formatted **"Acknowledgments"** or **"Credits"** section for your GitHub Wiki or `README.md`. It highlights the key open-source library that powers your engine's communication with Deezer.
+### Sequence Diagram 
+```mermaid
+sequenceDiagram
+    autonumber
+    
+    %% Use neutral tones for accessibility
+    participant S as Deezer
+    participant P as Pipeline (Engine)
+    participant D as Database
+    participant T as Transform (Modifiers)
+
+    Note over S, D: 1. SOURCES STAGE
+    loop For Each Source
+        P->>S: Fetch Track IDs
+        S-->>P: Return IDs
+        P->>D: Cache Collection
+        D-->>P: Identify New Tracks
+        P->>S: Fetch New Metadata
+        S-->>P: Metadata JSON
+        P->>D: Cache in Local SQLite
+    end
+
+    Note over P, T: 2. TRANSFORM STAGE
+    D->>P: Pull Collection from Cache
+    alt source has sub-modifier
+        P->>T: Apply Child Modifier
+        T-->>P: Updated Tracklist
+    else default
+        P->>P: Pass-through
+    end
+
+    loop For Each Global Modifier
+        P->>T: Apply Global Mod (BPM, Filter, etc.)
+        T-->>P: Modified Pipeline State
+    end
+
+    Note over P, D: 3. DESTINATION STAGE
+    P->>S: Upload Final Tracks
+```
 
 ---
 
-## Acknowledgments & Dependencies
+## Acknowledgements
 
-This project is made possible thanks to the following open-source libraries and resources:
-
-### [deezer-python](https://github.com/browniebroke/deezer-python)
-
-A friendly Python wrapper around the Deezer API. This library handles the heavy lifting of mapping Deezer's API responses to easy-to-use Python objects.
-
-- **Author:** [Bruno Alla (browniebroke)](https://github.com/browniebroke)
-- **License:** MIT
-
-### Additional Python Dependencies
-
-- **[Requests](https://github.com/psf/requests):** Used for low-level HTTP handling and session management during the authentication handshake.
-- **[PyYAML](https://github.com/yaml/pyyaml):** Powering the logic behind the `strategies.yml` configuration.
+For all acknowledgements, see [the wiki page](https://codeberg.org/kylemmkay/deezer-engine/wiki/Acknowledgments)
 
 ## License
-
-This project is licensed under the **GNU General Public License v3.0**. 
-
-- **Copyleft:** If you modify and distribute this software, you must also release your source code under the same license.
-- **Warranty:** This software is provided "as is" without warranty of any kind. Given that this script involves automated playlist management and AI-assisted logic, use it at your own risk.
-
-See the [LICENSE](LICENSE) file for the full text.
+Licensed under **GNU GPLv3**. See [LICENSE](LICENSE) for details.
