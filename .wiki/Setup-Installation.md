@@ -47,6 +47,7 @@ Deezer Engine is configured either through `config.yml` file or docker environme
 | `playlist_cap` | `DEEZER_PLAYLIST_CAP` | No | Integer | `5000` | The maximum number of songs you want in **any** playlist (Deezer has a limit of 5000). Warns if current pipline > `playlist_cap` and if tracks exceed this value, shrinks the pipeline to this cap. |
 | `favorites_cap` | `DEEZER_FAVORITES_CAP` | No | Integer | `10000` | The maximum number of songs you want in your favorites (Deezer has a limit of 10,000). Warns if current pipline > `favorites_cap` and if tracks exceed this value, shrinks the pipeline to this cap. |
 | `retention` | `DEEZER_RETENTION` | No | Integer | `0` | The number of hours to use a cached copy of a source before fetching live from deezer. |
+| `track_stats_refresh` | `DEEZER_TRACK_STATS_REFRESH` | No | Integer | `7` | The number of days you would like dynamic information such as rank to refresh. |
 
 ## Docker Compose
 

@@ -39,8 +39,8 @@ Pipleline Order of Operations:
 | `explicit_content_lyrics` | The explicit content lyrics values (0:Not Explicit; 1:Explicit; 2:Unknown; 3:Edited; 6:No Advice Available) | int | `false` |
 | `explicit_content_cover` | The explicit cover value (0:Not Explicit; 1:Explicit; 2:Unknown; 3:Edited; 6:No Advice Available) | int | `false` |
 | `preview` | The url of track's preview file. This file contains the first 30 seconds of the track | url | `false` |
-| `bpm` | Beats per minute | float | `false` |
-| `gain` | Signal strength | float | `false` |
+| `bpm` | Beats per minute | float | `true` |
+| `gain` | Signal strength | float | `true` |
 | `available_countries` | List of countries where the track is available | list | `true` |
 | `alternative` | Return an alternative readable track if the current track is not readable | track | `true` |
 | `contributors` | Return a list of contributors on the track | list | `false` |

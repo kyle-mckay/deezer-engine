@@ -5,6 +5,19 @@
 ### Enhancements
 
 - feat: implement SQLLite db (completes #14) (#54) (@kylemmkay)
+- feat: implement db refresh for dynamic fields (#14) (#55) (@kylemmkay)
+
+### Fixes
+
+- fix: type mismatch between list and dict (closes #58) (#55) (@kylemmkay)
+- fix: exclude now checks cache (closes #57) (closes #61) (#55) (@kylemmkay)
+
+### Maintenance
+
+- chore: remove references to old cache system (#55) (@kylemmkay)
+- chore: enhance debug logging (#55) (@kylemmkay)
+- chore: add new strategies expected testing against (#55) (@kylemmkay)
+
 
 ## v0.7.0 - 2026-01-19
 

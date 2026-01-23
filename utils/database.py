@@ -32,10 +32,13 @@ def get_connection(logger=None):
     Returns a connection to the SQLite database with foreign keys enabled.
     Accepts a logger instance for debugging.
     """
+    if logger:
+        logger.debug(">>> START: utils.database.get_connection")
+        
     try:
         if not DB_PATH.parent.exists():
             if logger:
-                logger.debug(f"Creating database directory: {DB_PATH.parent}")
+                logger.debug(f"Creating missing database directory: {DB_PATH.parent}")
             DB_PATH.parent.mkdir(parents=True, exist_ok=True)
         
         conn = sqlite3.connect(str(DB_PATH))
@@ -44,17 +47,20 @@ def get_connection(logger=None):
         conn.row_factory = sqlite3.Row
         
         if logger:
-            logger.debug(f"Connected to SQLite database at {DB_PATH}")
+            logger.debug(f"Connected to SQLite database at: {DB_PATH}")
         return conn
     except Exception as e:
         if logger:
             logger.error(f"Failed to connect to database: {e}")
         raise
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.database.get_connection")
 
 def init_tracks_table(logger=None):
     """Initializes the tracks table based on the Deezer API schema."""
     if logger:
-        logger.debug("Initializing 'tracks' table...")
+        logger.debug(">>> START: utils.database.init_tracks_table")
         
     query = """
     CREATE TABLE IF NOT EXISTS tracks (
@@ -92,21 +98,20 @@ def init_tracks_table(logger=None):
         with get_connection(logger) as conn:
             conn.execute(query)
             if logger:
-                logger.info("Database: 'tracks' table is ready.")
+                logger.debug("Database: 'tracks' table ready.")
     except Exception as e:
         if logger:
-            logger.critical(f"Database initialization failed: {e}")
+            logger.critical(f"Critical Database Failure (Tracks): {e}")
         raise
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.database.init_tracks_table")
 
 def init_collections_table(logger=None):
     """Initializes the collections table for tracking track sources."""
     if logger:
-        logger.debug("Initializing 'collections' table...")
+        logger.debug(">>> START: utils.database.init_collections_table")
 
-    # id: Primary Key (Auto-incrementing)
-    # track_id: References tracks(id)
-    # source_name: The source (e.g., 'playlist_name', 'liked_songs')
-    # Unique constraint ensures we don't duplicate a track within the same source
     query = """
     CREATE TABLE IF NOT EXISTS collections (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -121,16 +126,24 @@ def init_collections_table(logger=None):
         with get_connection(logger) as conn:
             conn.execute(query)
             if logger:
-                logger.info("Database: 'collections' table is ready.")
+                logger.debug("Database: 'collections' table ready.")
     except Exception as e:
         if logger:
-            logger.critical(f"Database: Failed to initialize 'collections' table: {e}")
+            logger.critical(f"Critical Database Failure (Collections): {e}")
         raise
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.database.init_collections_table")
 
 def initialize_all(logger=None):
     """Run all initialization functions for the database."""
+    if logger:
+        logger.debug(">>> START: utils.database.initialize_all")
     init_tracks_table(logger)
     init_collections_table(logger)
+    if logger:
+        logger.info(f"Database: Initialized")
+        logger.debug("<<< END: utils.database.initialize_all")
 
 if __name__ == "__main__":
     from .logger import setup_logger

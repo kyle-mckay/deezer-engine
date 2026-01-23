@@ -15,13 +15,13 @@ def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, contex
     logger.debug(f"Handling cache for context '{context}' with retention {retention_hrs} hours.")
     logger.debug(f"Target cache file: {os.path.abspath(cache_file)}")
     
-    # 1. Load Valid Cache
-    if retention_hrs > 0 and os.path.exists(cache_file):
-        file_age = (time.time() - os.path.getmtime(cache_file)) / 3600
-        if file_age < retention_hrs:
-            with open(cache_file, 'r') as f:
-                logger.debug(f"Valid {context} cache found (age: {file_age:.2f} hrs). Loading from cache.")
-                return json.load(f)
+    ## 1. Load Valid Cache
+    #if retention_hrs > 0 and os.path.exists(cache_file):
+    #    file_age = (time.time() - os.path.getmtime(cache_file)) / 3600
+    #    if file_age < retention_hrs:
+    #        with open(cache_file, 'r') as f:
+    #            logger.debug(f"Valid {context} cache found (age: {file_age:.2f} hrs). Loading from cache.")
+    #            return json.load(f)
 
     # 2. Fetch Fresh Data
     try:
@@ -39,25 +39,48 @@ def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, contex
         else:
             logger.warn(f"No cache available to fall back on for {context}.")
         return []
+
+def get_collection_name(logger, type, name=None, id=None):
+    """Using the provided variables, attempts to determine the expected 'source_name' in the collections table for cache matching"""
+    _log_tag = "utils.cache_manager.get_collection_name"
+    logger.debug(f">>> START: {_log_tag}")
+    if not type:
+        logger.warning(f"Unable to determine collection name, source type is empty.")
+        return "unknown"
+    else:
+        type = type.lower()
+        prefix = f"{type}__"
+
+    def _is_id_empty():
+        if id:
+            logger.debug("id '{id}' is NOT empty")
+            return True
+        else:
+            logger.debug("id '{id}' IS empty")
+            return False
+
+    def _is_name_empty():
+        if name:
+            logger.debug("name '{name}' is NOT empty")
+            return True
+        else:
+            logger.debug("name '{name}' IS empty")
+            return False
+    match type:
+        case "favorites":
+            collection = f"{type}"
+        case "playlist" | "album" | "artist":
+            if _is_id_empty():
+                collection = f"{prefix}{id}"
+            else:
+                collection = "unknown"
+        case "smarttracklist":
+            if _is_name_empty():
+                collection = f"{prefix}{name}"
+            else:
+                collection = "unknown"
     
-def _cleanup_old_caches(type, var, current_cache_path, logger):
-    """Deletes old cache files for the same playlist ID to prevent folder clutter."""
-    try:
-        cache_dir = get_cache_dir()
-        current_filename = os.path.basename(current_cache_path)
-        cleanup = False
-        for f in os.listdir(cache_dir):
-            if type == "playlist":
-                # Check for files with same ID but different names
-                if f.startswith(f"playlist_{var}") and f != current_filename:
-                    cleanup = True
-            elif type == "favorites":
-                if f.startswith(f"favorites_{var}") and f != current_filename:
-                    cleanup = True
-            
-            if cleanup:
-                    os.remove(os.path.join(cache_dir, f))
-                    logger.debug(f"Cleaned up old cache file: {f}")
-    
-    except Exception as e:
-        logger.warn(f"Cleanup failed (non-critical): {e}")
+    logger.debug(f"Collection name identified as: '{collection}'")
+
+    logger.debug(f"<<< END: {_log_tag}")
+    return collection

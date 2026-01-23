@@ -4,60 +4,131 @@ This page provides details on each of the strategies supported by *Deezer Engine
 
 This section provides examples of different configurations that are possible.
 
-## Filter playlist out of your library
+## The "Artist Super-Fan" Chronological Archive
 
-Pull your favorite tracks but exclude a specific playlist, then update a target playlist.
+This strategy pulls every track from a specific artist's career and organizes them strictly by the date they were released. By using `release_date` with an ascending order, the resulting playlist functions as a musical timeline, starting with the artist's earliest work and ending with their most recent hits.
 
 ```yaml
 playlists:
-  - name: "Filtered Favorites"
+  - name: "Taylor Swift: The Timeline"
     source:
+      - type: "artist"
+        id: "12246" # Taylor Swift
+    modifiers:
+      - type: "sort"
+        field: "release_date"
+        order: "asc"
+    destination:
+      - type: "playlist"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
+
+```
+
+### High-Energy "Popular Only" Discovery
+
+This merges your Discovery mix with the "Inspired By" tracks, but uses a **Local Modifier** to filter out lower-ranked (less popular) songs from the discovery source before they even hit your main list.
+
+```yaml
+playlists:
+  - name: "High-Rank Discovery"
+    source:
+      - type: "smarttracklist"
+        name: "discovery"
+        modifiers:
+          - type: "filter"
+            field: "rank"
+            operator: "gt"
+            value: 500000 # Only keep very popular tracks
+      - type: "smarttracklist"
+        name: "inspired-by-1"
+      - type: "smarttracklist"
+        name: "inspired-by-2"
+      - type: "smarttracklist"
+        name: "inspired-by-3"
+    modifiers:
+      - type: "dedupe"
+      - type: "shuffle"
+        order: "smart" # Spread out artists for a better mix
+    destination:
+      - type: "playlist"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
+
+```
+
+### The "Unseen" Global Hits Radar
+
+This pulls from the **Top 50 Global** playlist but uses the `unseen` field to create a "New to Me" dashboard. It removes anything you have already "seen" in the Deezer interface.
+
+```yaml
+playlists:
+  - name: "Unseen Global Hits"
+    source:
+      - type: "playlist"
+        id: "10064140302" # Top 50 Global 2026
+    modifiers:
+      - type: "filter"
+        field: "unseen"
+        operator: "eq"
+        value: 1
+      - type: "limit"
+        count: 20
+        order: "top"
+    destination:
+      - type: "playlist"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
+
+```
+
+### "Fresh Heavy Rotation" (Album + Favorites)
+
+This combines a specific new album (e.g., **Robbie Williams'** *Britpop*) with your all-time favorites, then excludes a "Exclude" playlist you might have so you don't hear the same songs too often.
+
+```yaml
+playlists:
+  - name: "Fresh Favorites"
+    source:
+      - type: "album"
+        id: "897621962" # Britpop by Robbie Williams
       - type: "favorites"
-        retention: 48
     modifiers:
       - type: "exclude"
         source:
           type: "playlist"
-          id: "12345678"
-          retention: 48
+          id: "1363560485" # Example ID for a 'Recently Played' list
+      - type: "shuffle"
+        order: "random"
     destination:
       - type: "playlist"
-        id: "99999999"
-        order: "smart"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
 
 ```
 
-## Combine Discovery and New Releases (with Local Modifiers)
+### Short-Track "Workout" Generator
 
-Merge new releases (limited to the top 10) and your discovery mix, deduplicate, then exclude anything already in your library.
+This strategy pulls from a specific genre playlist (e.g., **Deep House 2026**) and uses a filter to only keep tracks under 3 minutes (180 seconds) to keep the energy high and the transitions frequent.
 
 ```yaml
 playlists:
-  - name: "Weekly Discovery"
+  - name: "Fast-Paced House"
     source:
-      - type: "smarttracklist"
-        name: "new-releases"
-        retention: 24
-        modifiers:
-          - type: "sort"
-            field: "rank"
-            order: "desc"
-          - type: "limit"
-            count: 10
-      - type: "smarttracklist"
-        name: "discovery"
-        retention: 24
+      - type: "playlist"
+        id: "10064138682" # Using Top 50 USA as a base
     modifiers:
-      - type: "dedupe"
-      - type: "exclude"
-        source:
-          type: "favorites"
-          retention: 48
-    
+      - type: "filter"
+        field: "duration"
+        operator: "lt"
+        value: 180 # Tracks shorter than 3 mins
+      - type: "limit"
+        count: 30
+        order: "first"
     destination:
       - type: "playlist"
-        id: "88888888"
-        order: "smart"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
 
 ```
 
@@ -122,7 +193,7 @@ Gets songs from a specific album. Currently only supports album id: `https://www
 
 ```
 
-### `album`
+### `artist`
 
 Gets all songs from a specific artist by itterating through their albums. Currently only supports album id: `https://www.deezer.com/us/artist/<playlist_id>`
 
@@ -226,7 +297,7 @@ Include only the tracks that meet specific criteria based on their metadata.
 
 > Note: String comparisons (equals, contains, starts_with, ends_with) are case-insensitive.
 
-`eq`, `equals`, `==` or `is` - Match the exact value (e.g., `unseen: true`).
+`eq`, `equals`, `==` or `is` - Match the exact value (e.g., `unseen: 1`).
 `ne`, `not`, `!=` or `is_not` - Exclude tracks matching the value.
 `gt`, `greater_than`, `>` - True if the field is greater than the value.
 `gte` or `>=` - True if the field is **greater than or equal** to the value.

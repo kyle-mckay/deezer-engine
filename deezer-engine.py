@@ -1,4 +1,5 @@
 import yaml
+import re
 import sys
 import logging
 import os
@@ -9,20 +10,25 @@ from utils.config_loader import load_config_with_env_overrides, load_strategies_
 from utils.deezer_auth import get_authenticated_client, get_tracks
 from strategies.base import StrategyController
 from utils.database import initialize_all
-from utils.db_manager import get_unprocessed_track_ids, update_track_metadata,fetch_collection, is_collection_cached
+from utils.cache_manager import get_collection_name
+from utils.db_manager import get_unprocessed_track_ids, update_track_metadata,fetch_collection, is_collection_cached, get_expired_track_ids, update_tracks_partial_batch, update_unprocessed, refresh_stats
 from __version__ import __version__, __banner__
 
-def load_configs():
+def load_configs(type,logger = None):
     """Load configuration and strategies with environment variable overrides."""
     try:
-        config = load_config_with_env_overrides()
-        strategies = load_strategies_with_env_overrides()
+
+        match type:
+            case "config":
+                loaded = load_config_with_env_overrides()
+                # Validate that required config exists
+                if 'config' not in loaded:
+                    raise ValueError("No 'config' section found in configuration")
+            case "strategy":
+                loaded = load_strategies_with_env_overrides(logger)
         
-        # Validate that required config exists
-        if 'config' not in config:
-            raise ValueError("No 'config' section found in configuration")
+        return loaded
         
-        return config, strategies
     except Exception as e:
         print(f"Critical Error: Could not load configuration. {e}")
         sys.exit(1)
@@ -31,9 +37,86 @@ def print_startup():
     print(__banner__)
     print(f"Running Deezer-Engine {__version__}")
 
+def process_sources(s_data, controller, config, client, logger, strategy_name):
+    """
+    Handles the Source Phase of the strategy.
+    Returns a list of tuples containing (source_name, source_specific_modifiers).
+    """
+    source_metadata = []
+    sources = s_data.get('source', [])
+    logger.debug(f"Strategy '{strategy_name}' has {len(sources)} sources defined.")
+    
+    for src in sources:
+        logger.debug(f"Handling source type: {src.get('type')}")
+        source_type = src.get('type')
+        source_modifiers = src.get('modifiers', []) # Capture child modifiers
+
+        source_name = get_collection_name(logger,source_type,src.get('name',None),src.get('id',None))
+        
+        # Track the name and its specific modifiers
+        source_metadata.append((source_name, source_modifiers))
+
+        # Get new tracklist if cache expired
+        if is_collection_cached(source_name, config, logger) == False:
+            logger.debug(f"Cache expired or missing for {source_name}. Fetching from API.")
+            controller.handle_source(src,source_name)
+        else:
+            logger.debug(f"Using cached data for {source_name}.")
+        
+        # Identify new tracks to fetch metadata for.
+        update_unprocessed(client, logger)
+    
+    return source_metadata
+
+def process_modifiers(s_data, controller, source_metadata, logger, strategy_name):
+    """Handles the Modifier Phase, including source-specific and global modifiers."""
+    
+    # 1. Collect and apply source-specific modifiers individually
+    all_processed_tracks = []
+    
+    for source_name, child_modifiers in source_metadata:
+        fetched = fetch_collection(source_name, logger)
+        logger.debug(f"Fetched {len(fetched)} tracks from {source_name}")
+        
+        if child_modifiers:
+            logger.debug(f"Applying {len(child_modifiers)} child modifiers to source '{source_name}'")
+            for mod in child_modifiers:
+                logger.debug(f"Applying child modifier: {mod.get('type')}")
+                fetched = controller.handle_modifier(mod,fetched,source_name)
+            
+        all_processed_tracks.extend(fetched)
+    
+    # 2. Apply Global Strategy Modifiers
+    logger.debug(f"Total tracks collected for global pipeline: {len(all_processed_tracks)}")
+    controller._write_tmp(all_processed_tracks)
+
+    global_modifiers = s_data.get('modifiers', [])
+    if global_modifiers:
+        logger.debug(f"Strategy '{strategy_name}' has {len(global_modifiers)} global modifiers defined.")
+        for mod in global_modifiers:
+            logger.debug(f"Applying global modifier: {mod.get('type')}")
+            controller.handle_modifier(mod,None,source_name)
+            
+            if logger.isEnabledFor(logging.DEBUG):
+                modified_tracks = controller._read_tmp()
+                logger.debug(f"Pipeline size after '{mod.get('type')}': {len(modified_tracks)} tracks.")
+
+def process_destinations(s_data, controller, logger, strategy_name):
+    """Handles the Destination Phase of the strategy."""
+    destinations = s_data.get('destination', [])
+    if destinations:
+        for dest in destinations:
+            dest_type = dest.get('type')
+            dest_id = dest.get('id', 'Unknown')
+            logger.debug(f"Routing to destination: {dest_type} (ID: {dest_id})")
+            controller.handle_destination(dest)
+        logger.info(f"Successfully completed: {strategy_name}")
+    else:
+        logger.warning(f"Strategy '{strategy_name}' has no destination defined.")
+
 def main():
     # 1. Load data
-    config, strategies_config = load_configs()
+    config = load_configs("config")
 
     # 2. Setup Logger & Validate Level
     user_log_level = config.get('config', {}).get('log_level', 'INFO').upper()
@@ -51,26 +134,29 @@ def main():
         actual_level = 'INFO'
         warning_needed = True
 
-    logger = setup_logger("DeezerEngine", actual_level,log_to_file=should_write_logs)
+    logger = setup_logger("DeezerEngine", actual_level, log_to_file=should_write_logs)
     
     # Issue the warning if config was bad
     if warning_needed:
         logger.warning(f"Unsupported log level '{user_log_level}' found in config.yml. Defaulting to 'INFO'.")
     logger.debug("--- Starting Deezer Engine ---")
 
+    strategies_config = load_configs("strategy", logger)
+
     containerized = get_global_value('containerized', default=False)
     print_banner = get_global_value('print_banner', default=True)
     
     # Print banner within script if not containerized, enabled and verbosity is info or higher
-    if  containerized == False and print_banner == True and logger.isEnabledFor(logging.INFO):
+    if containerized == False and print_banner == True and logger.isEnabledFor(logging.INFO):
         print_startup()
 
-    check_for_updates(__version__,containerized,logger)
+    check_for_updates(__version__, containerized, logger)
 
     if containerized == 'true':
-        logger.info("Deezer Engine is running in DOCKER mode.")
+        logger.info("Environment: Docker")
         logger.debug("Defaulting paths to '/app/data/'")
     else:
+        logger.info("Environment: Local")
         logger.debug("Deezer Engine is running in LOCAL mode.")
         logger.debug(f"Using standard paths './'")
     
@@ -82,9 +168,11 @@ def main():
                      f"BatchSize={config.get('config', {}).get('batch_size', 50)}")
 
     # Initialize database
+    logger.debug("Initializing database components...")
     initialize_all(logger)
     
     # 3. Authenticate
+    logger.debug("Requesting Deezer authentication...")
     client = get_authenticated_client(config, logger)
     
     # 4. Strategy Execution Loop
@@ -92,13 +180,15 @@ def main():
         logger.warning("No strategies found in strategies.yml.")
         return
 
+    logger.info(f"Loaded {len(strategies_config['playlists'])} strategies.")
+
     for s_data in strategies_config['playlists']:
         strategy_name = s_data.get('name', 'unnamed_strategy')
         
         # Sanitize the name for the temp filename
         safe_name = strategy_name.lower().replace(" ", "_")
         
-        logger.info(f"--- Executing Strategy: {strategy_name} ---")
+        logger.info(f">>> START: Processing Strategy: {strategy_name}")
         
         # Log Strategy Definition (Debug Only)
         if logger.isEnabledFor(logging.DEBUG):
@@ -107,58 +197,20 @@ def main():
         # Initialize the Controller for this specific strategy
         controller = StrategyController(client, config, logger, safe_name)
         
-        try:
-            source_list = []
-            # Source Phase
-            sources = s_data.get('source', [])
-            for src in sources:
-                logger.debug(f"Handling source type: {src.get('type')}")
-                source_name=src.get('type')
-                if source_name == 'favorites':
-                    source_list.append(f"{source_name}")
-                elif source_name == "smarttracklist":
-                    source_list.append(f"{source_name}__{src.get('name')}")
-                else:
-                    source_list.append(f"{source_name}__{src.get('id')}")
+        # Update stale dynamic track data
+        refresh_stats(client, logger)
 
-                # Get new tracklist if cache expired
-                if is_collection_cached(source_name,config,logger) == False:
-                    controller.handle_source(src)
-                
-                # Identify new tracks to fetch metadata for.
-                unprocessed = get_unprocessed_track_ids()
-                if len(unprocessed) > 0:
-                    logger.info(f"Fetching metadata for new {len(unprocessed)} new tracks... This may take a while")
-                    unprocessed = get_tracks(client,logger,"database","tracks","null",unprocessed)
-                    logger.debug(f"Metadata fetched, updating database.")
-                    update_track_metadata(unprocessed,logger)
-            
+        try:
+            source_metadata = []
+            # Source Phase
+            source_metadata = process_sources(s_data, controller, config, client, logger, strategy_name)
 
             # Modifier Phase
-            tracks = []
-            for source in source_list:
-                tracks.extend(fetch_collection(source,logger))
-            controller._write_tmp(tracks)
-
-            modifiers = s_data.get('modifiers', [])
-            for mod in modifiers:
-                logger.debug(f"Applying modifier: {mod.get('type')}")
-                controller.handle_modifier(mod)
-                
-                if logger.isEnabledFor(logging.DEBUG):
-                    modified_tracks = controller._read_tmp()
-                    logger.debug(f"Pipeline size after modifier: {len(modified_tracks)} tracks.")
+            update_unprocessed
+            process_modifiers(s_data, controller, source_metadata, logger, strategy_name)
 
             # Destination Phase
-            destinations = s_data.get('destination', [])
-            if destinations:
-                for dest in destinations:
-                    dest_type = dest.get('type')
-                    dest_id = dest.get('id', 'Unknown')
-                    logger.debug(f"Routing to destination: {dest_type} (ID: {dest_id})")
-                    controller.handle_destination(dest)
-            else:
-                logger.warning(f"Strategy '{strategy_name}' has no destination defined.")
+            process_destinations(s_data, controller, logger, strategy_name)
 
         except Exception as e:
             logger.error(f"Strategy '{strategy_name}' failed: {e}")

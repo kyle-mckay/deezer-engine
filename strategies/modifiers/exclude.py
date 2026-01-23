@@ -1,7 +1,9 @@
 import importlib
 import logging
+from utils.cache_manager import get_collection_name
+from utils.db_manager import is_collection_cached, fetch_collection, sync_to_collections
 
-def run(client, config, logger, mod_data, current_tracks):
+def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """
     Subtracts tracks found in a specific source from the current pipeline.
     
@@ -10,31 +12,47 @@ def run(client, config, logger, mod_data, current_tracks):
     2. Compares them against 'current_tracks' (the pipeline from ./tmp/).
     3. Returns the filtered list to the Controller to overwrite ./tmp/.
     """
-    logger.info("Applying 'exclude' modifier...")
+    logger.debug(">>> START: strategies.modifiers.exclude.run")
 
     # 1. Resolve the exclude source dynamically
-    source_info = mod_data.get('source')
-    if not source_info:
+    source_data = mod_data.get('source')
+    if not source_data:
         logger.error("Exclude modifier missing 'source' definition.")
         return current_tracks
-
-    for src in source_info:
-        source_type = src.get('type')
-        source_id = src.get('id')
-        
-        logger.debug(f"Applying modifier to source: {source_type}__{source_id}")
     
-        if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"Exclusion logic started. Target source type: {source_type}")
-            logger.debug(f"Current pipeline size: {len(current_tracks)} tracks.")
+    if isinstance(source_data, dict):
+            source_data = [source_data]
+    for src in source_data:
+        source_type = src.get('type')
+        source_id = src.get('id', None)
+        source_name = src.get('name', None)
+
+        if source_id:
+            logger.debug(f"Targeting exclusion source: {source_type} (ID: {source_id})")
+        elif source_name:
+            logger.debug(f"Targeting exclusion source: {source_type} (Name: {source_name})")
+        else:
+            logger.debug(f"Targeting exclusion source: {source_type}")
+
+        collection_name = get_collection_name(logger, source_type, source_name, source_id)
+
+        logger.debug(f"Pipeline size before exclusion: {len(current_tracks)}")
 
         try:
-            # We reuse the source workers to get the list of IDs to exclude.
-            module_path = f"strategies.sources.{source_type}"
-            logger.debug(f"Loading exclusion source worker: {module_path}")
-            
-            source_worker = importlib.import_module(module_path)
-            exclude_tracks = source_worker.run(client, config, logger, source_info)
+            # Check if cache exists
+ 
+            if collection_name != "unknown" and is_collection_cached(collection_name, config, logger):
+                logger.debug(f"Tracks for source {collection_name} are cached. Pulling from cache")
+                exclude_tracks = fetch_collection(collection_name, logger)
+            else:
+                logger.debug(f"Cached tracks are not available, pulling live track data.")
+                # Reuse source worker
+                module_path = f"strategies.sources.{source_type}"
+                logger.debug(f"Importing source worker: {module_path}")
+                source_worker = importlib.import_module(module_path)
+                exclude_tracks = source_worker.run(client, config, logger, source_data)
+                # Push to collections for future reference
+                sync_to_collections(exclude_tracks,logger)
             
             # 2. Perform the subtraction
             # Build set of IDs to exclude
@@ -44,14 +62,11 @@ def run(client, config, logger, mod_data, current_tracks):
                 exclude_set.add(track_id)
             
             if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Exclusion list loaded: {len(exclude_set)} unique tracks to filter out.")
+                logger.debug(f"Loaded {len(exclude_set)} IDs to exclude.")
                 # Verify if there is any overlap at all before filtering
-                current_ids = set()
-                for track in current_tracks:
-                    track_id = str(track.get('id') if isinstance(track, dict) else track.id)
-                    current_ids.add(track_id)
+                current_ids = {str(t.get('id') if isinstance(t, dict) else t.id) for t in current_tracks}
                 intersection = current_ids.intersection(exclude_set)
-                logger.debug(f"Intersection found: {len(intersection)} tracks in pipeline match the exclusion list.")
+                logger.debug(f"Match found: {len(intersection)} tracks from current pipeline exist in exclusion source.")
 
             starting_count = len(current_tracks)
             
@@ -61,18 +76,19 @@ def run(client, config, logger, mod_data, current_tracks):
                 track_id = str(track.get('id') if isinstance(track, dict) else track.id)
                 if track_id not in exclude_set:
                     result.append(track)
+                else:
+                    logger.debug(f"Excluding Track ID: {track_id}")
             
             removed_count = starting_count - len(result)
-            logger.info(f"Exclusion complete: Removed {removed_count} matching tracks.")
+            logger.info(f"Exclusion applied: Removed {removed_count} tracks based on {source_type}.")
             
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Final pipeline count after exclusion: {len(result)}")
+            logger.debug(f"Final pipeline count: {len(result)}")
+            logger.debug("<<< END: strategies.modifiers.exclude.run")
                 
             return result
 
         except Exception as e:
             logger.error(f"Failed to apply exclusion: {e}")
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.exception("Traceback for exclusion failure:")
+            logger.debug("Traceback for exclusion failure:", exc_info=True)
             # On failure, return the original list to avoid breaking the pipeline
             return current_tracks

@@ -8,13 +8,13 @@ import logging
 import json
 from datetime import datetime
 from utils.logger import setup_logger
-from utils.cache_manager import _cleanup_old_caches
 from utils.config_loader import get_global_value
 
 def get_authenticated_client(config, logger):
     """
     Initializes the Deezer Client using an ARL cookie.
     """
+    logger.debug(">>> START: utils.deezer_auth.get_authenticated_client")
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("--- Initializing Deezer Authentication ---")
         logger.debug(f"Raw config keys available: {list(config.get('config', {}).keys())}")
@@ -82,12 +82,15 @@ def get_authenticated_client(config, logger):
             
         logger.debug("Check if your ARL token has expired or if your user_id is correct.")
         sys.exit(1)
+    finally:
+        logger.debug("<<< END: utils.deezer_auth.get_authenticated_client")
 
 def get_authenticated_session(arl, logger, warm_url=None):
     """
     Creates a session, establishes context via a pre-flight GET, 
     and performs the CSRF handshake to return (session, api_token).
     """
+    logger.debug(">>> START: utils.deezer_auth.get_authenticated_session")
     session = requests.Session()
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:146.0) Gecko/20100101 Firefox/146.0',
@@ -125,12 +128,46 @@ def get_authenticated_session(arl, logger, warm_url=None):
     except Exception as e:
         logger.error(f"Authentication utility error: {e}")
         return None, None
-    
+    finally:
+        logger.debug("<<< END: utils.deezer_auth.get_authenticated_session")
+
 def get_tracks(client, logger, source_type, identifier, cache_file=None, track_ids=None):
     """
-    Transforms Deezer API objects into a list of dictionaries.
+    Transforms Deezer API objects into a list of dictionaries with rate-limiting protection.
     """
+    logger.debug(f">>> START: utils.deezer_auth.get_tracks ({source_type})")
     logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
+
+    def fetch_track_with_retry(t_id, max_retries=5):
+        """
+        Helper to fetch track data handling both Rate Limits and Network Drops.
+        """
+        for attempt in range(max_retries):
+            try:
+                # Small jitter to keep requests non-rhythmic
+                time.sleep(random.uniform(0.2, 0.5))
+                return client.get_track(t_id)
+            
+            except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as net_err:
+                wait_time = (5 * (attempt + 1))  # 5s, 10s, 15s...
+                logger.debug(f"Network retry (Track {t_id}): {net_err}. Retrying in {wait_time}s...")
+                time.sleep(wait_time)
+                
+            except Exception as e:
+                # Check for rate limiting in the error message
+                err_str = str(e).lower()
+                if "429" in err_str or "quota" in err_str:
+                    wait_time = (2 ** attempt) + random.uniform(1, 3)
+                    # Rate limits remain WARNING to notify user of throttling
+                    logger.warning(f"Rate limited (Track {t_id})! Retrying in {wait_time:.2f}s...")
+                    time.sleep(wait_time)
+                else:
+                    # Other API errors
+                    logger.debug(f"Unexpected API error for {t_id}: {e} (Attempt {attempt+1}/{max_retries})")
+                    time.sleep(3)
+        
+        logger.error(f"CANCELLED: Failed to retrieve track {t_id} after {max_retries} attempts.")
+        return None
 
     display_name = identifier
     item_id = identifier
@@ -142,59 +179,87 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
             item_type = parts[0] 
             display_name = parts[1].replace("_", " ")
             item_id = parts[2]
-            
             logger.debug(f"Parsed {item_type} identifier: Name='{display_name}', ID='{item_id}'")
 
     tracks = []
 
     # Decide if we are iterating a collection or fetching specific IDs
-    # If track_ids is provided, we fetch full objects for those IDs
     iterable = track_ids if track_ids is not None else client
 
     # Extract full track metadata
-    date_time=datetime.now().isoformat()
+    date_time = datetime.now().isoformat()
     if source_type == "favorites":
         collection = source_type
     elif source_type != "database":
         collection = f"{item_type}__{item_id}"
-    update_int = get_global_value('batch_size')
+    
+    if logger.isEnabledFor(logging.DEBUG):
+        update_int = 1
+    else:
+        update_int = get_global_value('batch_size', default=50)
+    
+    total_len = len(iterable) if hasattr(iterable, '__len__') else "unknown"
+
     for i, track in enumerate(iterable, 1):
         try:
-            if source_type == "database":
-                # Fetch full metadata only for database enrichment
+            # Every 40 requests, take a longer pause to prevent sustained high-load triggers
+            if i % 40 == 0:
+                logger.debug("Cooldown period: Sleeping for 3 seconds to respect API limits...")
+                time.sleep(3)
+
+            if source_type == "database" and (identifier == "tracks" or identifier == "stats"):
                 t_id = track.get('id') if isinstance(track, dict) else track
-                track_obj = client.get_track(t_id)
+                
+                # Use the retry helper for heavy metadata fetching
+                track_obj = fetch_track_with_retry(t_id)
+                if not track_obj:
+                    # Error message provided in fetch_track_with_retry
+                    continue
+                    
                 d = track_obj.as_dict()
                 
-                tracks.append({
-                    'id': str(d.get('id')),
-                    'readable': d.get('readable'),
-                    'title': d.get('title'),
-                    'title_short': d.get('title_short'),
-                    'title_version': d.get('title_version'),
-                    'unseen': d.get('unseen', False),
-                    'isrc': d.get('isrc'),
-                    'link': d.get('link'),
-                    'share': d.get('share'),
-                    'duration': d.get('duration', 0),
-                    'track_position': d.get('track_position'),
-                    'disk_number': d.get('disk_number'),
-                    'rank': d.get('rank', 0),
-                    'release_date': d.get('release_date'),
-                    'explicit_lyrics': d.get('explicit_lyrics',False),
-                    'explicit_content_lyrics': d.get('explicit_content_lyrics',0),
-                    'explicit_content_cover': d.get('explicit_content_cover',0),
-                    'preview': d.get('preview'),
-                    'bpm': d.get('bpm',0),
-                    'gain': d.get('gain',0),
-                    'available_countries': json.dumps(d.get('available_countries', [])),
-                    'contributors': json.dumps(d.get('contributors', [])),
-                    'md5_image': d.get('md5_image'),
-                    'track_token': d.get('track_token'),
-                    'artist_id': d.get('artist', {}).get('id'),
-                    'album_id': d.get('album', {}).get('id'),
-                    'date_cached': date_time
-                })
+                if identifier == "tracks":
+                    tracks.append({
+                        'id': str(d.get('id')),
+                        'readable': d.get('readable'),
+                        'title': d.get('title'),
+                        'title_short': d.get('title_short'),
+                        'title_version': d.get('title_version'),
+                        'unseen': d.get('unseen', False),
+                        'isrc': d.get('isrc'),
+                        'link': d.get('link'),
+                        'share': d.get('share'),
+                        'duration': d.get('duration', 0),
+                        'track_position': d.get('track_position'),
+                        'disk_number': d.get('disk_number'),
+                        'rank': d.get('rank', 0),
+                        'release_date': d.get('release_date'),
+                        'explicit_lyrics': d.get('explicit_lyrics',False),
+                        'explicit_content_lyrics': d.get('explicit_content_lyrics',0),
+                        'explicit_content_cover': d.get('explicit_content_cover',0),
+                        'preview': d.get('preview'),
+                        'bpm': d.get('bpm',0),
+                        'gain': d.get('gain',0),
+                        'available_countries': json.dumps(d.get('available_countries', [])),
+                        'contributors': json.dumps(d.get('contributors', [])),
+                        'md5_image': d.get('md5_image'),
+                        'track_token': d.get('track_token'),
+                        'artist_id': d.get('artist', {}).get('id'),
+                        'album_id': d.get('album', {}).get('id'),
+                        'date_cached': date_time
+                    })
+                else: # stats enrichment
+                    tracks.append({
+                        'id': str(d.get('id')),
+                        'readable': d.get('readable'),
+                        'unseen': d.get('unseen', False),
+                        'rank': d.get('rank', 0),
+                        'bpm': d.get('bpm',0),
+                        'gain': d.get('gain',0),
+                        'available_countries': json.dumps(d.get('available_countries', [])),
+                        'contributors': json.dumps(d.get('contributors', [])),
+                        'date_cached': date_time
+                    })
             else:
                 # fetch for source ID collection
                 d = track.as_dict()
@@ -204,32 +269,29 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                     'date_cached': date_time
                 })
 
-            # Give the user an update every n tracks, where n is their batch_size
+            # Progress logging
+            if i % update_int == 0 | logger.isEnabledFor(logging.DEBUG):
+                progress_str = f"{i}/{total_len}"
+
             if i % update_int == 0:
                 if source_type == "database":
-                    logger.info(f"Database enrichment: processed {i}/{len(iterable)} tracks.")
+                    logger.info(f"Database '{identifier}' enrichment: processed {progress_str} tracks.")
                 elif source_type == "favorites":
-                    logger.info(f"Scanning favorites... processed {i}/{len(iterable)} tracks.")
-                elif identifier.startswith("playlist__"):
-                    logger.info(f"Scanning '{display_name}'... processed {i}/{len(iterable)} tracks.")
-                elif identifier.startswith("album__"):
-                    logger.info(f"Scanning '{display_name}'... processed {i}/{len(iterable)} tracks.")
+                    logger.info(f"Scanning favorites: processed {progress_str} tracks.")
+                elif identifier.startswith("playlist__") or identifier.startswith("album__"):
+                    logger.info(f"Scanning '{display_name}': processed {progress_str} tracks.")
                 else:
-                    logger.info(f"Scanning {source_type}... processed {i}/{len(iterable)} tracks.")
+                    logger.info(f"Scanning {source_type}: processed {progress_str} tracks.")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Processed track {track}: {progress_str}")
 
         except Exception as e:
-            logger.error(f"Error processing track at index {i}: {e}")
+            logger.debug(f"Non-critical loop error at index {i} (Track {track}): {e}")
+            time.sleep(1)
             continue
-    
-    # Remove old files for this ID (e.g., if the playlist was renamed)
-    try:
-        from utils.cache_manager import _cleanup_old_caches
-        _cleanup_old_caches(source_type, item_id, cache_file, logger)
-    except ImportError:
-        pass
 
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug(f"Successfully transformed {len(tracks)} tracks.")
     
-    time.sleep(0.5)
+    logger.debug("<<< END: utils.deezer_auth.get_tracks")
     return tracks

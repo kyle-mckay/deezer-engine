@@ -9,7 +9,7 @@ def run(client, config, logger, dest_data, tracks):
     """
     Synchronizes tracks to Deezer with high-fidelity browser emulation.
     """
-    logger.debug("------ destinations.playlist START------")
+    logger.debug(">>> START: strategies.destinations.playlist.run")
     target_id = str(dest_data.get('id'))
     method = dest_data.get('order', 'smart')
     arl = config.get('config', {}).get('arl_token')
@@ -20,10 +20,12 @@ def run(client, config, logger, dest_data, tracks):
         return
 
     # Use Utility for Auth
+    logger.debug(f"Authenticating for playlist {target_id} using ARL and UserID: {user_id}")
     warm_url = f"https://www.deezer.com/us/playlist/{target_id}"
     session, api_token = get_authenticated_session(arl, logger, warm_url)
     
     if not session:
+        logger.debug("Failed to obtain authenticated session.")
         return
 
     try:
@@ -39,6 +41,9 @@ def run(client, config, logger, dest_data, tracks):
         dst_ids = [str(t.id) for t in playlist.get_tracks()]
         current_set = set(dst_ids)
         target_set = set(track_ids)
+        
+        logger.debug(f"Targeting playlist: '{playlist.title}' (ID: {target_id})")
+        logger.debug(f"Current playlist size: {len(dst_ids)} | Target size: {len(track_ids)}")
 
         # Prepare for Writes
         session.headers.update({
@@ -49,47 +54,51 @@ def run(client, config, logger, dest_data, tracks):
 
         # --- SMART STRATEGY ---
         if method in ['smartreplace', 'smart']:
-            logger.info(f"Connected to '{playlist.title}'. Running Smart Sync...")
+            logger.info(f"Syncing '{playlist.title}' (Smart Sync)")
             to_add = [tid for tid in track_ids if str(tid) not in current_set]
             to_remove = [tid for tid in dst_ids if str(tid) not in target_set]
             
             if not to_add and not to_remove:
-                logger.info(f"'{playlist.title}' is already in sync.")
+                logger.info(f"Playlist '{playlist.title}' is already up to date.")
                 return
 
-            logger.info(f"Analysis: {len(to_add)} to add, {len(to_remove)} to remove.")
+            logger.debug(f"Smart Sync - To Add: {to_add}")
+            logger.debug(f"Smart Sync - To Remove: {to_remove}")
+            
             if to_remove:
+                logger.info(f"Removing {len(to_remove)} tracks...")
                 _gateway_request(session, "playlist.deleteSongs", target_id, api_token, to_remove, client.batch_size, logger)
             if to_add:
+                logger.info(f"Adding {len(to_add)} tracks...")
                 _gateway_request(session, "playlist.addSongs", target_id, api_token, to_add, client.batch_size, logger)
 
         # --- APPEND / INSERT STRATEGY ---
         elif method in ['append', 'insert']:
-            logger.info(f"Connected to '{playlist.title}'. Appending {len(track_ids)} songs...")
-            # Just push the tracks
+            logger.info(f"Syncing '{playlist.title}' (Appending {len(track_ids)} tracks)")
             _gateway_request(session, "playlist.addSongs", target_id, api_token, track_ids, client.batch_size, logger)
 
         # --- REPLACE STRATEGY ---
         else:
-            logger.info(f"Connected to '{playlist.title}'. Performing Full Replace...")
+            logger.info(f"Syncing '{playlist.title}' (Full Replace)")
             if dst_ids:
-                logger.info(f"Wiping {len(dst_ids)} existing tracks...")
+                logger.debug(f"Wiping existing {len(dst_ids)} tracks for clean replace.")
                 _gateway_request(session, "playlist.deleteSongs", target_id, api_token, dst_ids, client.batch_size, logger)
                 
                 # Dynamic wait for cloud consistency
                 wait_time = max(math.ceil((len(dst_ids) / 1000) * 10), 5)
-                logger.info(f"Waiting {wait_time}s for database to clear...")
+                logger.debug(f"Cooldown: Waiting {wait_time}s for cloud database consistency...")
                 time.sleep(wait_time)
             
             if track_ids:
-                logger.info(f"Injecting {len(track_ids)} new tracks...")
+                logger.info(f"Injecting {len(track_ids)} tracks...")
                 _gateway_request(session, "playlist.addSongs", target_id, api_token, track_ids, client.batch_size, logger)
 
-        logger.info(f"Strategy '{method}' complete for '{playlist.title}'.")
-        logger.debug("------ destinations.playlist END------")
+        logger.info(f"Sync complete for '{playlist.title}'.")
+        logger.debug("<<< END: strategies.destinations.playlist.run")
 
     except Exception as e:
-        logger.error(f"Sync failed: {e}")
+        logger.error(f"Sync failed for '{target_id}': {e}")
+        logger.debug("Traceback:", exc_info=True)
 
 def _gateway_request(session, method, playlist_id, token, ids, batch_size, logger):
     """
@@ -97,7 +106,7 @@ def _gateway_request(session, method, playlist_id, token, ids, batch_size, logge
     """
     total = len(ids)
     count = 0
-    verb = "Removing" if "delete" in method else "Adding"
+    verb = "Removed" if "delete" in method else "Added"
 
     for i in range(0, len(ids), batch_size):
         batch = ids[i:i + batch_size]
@@ -106,9 +115,7 @@ def _gateway_request(session, method, playlist_id, token, ids, batch_size, logge
         
         batch_ids = [int(tid) for tid in batch]
         
-        # Log IDs for debug mode
-        if logger.isEnabledFor(10): # DEBUG
-            logger.debug(f"Batch Processing IDs: {batch_ids}")
+        logger.debug(f"Gateway Call ({method}): Processing batch of {len(batch_ids)} tracks.")
 
         payload = {
             "playlist_id": str(playlist_id),
@@ -120,13 +127,18 @@ def _gateway_request(session, method, playlist_id, token, ids, batch_size, logge
             payload["offset"] = -1 # Always appends to end
 
         try:
-            resp = session.post(url, data=json.dumps(payload)).json()
+            raw_resp = session.post(url, data=json.dumps(payload))
+            resp = raw_resp.json()
+            
             if resp.get('error'):
-                logger.error(f"Gateway Error: {resp['error']}")
+                logger.error(f"Deezer Gateway Error: {resp['error']}")
+                logger.debug(f"Failed Payload: {json.dumps(payload)}")
             else:
                 count += len(batch)
-                logger.info(f"{verb} songs... {count}/{total} complete.")
+                logger.debug(f"Batch success. Progress: {count}/{total}")
         except Exception as e:
-            logger.error(f"Network request failed: {e}")
+            logger.error(f"Network request failed during {method}: {e}")
         
         time.sleep(0.5)
+    
+    logger.info(f"Done: {verb} {count} tracks.")
