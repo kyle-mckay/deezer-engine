@@ -4,6 +4,7 @@
 
 ### Fixes
 
+- fix: cache check ignoring retention, add placeholder for history (@kylemmkay)
 - fix: typo and wrong variable for count (@kylemmkay)
 
 ### Maintenance
