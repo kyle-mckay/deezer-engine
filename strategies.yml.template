@@ -28,6 +28,11 @@ playlists:
       - type: "smarttracklist"
         name: "inspired-by-3"
     modifiers:
+      - type: "exclude"
+        source:
+          - type: "history"
+            retention: 0
+            lookback: 7
       - type: "dedupe"
       - type: "shuffle"
         order: "smart" # Spread out artists for a better mix

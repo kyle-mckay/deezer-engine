@@ -27,6 +27,7 @@ Every source entry supports these optional fields:
 | Type | Required Field | Description |
 | --- | --- | --- |
 | `favorites` | None | Tracks from your "Loved Tracks" profile. |
+| `history` | None | Tracks from your play history |
 | `playlist` | `id` | All tracks from a specific playlist ID. |
 | `album` | `id` | All tracks from a specific album ID. |
 | `artist` | `id` | Iterates through an artist's discography. |
@@ -40,6 +41,23 @@ Gets songs from your favorite tracks: `https://www.deezer.com/us/profile/<user_i
     source:
       - type: "favorites"
 ```
+
+#### `history`
+
+Gets songs from your history: `https://www.deezer.com/en/profile/me/history`
+
+> [!NOTE]
+> Deezer only tracks the last 100 songs. At the moment history is not aggregated.
+
+```yaml
+    source:
+      - type: "history"
+        lookback: 14 # optional
+```
+
+**Optional keys**:
+
+* `lookback` - How many days to look back in your history.
 
 #### `playlist`
 
@@ -286,6 +304,11 @@ playlists:
       - type: "smarttracklist"
         name: "inspired-by-3"
     modifiers:
+      - type: "exclude"
+        source:
+          - type: "history"
+            retention: 0
+            lookback: 7
       - type: "dedupe"
       - type: "shuffle"
         order: "smart" # Spread out artists for a better mix
