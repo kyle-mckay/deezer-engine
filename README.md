@@ -82,3 +82,12 @@ A friendly Python wrapper around the Deezer API. This library handles the heavy 
 
 - **[Requests](https://github.com/psf/requests):** Used for low-level HTTP handling and session management during the authentication handshake.
 - **[PyYAML](https://github.com/yaml/pyyaml):** Powering the logic behind the `strategies.yml` configuration.
+
+## License
+
+This project is licensed under the **GNU General Public License v3.0**. 
+
+- **Copyleft:** If you modify and distribute this software, you must also release your source code under the same license.
+- **Warranty:** This software is provided "as is" without warranty of any kind. Given that this script involves automated playlist management and AI-assisted logic, use it at your own risk.
+
+See the [LICENSE](LICENSE) file for the full text.

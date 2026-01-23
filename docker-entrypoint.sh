@@ -1,3 +1,19 @@
+# Copyright (C) 2026 kylemmkay
+# Source: https://codeberg.org/kylemmkay/deezer-engine
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/>.
+
 #!/bin/bash
 set -e
 
@@ -73,7 +89,7 @@ setup_run(){
 # Print banner unless disabled
 : "${DEEZER_PRINT_BANNER:=true}"
 if [ "$DEEZER_PRINT_BANNER" = "true" ]; then
-    python3 -c "from __version__ import __banner__, __version__; print(__banner__); print(f'Running Deezer-Engine {__version__}\n')"
+    python3 -c "from __version__ import __banner__, __version__; print(__banner__); print(f'Running Deezer-Engine {__version__}\n'); print('This is free software under the GNU GPL v3.0.'); print('For more details, see https://codeberg.org/kylemmkay/deezer-engine')"
     echo "----------------------------"
 fi
 
