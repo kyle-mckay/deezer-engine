@@ -130,7 +130,7 @@ def _gateway_request(session, method, playlist_id, token, ids, batch_size, logge
     start_log_time = time.time()
     last_log_time = start_log_time
     log_interval = get_global_value('log_interval',120)
-    total_tracks = len(batch_size)
+    total_tracks = len(ids)
     for i in range(0, len(ids), batch_size):
         batch = ids[i:i + batch_size]
         cid = random.randint(100000000, 999999999)
@@ -180,9 +180,9 @@ def _gateway_request(session, method, playlist_id, token, ids, batch_size, logge
             # 4. Create suffix
             suffix = f"{percent} complete (ETA: {eta_str})..."
             if verb == "Added":
-                logger.info(f"Addign {total_tracks} to playlist': {suffix}")
+                logger.info(f"Adding {total_tracks} tracks to playlist': {suffix}")
             elif verb == "Removed":
-                logger.info(f"Removing {total_tracks} from playlist: {suffix}")
+                logger.info(f"Removing {total_tracks} tracks from playlist: {suffix}")
             last_log_time = current_time 
         time.sleep(0.5)
     
