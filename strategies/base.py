@@ -103,7 +103,7 @@ class StrategyController:
             self.logger.debug(f"Executing {src_type}.run()")
 
             # Get new tracklist if cache expired
-            if src_retention == 0 or not is_collection_cached(source_name, self.config, self.logger) == False:
+            if src_retention == 0 or not is_collection_cached(source_name, self.config, self.logger):
                 self.logger.debug(f"Cache expired or missing for {source_name}. Fetching from API.")
                 #controller.handle_source(src)
                 new_tracks = module.run(self.client, self.config, self.logger, source_data)

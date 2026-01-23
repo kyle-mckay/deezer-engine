@@ -32,6 +32,7 @@ Every source entry supports these optional fields:
 | `album` | `id` | All tracks from a specific album ID. |
 | `artist` | `id` | Iterates through an artist's discography. |
 | `smarttracklist` | `name` | Curated: `discovery`, `new-releases`, `inspired-by-1` to `5`. |
+| `file` | `format` | Export tracks to a file on your computer. |
 
 #### `favorites`
 
@@ -109,6 +110,28 @@ Deezer's curated lists: `https://www.deezer.com/us/smarttracklist/<list name>`
       - type: "smarttracklist"
         name: "inspired-by-5"
 ```
+
+#### `file`
+
+Exports your tracklist to a local file in either JSON or CSV format. This is useful for creating periodic backups of your playlists or favorites.
+
+```yaml
+    destination:
+      - type: "file"
+        format: "csv" # options: "json", "csv"
+        dir: "./backups" # optional
+        filename: "my_favorites_{date}" # optional
+        retention: 24 # optional (in hours)
+
+```
+
+**Optional keys**:
+
+* `format` - The file extension and data structure to use. Defaults to `json`.
+* `dir` - The directory where the file will be saved. Defaults to a `backups` folder in your data directory.
+* `filename` - The name of the file. You can use the `{date}` placeholder to include a timestamp (formatted as `_YYYYMMDD_HHMM`). If `filename` is omitted, the filename defaults to the current timestamp (`file_YYYYMMDD_HHMM`).
+* `retention` - How many **hours** to keep old files. The system will delete files with the same name prefix that are older than this value. Set to `0` to disable automatic deletion. Defaults to `168` (7 days). (Config `file_retention` or ENV `DEEZER_FILE_RETENTION`)
+
 
 ## 🔧 Modifiers
 

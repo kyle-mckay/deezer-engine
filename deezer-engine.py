@@ -76,7 +76,7 @@ def process_sources(s_data, controller, config, client, logger, strategy_name):
         source_metadata.append((source_name, source_modifiers))
 
         # Get new tracklist if cache expired
-        if source_retention == 0 or not is_collection_cached(source_name, config, logger) == False:
+        if source_retention == 0 or not is_collection_cached(source_name, config, logger):
             logger.debug(f"Cache expired or missing for {source_name}. Fetching from API.")
             controller.handle_source(src,source_name)
         else:

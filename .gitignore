@@ -8,6 +8,7 @@ strategies.yml
 cache/
 tmp/
 db/
+backups/
 deezer_engine.db
 
 # --- PYTHON SETTINGS ---
