@@ -74,7 +74,6 @@ services:
             - TZ=UTC
             #- DEEZER_SCHEDULE="0 3 * * *" # Optional: Daily at 3 AM (Based off env TZ)
         command: run
-
 ```
 
 > [!TIP]
@@ -106,7 +105,6 @@ docker run -d \
   -e DEEZER_SCHEDULE="0 3 * * *" \
   -v $(pwd)/data:/app/data \
   kylemmkay/deezer-engine:latest cron
-
 ```
 
 ### 🏗️ Build & Development
@@ -121,7 +119,6 @@ From the root of the repository:
 
 ```bash
 docker build -t deezer-engine:dev .
-
 ```
 
 **2. Run your dev build:**
@@ -133,7 +130,6 @@ docker run --rm \
   -e DEEZER_USER_ID="123456789" \
   -e DEEZER_ARL_TOKEN="YOUR_TOKEN" \
   deezer-engine:dev run
-
 ```
 
 **3. Development Tips:**
@@ -152,7 +148,6 @@ cd deezer-engine
 python3 -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
 ```
 
 2. **Configure:**
@@ -160,7 +155,6 @@ pip install -r requirements.txt
 ```bash
 cp config.yml.template config.yml
 cp strategies.yml.template strategies.yml
-
 ```
 
 *Edit these files with your specific settings.*
@@ -169,7 +163,6 @@ cp strategies.yml.template strategies.yml
 
 ```bash
 python3 deezer-engine.py
-
 ```
 
 **Next Step:** Once installed, head over to the [Strategy Configuration](https://www.google.com/search?q=Strategy-Configuration) page to define your first smart playlist.

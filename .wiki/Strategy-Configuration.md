@@ -39,7 +39,6 @@ Gets songs from your favorite tracks: `https://www.deezer.com/us/profile/<user_i
 ```yaml
     source:
       - type: "favorites"
-
 ```
 
 #### `playlist`
@@ -50,7 +49,6 @@ Gets songs from a specific playlist. Currently only supports playlist id: `https
     source:
       - type: "playlist"
         id: "12345678"
-
 ```
 
 #### `album`
@@ -61,7 +59,6 @@ Gets songs from a specific album. Currently only supports album id: `https://www
     source:
       - type: "album"
         id: "12345678"
-
 ```
 
 #### `artist`
@@ -72,7 +69,6 @@ Gets all songs from a specific artist by itterating through their albums. Curren
     source:
       - type: "artist"
         id: "123"
-
 ```
 
 #### `smarttracklist`
@@ -128,7 +124,6 @@ Modifiers is an *optional* section that allows you to transform your track list 
 ```yaml
     modifiers:
       - type: "dedupe"
-
 ```
 
 ### Supported Modifiers
@@ -140,7 +135,6 @@ Removes duplicate track IDs. Note that sources already de-duplicate by ID during
 ```yaml
 modifiers:
   - type: "dedupe"
-
 ```
 
 #### `limit`
@@ -154,7 +148,6 @@ modifiers:
   - type: "limit"
     order: "top"
     count: 20
-
 ```
 
 #### `filter`
@@ -175,7 +168,6 @@ modifiers:
     field: "unseen"
     operator: "eq"
     value: 1
-
 ```
 
 For available filter fields, see the official [deezer documentation for tracks](https://deezer-python.readthedocs.io/en/stable/api_reference/resources/track.html#deezer.Track).
@@ -206,7 +198,6 @@ Randomizes the order. **Recommended:** Use `replace` as your destination mode wh
 modifiers:
   - type: "shuffle"
     order: "smart"
-
 ```
 
 ### `sort`
@@ -220,7 +211,6 @@ modifiers:
   - type: "sort"
     order: "desc"
     field: "release_date"
-
 ```
 
 For available sort fields, see the official [deezer documentation for tracks](https://deezer-python.readthedocs.io/en/stable/api_reference/resources/track.html#deezer.Track).
@@ -244,7 +234,6 @@ destination:
   - type: "playlist"
     id: "01234567"
     order: "smart"
-
 ```
 
 
@@ -252,6 +241,8 @@ destination:
 # Examples
 
 This page provides examples of different configurations that are possible.
+
+> Builds are tested off these examples.
 
 ## The "Artist Super-Fan"
 
@@ -271,7 +262,6 @@ playlists:
       - type: "playlist"
         id: "REPLACE_WITH_YOUR_ID"
         order: "replace"
-
 ```
 
 ### High-Energy "Popular Only" Discovery
@@ -303,7 +293,6 @@ playlists:
       - type: "playlist"
         id: "REPLACE_WITH_YOUR_ID"
         order: "replace"
-
 ```
 
 ### The "Unseen" Global Hits Radar
@@ -328,7 +317,6 @@ playlists:
       - type: "playlist"
         id: "REPLACE_WITH_YOUR_ID"
         order: "replace"
-
 ```
 
 ### "Fresh Heavy Rotation" (Album + Favorites)
@@ -353,7 +341,6 @@ playlists:
       - type: "playlist"
         id: "REPLACE_WITH_YOUR_ID"
         order: "replace"
-
 ```
 
 ### Short-Track "Workout" Generator
@@ -378,5 +365,4 @@ playlists:
       - type: "playlist"
         id: "REPLACE_WITH_YOUR_ID"
         order: "replace"
-
 ```
