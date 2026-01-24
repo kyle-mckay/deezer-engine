@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Copyright (C) 2026 kylemmkay
 # Source: https://codeberg.org/kylemmkay/deezer-engine
 #
@@ -14,7 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-#!/bin/bash
+
 set -e
 
 # Docker entrypoint script for deezer-engine
