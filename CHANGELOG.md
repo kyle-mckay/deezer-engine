@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.9.1 - 2026-01-24
+
+### Fixes
+
+- fix: move shebang back to top of entrypoint (@kylemmkay)
+
 ## v0.9.0 - 2026-01-23
 
 ### Enhancements
