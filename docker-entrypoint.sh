@@ -100,6 +100,9 @@ fi
 # Check if strategies.yml exists, if not generate from template
 if [ ! -f /app/data/strategies.yml ]; then
     echo "No strategy file detected on startup!"
+    echo "------ /app/data -----"
+    ls -Rl /app/data
+    echo "---------------------------"
     cp /app/strategies.yml.template /app/data/strategies.yml
     echo ""
     echo "If you're bind mounting the '/app/data' folder, a default strategy file has been generated at /app/data/strategies.yml"

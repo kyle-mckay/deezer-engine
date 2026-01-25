@@ -206,8 +206,8 @@ def load_strategies_with_env_overrides(logger):
     try:
         with open(strategies_path, 'r') as f:
             strategies = yaml.safe_load(f)
-            if strategies is None:
-                logger.warning(f"Strategies file at {strategies_path} is empty.")
+            if strategies is None or strategies.get("playlists") is None:
+                logger.warning(f"Strategies file at {strategies_path} is empty or missing playlists.")
                 return {"playlists": []}
     except Exception as e:
         logger.error(f"Error loading YAML: {e}")

@@ -1,4 +1,4 @@
-name: Build and Push Docker Image
+name: Build, Test, and Push Docker Image
 
 on:
   release:
@@ -11,8 +11,8 @@ on:
         type: string
 
 jobs:
-  push_to_registries:
-    name: Build and Push
+  test_and_push:
+    name: Build, Test, and Push
     runs-on: ubuntu-latest
     
     steps:
@@ -24,24 +24,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y docker.io curl jq
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker
-
-      - name: Log in to Codeberg Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: codeberg.org
-          username: ${{ github.actor }}
-          password: ${{ secrets.REPO_PAT }}
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -50,11 +32,92 @@ jobs:
             codeberg.org/${{ github.repository }}
             kylemmkay/deezer-engine
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest
-            type=raw,value=${{ github.event.inputs.tag_name }},enabled=${{ github.event_name == 'workflow_dispatch' }}
+            # Release-only tags
+            type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' }}
+            
+            # Manual/Development tags
+            type=sha,prefix=beta-,enable=${{ github.event_name == 'workflow_dispatch' }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      # Build the image locally
+      - name: Build local image for testing
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: deezer-engine:test
+
+      - name: Verify Container Execution
+        run: |
+          echo "Cleaning up any old test containers..."
+          docker rm -f engine-test 2>/dev/null || true
+          
+          echo "Preparing test environment in dir: $(pwd)..."
+          DATA="$(pwd)/data"
+          mkdir -p "$DATA"
+          FILE="$DATA/strategies.yml"
+          echo "playlists:" > "$FILE"
+
+          if [[ -f "$(pwd)/data/strategies.yml" ]]; then
+            echo "File created successfully at $(pwd)/data/strategies.yml"
+          else
+            echo "File failed to create..."
+            exit 1
+          fi
+
+          echo "Starting Comprehensive Test..."
+          docker run -d --name engine-test \
+            -e DEEZER_PRINT_BANNER=true \
+            -e DEEZER_LOG_LEVEL="DEBUG" \
+            -v "$(pwd)/data:/app/data" \
+            deezer-engine:test run
+          
+          sleep 10
+          
+          LOGS=$(docker logs engine-test 2>&1)
+          echo "--- Container Logs ---"
+          echo "$LOGS"
+          echo "----------------------"
+
+          # 1. Check for the Banner
+          if [[ "$LOGS" != *"Running Deezer-Engine"* ]]; then
+            echo "❌ Banner NOT detected."
+            exit 1
+          else
+            echo "✅ Banner detected"
+          fi
+
+          # 2. Check for Config Warning 
+          if [[ "$LOGS" != *"[WARNING] - Strategies file"* ]] && [[ "$LOGS" != *"[DEBUG] - --- Processing Strategy"* ]]; then
+              echo "Error: Required log patterns not found."
+              exit 1
+          else
+            echo "✅ Strategy file identified"
+          fi
+
+          # 3. Check for Engine Logic 
+          if [[ "$LOGS" != *"[ERROR] - ARL token is missing"* ]]; then
+            echo "❌ Engine check failed: Missing ARL error not found."
+            exit 1
+          else
+            echo "✅ Config loader detected 'invalid' config"
+          fi
+
+          echo "✅ All verification checks passed!"
+          
+          # Clean up manually since we didn't use --rm
+          docker rm -f engine-test
+
+      # 3. Log in
+      - name: Log in to Registries
+        if: success()
+        run: |
+          echo "${{ secrets.REPO_PAT }}" | docker login codeberg.org -u ${{ github.actor }} --password-stdin
+          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -65,12 +128,14 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Get Repo Description from Codeberg
+        if: ${{ github.event_name == 'release' && github.ref == 'refs/heads/main' }}
         id: repo_data
         run: |
           DESC=$(curl -s "https://codeberg.org/api/v1/repos/${{ github.repository }}" | jq -r '.description')
           echo "description=$DESC" >> $GITHUB_OUTPUT
 
       - name: Update Docker Hub Description
+        if: ${{ github.event_name == 'release' && github.ref == 'refs/heads/main' }}
         uses: https://github.com/peter-evans/dockerhub-description@v4
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
