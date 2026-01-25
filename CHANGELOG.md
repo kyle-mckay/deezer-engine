@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.9.2 - 2026-01-25
+
+### Maintenance
+
+- chore: modify docker build to test and only push to latest on release (#67) (@kylemmkay)
+
 ## v0.9.1 - 2026-01-24
 
 ### Fixes
