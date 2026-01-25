@@ -39,6 +39,7 @@ jobs:
             
             # Manual/Development tags
             type=sha,prefix=beta-,enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=beta,enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
