@@ -1,6 +1,6 @@
 # Deezer Engine (Smart Playlists)
 
-[![Source on Codeberg](https://img.shields.io/badge/Source-Codeberg-blue?logo=gitea)](https://codeberg.org/kylemmkay/deezer-engine) [![Docker Hub](https://img.shields.io/badge/docker-pull-blue.svg?logo=docker)](https://hub.docker.com/r/kylemmkay/deezer-engine)
+[![Source on Codeberg](https://img.shields.io/badge/Source-Codeberg-blue?logo=codeberg)](https://codeberg.org/kylemmkay/deezer-engine) [![Docker Hub](https://img.shields.io/badge/docker-pull-blue.svg?logo=docker)](https://hub.docker.com/r/kylemmkay/deezer-engine)
 
 > [!NOTE]
 > This repository was built with AI 🤖 assistance.
