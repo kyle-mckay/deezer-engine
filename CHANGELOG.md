@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.9.3 - 2026-01-27
+
+### Fixes
+
+- fix: add sigint support for script and container (#70) (@kylemmkay)
+
 ## v0.9.2 - 2026-01-27
 
 ### Fixes
