@@ -4,6 +4,13 @@ on:
   release:
     types: [published]
   pull_request:
+    paths:
+      - '.forgejo/workflows/docker-publish.yml'
+      - '**'
+    paths-ignore:
+      - '__version__.py'
+      - 'CHANGELOG.md'
+      - '.forgejo/**'
     branches:
       - main
   workflow_dispatch:
