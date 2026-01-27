@@ -18,6 +18,7 @@ import yaml
 import re
 import sys
 import logging
+import signal
 import os
 from pathlib import Path
 from utils.logger import setup_logger
@@ -27,8 +28,14 @@ from utils.deezer_auth import get_authenticated_client, get_tracks
 from strategies.base import StrategyController
 from utils.database import initialize_all
 from utils.cache_manager import get_collection_name
+from utils.signals import shutdown_event
 from utils.db_manager import get_unprocessed_track_ids, update_track_metadata,fetch_collection, is_collection_cached, get_expired_track_ids, update_tracks_partial_batch, update_unprocessed, refresh_stats
 from __version__ import __version__, __banner__
+
+def signal_handler(sig, frame):
+    """Callback for SIGINT/SIGTERM to trigger a graceful exit."""
+    print(f"\n[!] Signal {sig} received. Will exit after current strategy finishes...")
+    shutdown_event.set()
 
 def load_configs(type,logger = None):
     """Load configuration and strategies with environment variable overrides."""
@@ -81,7 +88,10 @@ def process_sources(s_data, controller, config, client, logger, strategy_name):
             controller.handle_source(src,source_name)
         else:
             logger.debug(f"Using cached data for {source_name}.")
-        
+
+        if shutdown_event.is_set():
+                logger.debug("Shutdown passing through process_sources acknowledged. Skipping remaining strategies.")
+                break
         # Identify new tracks to fetch metadata for.
         update_unprocessed(client, logger)
     
@@ -134,6 +144,10 @@ def process_destinations(s_data, controller, logger, strategy_name):
         logger.warning(f"Strategy '{strategy_name}' has no destination defined.")
 
 def main():
+    # Register signal handlers for Ctrl+C (SIGINT) and Docker stop (SIGTERM)
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     # 1. Load data
     config = load_configs("config")
 
@@ -194,6 +208,11 @@ def main():
     total_strategies = len(strategies_config['playlists'])
 
     for i, s_data in enumerate(strategies_config['playlists'],1):
+        # Check for shutdown signal
+        if shutdown_event.is_set():
+            logger.info("Shutdown signal acknowledged. Skipping remaining strategies.")
+            break
+
         strategy_name = s_data.get('name', 'unnamed_strategy')
         
         # Sanitize the name for the temp filename
@@ -217,10 +236,16 @@ def main():
             source_metadata = process_sources(s_data, controller, config, client, logger, strategy_name)
 
             # Modifier Phase
+            if shutdown_event.is_set():
+                logger.info("Shutdown signal acknowledged. Skipping remaining strategies.")
+                break
             update_unprocessed
             process_modifiers(s_data, controller, source_metadata, logger, strategy_name)
 
             # Destination Phase
+            if shutdown_event.is_set():
+                logger.info("Shutdown signal acknowledged. Skipping remaining strategies.")
+                break
             process_destinations(s_data, controller, logger, strategy_name)
 
         except Exception as e:

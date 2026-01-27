@@ -151,6 +151,7 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     """
     Transforms Deezer API objects into a list of dictionaries with rate-limiting protection.
     """
+    from utils.signals import shutdown_event
     from utils.db_manager import update_track_metadata
     logger.debug(f">>> START: utils.deezer_auth.get_tracks ({source_type})")
     logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
@@ -160,6 +161,9 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
         Helper to fetch track data handling both Rate Limits and Network Drops.
         """
         for attempt in range(max_retries):
+            if shutdown_event.is_set():
+                logger.debug("fetch_track_with_retry interrupted! Returning partial results.")
+                return None
             try:
                 # Small jitter to keep requests non-rhythmic
                 time.sleep(random.uniform(0.2, 0.5))
@@ -220,6 +224,10 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     
     for i, track in enumerate(iterable, 1):
         try:
+            if shutdown_event.is_set():
+                logger.warning("Track collection interrupted! Returning partial results.")
+                return cached_tracks
+
             # Every 40 requests, take a longer pause to prevent sustained high-load triggers
             if i % 40 == 0:
                 logger.debug("Cooldown period: Sleeping for 3 seconds to respect API limits...")

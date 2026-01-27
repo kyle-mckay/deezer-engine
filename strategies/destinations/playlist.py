@@ -14,11 +14,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 import time
-from datetime import timedelta
 import json
 import os
 import math
 import random
+from datetime import timedelta
+from utils.signals import shutdown_event
 from utils.deezer_auth import get_authenticated_session
 from utils.config_loader import get_global_value
 
@@ -132,6 +133,11 @@ def _gateway_request(session, method, playlist_id, token, ids, batch_size, logge
     log_interval = get_global_value('log_interval',120)
     total_tracks = len(ids)
     for i in range(0, len(ids), batch_size):
+
+        if shutdown_event.is_set():
+            logger.warning(f"Interrupt detected. Stopping playlist update.")
+            break
+
         batch = ids[i:i + batch_size]
         cid = random.randint(100000000, 999999999)
         url = f"https://www.deezer.com/ajax/gw-light.php?method={method}&input=3&api_version=1.0&api_token={token}&cid={cid}"

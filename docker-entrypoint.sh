@@ -35,8 +35,9 @@ strip_quotes() {
 
 setup_cron(){
     echo "Scheduler active. Schedule: $DEEZER_SCHEDULE"
-    
     echo "Starting scheduler loop at $(date '+%Y-%m-%d %H:%M:%S %:z')..."
+    trap 'echo "Stopping scheduler..."; kill -SIGINT "$child_pid" 2>/dev/null; exit 0' SIGINT SIGTERM
+    trap 'echo "Interrupting scheduler..."; kill -INT "$child_pid" 2>/dev/null; exit 0' SIGINT
 
     while true; do
         # Get how long until next schedule
@@ -68,7 +69,12 @@ EOF
         
         # Script
         cd /app
-        python3 deezer-engine.py
+        # Run in the background
+        python3 -u deezer-engine.py &
+        child_pid=$!
+
+        # Wait for engine to finish or for signal
+        wait "$child_pid"
         
         echo "$(date '+%Y-%m-%d %H:%M:%S %:z') - Run complete; waiting for next schedule"
     done
