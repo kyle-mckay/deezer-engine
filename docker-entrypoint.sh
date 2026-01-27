@@ -34,38 +34,44 @@ strip_quotes() {
 }
 
 setup_cron(){
-    echo "Cron schedule set to: $DEEZER_SCHEDULE"
-    echo "Configuring environment for cron task..."
+    echo "Scheduler active. Schedule: $DEEZER_SCHEDULE"
     
-    # We save all DEEZER_ variables to a file. 
-    env | grep '^DEEZER_' > /app/env_config.env
-    echo "TZ=${TZ:-UTC}" >> /app/env_config.env
-    echo "CONTAINERIZED=true" >> /app/env_config.env
+    echo "Starting scheduler loop at $(date '+%Y-%m-%d %H:%M:%S %:z')..."
 
-    # Ensure logging infrastructure exists
-    mkdir -p /app/data/logs
-    touch /app/data/logs/cron.log
-    
-    # Build and install the crontab
-    {
-        echo "SHELL=/bin/bash"
-        echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-        echo ""
-        # The command sequence:
-        # - Load the env file (source)
-        # - Move to the app directory
-        # - Run the engine and pipe both output and errors to the log file
-        # - After the run completes, write a timestamped completion message to container stdout
-        printf '%s %s\n' "$DEEZER_SCHEDULE" ". /app/env_config.env && cd /app && /usr/local/bin/python deezer-engine.py >> /app/data/logs/cron.log 2>&1; echo \"$(date -u '+%Y-%m-%d %H:%M:%S %Z') - Cron run complete; waiting for next schedule\" > /proc/1/fd/1"
-    } | crontab -
-    
-    # Launch the services
-    echo "Starting scheduler at $(date)... (Logs will stream below)"
-    
-    service cron start
-    
-    # Effectively hands over control to the log stream
-    tail -f -n 0 /app/data/logs/cron.log
+    while true; do
+        # Get how long until next schedule
+        WAIT_SECONDS=$(python3 - <<EOF
+import datetime, sys
+from croniter import croniter
+try:
+    base = datetime.datetime.now()
+    iter = croniter('$DEEZER_SCHEDULE', base)
+    next_run = iter.get_next(datetime.datetime)
+    print(int((next_run - base).total_seconds()))
+except Exception as e:
+    print(f"Error: {e}", file=sys.stderr)
+    sys.exit(1)
+EOF
+        )
+
+        if [[ "$DEEZER_LOG_LEVEL" == "DEBUG" ]]; then
+            NEXT_DATE=$(date -d "@$(($(date +%s) + $WAIT_SECONDS))" '+%Y-%m-%d %H:%M:%S %:z')
+            echo "---------------------------------------------------------------"
+            echo "Next execution: $NEXT_DATE (In $WAIT_SECONDS seconds)"
+            echo "---------------------------------------------------------------"
+        fi
+
+        # Sleep and wait
+        sleep "$WAIT_SECONDS" & wait $!
+
+        echo "Triggering scheduled run: $(date '+%Y-%m-%d %H:%M:%S %:z')"
+        
+        # Script
+        cd /app
+        python3 deezer-engine.py
+        
+        echo "$(date '+%Y-%m-%d %H:%M:%S %:z') - Run complete; waiting for next schedule"
+    done
 }
 
 setup_run(){
@@ -98,7 +104,7 @@ if [ "$DEEZER_PRINT_BANNER" = "true" ]; then
 fi
 
 # Check if strategies.yml exists, if not generate from template
-if [ ! -f /app/data/strategies.yml ]; then
+if [ ! -f /app/data/strategies.yml ] && [ "$1" != "shell" ]; then
     echo "No strategy file detected on startup!"
     echo "------ /app/data -----"
     ls -Rl /app/data
@@ -133,8 +139,8 @@ case "$1" in
         setup_run
         ;;
     shell)
-        # Start an interactive shell for debugging
-        exec /bin/bash
+        # Start an interactive shell for debugging with docker run
+        exec /bin/bash -i
         ;;
     *)
         # Default behavior: if DEEZER_SCHEDULE was provided, run cron; otherwise run once

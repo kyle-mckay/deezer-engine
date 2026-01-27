@@ -74,7 +74,6 @@ services:
             - DEEZER_LOG_LEVEL=INFO
             - TZ=UTC
             #- DEEZER_SCHEDULE="0 3 * * *" # Optional: Daily at 3 AM (Based off env TZ)
-        command: run
 ```
 
 > [!TIP]
@@ -84,7 +83,8 @@ services:
 
 | Mode | Command | Behavior |
 | --- | --- | --- |
-| **Run** | `command: run` / not included | (Default) Dynamically executes strategies: runs once and exits unless `DEEZER_SCHEDULE` defined. |
+| **Default** | None | (Default) Dynamically executes cron if `DEEZER_SCHEDULE` configured, otherwise runs once. |
+| **Run** | `command: run` / not included | Runs once and exits |
 | **Cron** | `command: cron` | Container stays alive and runs on your `DEEZER_SCHEDULE`. |
 | **Shell** | `command: shell` | Starts an interactive bash shell for debugging. |
 
