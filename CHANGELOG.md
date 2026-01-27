@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.9.2 - 2026-01-26
+## v0.9.2 - 2026-01-27
+
+### Fixes
+
+- fix: scheduler no longer relies on cron service (closes #33) (#68) (@kylemmkay)
 
 ### Maintenance
 
