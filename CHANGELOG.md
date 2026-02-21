@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.9.3 - 2026-01-27
+## v0.10.0 - 2026-02-21
+
+### Enhancements
+
+- feat: allow the use of a local file as a source for tracks (#72) (@kylemmkay)
 
 ### Fixes
 
