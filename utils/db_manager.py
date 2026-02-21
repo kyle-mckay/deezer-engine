@@ -282,7 +282,7 @@ def get_expired_track_ids(logger=None):
     if logger:
         logger.debug(">>> START: utils.db_manager.get_expired_track_ids")
 
-    track_stats_refresh=get_global_value("track_stats_refresh",default = 7)
+    track_stats_refresh=get_global_value("track_stats_refresh",default = 90)
     query = f"""
     SELECT id 
     FROM tracks 

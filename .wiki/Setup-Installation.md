@@ -43,7 +43,7 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | `favorites_cap` | `DEEZER_FAVORITES_CAP` | No | `10000` | Max tracks allowed in your "Favorites" (Deezer limit is 10k). |
 | `retention` | `DEEZER_RETENTION` | No | `0` | Hours to use cached 'source' data before fetching live. |
 | `file_retention` | `DEEZER_FILE_RETENTION` | No | `168` | The hours to retain a file export. |
-| `track_stats_refresh` | `DEEZER_TRACK_STATS_REFRESH` | No | `7` | Days before refreshing dynamic metadata like track rank. |
+| `track_stats_refresh` | `DEEZER_TRACK_STATS_REFRESH` | No | `90` | Days before refreshing dynamic metadata like track rank. |
 
 ### Logic Hierarchy
 

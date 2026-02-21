@@ -31,11 +31,11 @@ body:
     id: logs
     attributes:
       label: Relevant Logs
-      description: Please paste any error output here.
+      description: Please paste any error output here. Review the logs before submitting to ensure no sensitive information is included.
       render: shell
   - type: textarea
     id: strategy
     attributes:
       label: Strategy Configuration
-      description: Please paste your `strategy.yml` contents here.
+      description: Please paste your `strategy.yml` contents here. Note that if the playlist is not private it can be looked up via the ID.
       render: yml

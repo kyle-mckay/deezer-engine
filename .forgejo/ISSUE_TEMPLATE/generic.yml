@@ -1,5 +1,5 @@
 name: General Question / Setup Help
-description: For questions about DeezNg configuration or general usage
+description: For questions about configuration or general usage
 title: "misc: "
 body:
   - type: dropdown

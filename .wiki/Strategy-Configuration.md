@@ -113,16 +113,13 @@ Deezer's curated lists: `https://www.deezer.com/us/smarttracklist/<list name>`
 
 #### `file`
 
-Exports your tracklist to a local file in either JSON or CSV format. This is useful for creating periodic backups of your playlists or favorites.
+Imports your tracklist from a local file in either JSON or CSV format. This is useful for restoring prior backups or exports.
 
 ```yaml
-    destination:
+    source:
       - type: "file"
-        format: "csv" # options: "json", "csv"
-        dir: "./backups" # optional
-        filename: "my_favorites_{date}" # optional
-        retention: 24 # optional (in hours)
-
+        dir: "./backups" # optional, relative to script directory
+        name: "my_favorites.csv"
 ```
 
 **Optional keys**:
@@ -258,9 +255,16 @@ For available sort fields, see the official [deezer documentation for tracks](ht
 
 ## 🎯 Destinations
 
-Define where the final list is saved. Currently, only **playlists** are supported.
+Define where the final list is saved. 
 
 ### Destination Modes
+
+| Type | Required Field | Description |
+| --- | --- | --- |
+| `playlist` | `id` | Save tracks to one of your playlists. |
+| `file` | none | Export tracks from any collection of sources into a single file. |
+
+#### `playlist`
 
 | Mode | Behavior |
 | --- | --- |
@@ -277,7 +281,30 @@ destination:
     order: "smart"
 ```
 
+### `file`
 
+Exports your tracklist to a local file. This is the primary method for creating versioned backups or maintaining a historical archive.
+
+```yaml
+    destination:
+      - type: "file"
+        dir: "./backups"                 # optional, defaults to './backups'
+        name: "my_favorites_{date}.json" # optional, defaults to 'file_{date}.json'
+        retention: 72                    # optional, duration in hours
+
+```
+
+**Key Details:**
+
+* **Format:** Determined by the file extension in `name` (defaults to `.json` if omitted).
+* **Auto-Provisioning:** The `dir` path will be created automatically if it doesn't exist.
+* **The `{date}` Placeholder:** This is replaced by a timestamp at runtime to ensure unique filenames.
+
+> [!NOTE]
+> **Retention vs. Cache**
+> Unlike other strategies where `retention` refers to cache age, for the `file` destination, it manages **disk cleanup**.
+> The tool looks for files in the `dir` that share the same **basename** (the text before `{date}`). It parses the timestamp within those filenames; any file older than the specified `retention` hours is deleted, while newer backups are preserved.
+> If retention is not specified, no files are deleted within `dir`.
 
 # Examples
 
@@ -411,4 +438,20 @@ playlists:
       - type: "playlist"
         id: "REPLACE_WITH_YOUR_ID"
         order: "replace"
+```
+
+### Favorites back-up
+
+This strategy stores a copy of all tracks and their data within a file. Whenever the strategy is run, it will create a new file and delete any files where the export date is older than 1 week.
+
+```yml
+playlists:
+  - name "Favorites back-up"
+    source:
+      - type: "favorites"
+    destination:
+      - type: "file"
+        dir: "./backups" # Store in app directory
+        name: "favorites-backup_{date}.json"
+        retention: 168
 ```

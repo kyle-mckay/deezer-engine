@@ -14,14 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 import time
-from datetime import timedelta
-import json
-import os
+from datetime import timedelta, datetime
 from pathlib import Path
-import math
-from datetime import datetime
-import random
-from utils.deezer_auth import get_authenticated_session
 from utils.config_loader import get_global_value
 from utils.paths import get_data_dir
 from utils.files import write_to_json, write_to_csv
@@ -30,105 +24,105 @@ def cleanup_old_backups(directory, prefix, extension, retention_hours, logger):
     """
     Deletes files matching 'prefix*' with 'extension' older than retention_hours.
     """
-    logger.debug(f">>> START: utils.files.cleanup_old_backups)")
-
+    logger.debug(f">>> START: strategies.destinations.file.cleanup_old_backups")
     try:
         path_dir = Path(directory)
-        # Match files starting with the prefix and ending with the extension
-        search_pattern = f"{prefix}*.{extension}"
+        # Ensure extension starts with a dot for globbing
+        ext_pattern = f".{extension.lstrip('.')}"
+        search_pattern = f"{prefix}*{ext_pattern}"
         
-        # Calculate cutoff using hours
-        cutoff_timestamp = (datetime.now() - timedelta(hours=retention_hours)).timestamp()
+        # Calculate cutoff
+        cutoff_dt = datetime.now() - timedelta(hours=retention_hours)
         deleted_count = 0
 
         for file_path in path_dir.glob(search_pattern):
             if file_path.is_file():
-                # Compare file modification time to our cutoff
-                if file_path.stat().st_mtime < cutoff_timestamp:
-                    file_path.unlink()
-                    logger.info(f"Deleted expired backup: {file_path.name}")
-                    deleted_count += 1
+                try:
+                    # Extract timestamp from filename (e.g., name_20231027_1430)
+                    file_stem = file_path.stem
+                    parts = file_stem.split('_')
+                    
+                    # Expected format: yyyymmdd_hhmm (last two segments)
+                    date_str = f"{parts[-2]}_{parts[-1]}"
+                    file_dt = datetime.strptime(date_str, "%Y%m%d_%H%M")
+                    
+                    # Compare extracted file time to our cutoff
+                    if file_dt < cutoff_dt:
+                        file_path.unlink()
+                        logger.info(f"Deleted expired backup: {file_path.name}")
+                        deleted_count += 1
+                        
+                except (ValueError, IndexError):
+                    # Skip files that don't match the expected timestamp suffix
+                    logger.debug(f"Skipping file with incompatible name format: {file_path.name}")
+                    continue
 
         logger.debug(f"Cleanup complete. Deleted {deleted_count} files.")
-        logger.debug("<<< END: utils.files.cleanup_old_backups")
-
     except Exception as e:
         logger.error(f"Error during backup cleanup: {e}")
+    logger.debug("<<< END: strategies.destinations.file.cleanup_old_backups")
 
 def run(client, config, logger, dest_data, tracks):
     """
     Takes your current pipeline and saves it as a file.
     """
     logger.debug(">>> START: strategies.destinations.file.run")
-    target_id = str(dest_data.get('id'))
-    method = dest_data.get('order', 'smart')
-    arl = config.get('config', {}).get('arl_token')
-    user_id = str(config.get('config', {}).get('user_id'))
-
+    
     try:
         if isinstance(dest_data, dict):
             dest_data = [dest_data]
-        # Extract data
-
-        dest_type = dest_data[0].get('type')
-        if dest_type != "file":
-            logger.error(f"Error: Entered 'file' destination but was passed type: '{dest_type}'")
+            
+        # Resolve Directory
+        raw_dir = dest_data[0].get('dir')
+        if not raw_dir:
+            final_dir = Path(get_data_dir()).resolve() / "backups"
+            logger.debug(f"No directory passed. Defaulting to '{final_dir}'")
         else:
-            dest_type = dest_type.lower()
+            final_dir = Path(raw_dir).resolve()
+            logger.debug(f"Destination dir resolved: {final_dir}")
         
-        dest_format = dest_data[0].get('format')
-        if not dest_format:
-            logger.debug(f"File destination was passed invalid or missing format: '{format}'. Defaulting to json")
-            dest_format = "json"
-        else:
-            dest_format = dest_format.lower()
-        
-        dest_dir = dest_data[0].get('dir')
-        root_dir = get_data_dir()
-        if not dest_dir:
-            final_dir = Path(root_dir).resolve() / "backups"
-            logger.debug(f"Destination directory was passed invalid or missing: '{dest_dir}'. Defaulting to '{final_dir}'")
-        else:
-            final_dir = Path(dest_dir).resolve()
-            logger.debug(f"Using passed dest_dir: '{dest_dir}'")
+        final_dir.mkdir(parents=True, exist_ok=True)
 
-        dest_filename = dest_data[0].get('filename')
-        if not dest_filename:
-            dest_filename = 'file_{date}'
-            logger.debug("No filename has been passed to destination file. Defaulting to timestamp: 'file_{date}'")
+        # Resolve Filename and Extension
+        # Default to 'export_{date}.json' if no name provided
+        raw_filename = dest_data[0].get('filename') or dest_data[0].get('name')
+        if not raw_filename:
+            raw_filename = "export_{date}.json"
+            logger.debug(f"No filename provided. Defaulting to: {raw_filename}")
+
+        # Extract extension from the raw filename
+        extension = Path(raw_filename).suffix.lower().removeprefix('.')
+        if not extension:
+            extension = "json" # Safety fallback
+            raw_filename += ".json"
+            
+        # Handle Timestamps and Cleanup Prefix
         timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-
         
-        # Determine the prefix for cleanup
-        if dest_filename:
-            cleanup_prefix = dest_filename.replace("{date}", "")
-        else:
-            cleanup_prefix = None
-
-        if dest_filename:
-            dest_filename = dest_filename.replace("{date}", f"_{timestamp}")
-            logger.debug(f"Using passed dest_filename: '{dest_filename}'")
+        # Create a prefix for cleanup by removing the {date} tag and extension
+        cleanup_prefix = Path(raw_filename.replace("{date}", "")).stem
         
-        # Clean old backups
-        dest_retention = dest_data[0].get('retention',get_global_value('file_retention',168))
-        
-        if dest_retention >= 0 and cleanup_prefix:
-            cleanup_old_backups(final_dir, cleanup_prefix, dest_format, dest_retention, logger)
+        # Finalize the filename
+        actual_filename = raw_filename.replace("{date}", timestamp)
+        final_target = final_dir / actual_filename
 
-        # Build full path
-        final_target = f"{final_dir}/{dest_filename}.{dest_format}"
-        logger.debug(f"Saving export to path: '{final_target}")
+        # Cleanup Logic
+        dest_retention = dest_data[0].get('retention', get_global_value('file_retention', 168))
+        if dest_retention >= 0:
+            cleanup_old_backups(final_dir, cleanup_prefix, extension, dest_retention, logger)
 
-        match dest_format:
+        # Export
+        logger.debug(f"Saving export to: {final_target}")
+        match extension:
             case "json":
-                logger.debug(f"Exporting Tracks to JSON")
-                write_to_json(tracks, final_target, logger)
+                write_to_json(tracks, str(final_target), logger)
             case "csv":
-                logger.debug(f"Exporting tracks to CSV")
-                write_to_csv(tracks, final_target, logger)
+                write_to_csv(tracks, str(final_target), logger)
+            case _:
+                logger.error(f"Unsupported export format: {extension}")
 
         logger.debug("<<< END: strategies.destinations.file.run")
 
     except Exception as e:
-        logger.error(f"Sync failed for '{target_id}': {e}")
+        logger.error(f"File export failed: {e}")
         logger.debug("Traceback:", exc_info=True)

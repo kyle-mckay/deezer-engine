@@ -18,15 +18,19 @@ body:
       placeholder: "Example: Add a 'range' filter that accepts [min, max] values."
     validations:
       required: true
-  - type: checkboxes
+  - type: dropdown
     id: scope
     attributes:
       label: Impact Area
+      description: "Which part of the project does this primarily affect?"
+      multiple: true
       options:
-        - label: New Playlist Strategy (Logic change)
-        - label: CLI / UI improvement
-        - label: Docker / Deployment change
-        - label: Metadata / API handling
+        - "Core Logic / Python Source (Engine changes)"
+        - "CLI / Terminal Output (UI & Formatting)"
+        - "Docker / Deployment (Images & Environment)"
+        - "Metadata / API Handling (External Data)"
+    validations:
+      required: false
   - type: textarea
     id: context
     attributes:

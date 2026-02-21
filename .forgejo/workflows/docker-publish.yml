@@ -24,10 +24,12 @@ jobs:
   test_and_push:
     name: Build, Test, and Push
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
+        with:
+          set-safe-directory: 'true'
 
       - name: Install Docker CLI
         run: |
@@ -71,25 +73,26 @@ jobs:
           docker rm -f engine-test 2>/dev/null || true
           
           echo "Preparing test environment in dir: $(pwd)..."
-          DATA="$(pwd)/data"
-          mkdir -p "$DATA"
-          FILE="$DATA/strategies.yml"
-          echo "playlists:" > "$FILE"
+          mkdir -p ./test_data
+          echo "playlists:" > ./test_data/strategies.yml
 
-          if [[ -f "$(pwd)/data/strategies.yml" ]]; then
-            echo "File created successfully at $(pwd)/data/strategies.yml"
+          if [[ -f "./test_data/strategies.yml" ]]; then
+            echo "File created successfully at ./test_data/strategies.yml"
           else
             echo "File failed to create..."
             exit 1
           fi
 
-          echo "Starting Comprehensive Test..."
-          docker run -d --name engine-test \
+          echo "Creating Container..." # but dont start yet
+          docker create --name engine-test \
             -e DEEZER_PRINT_BANNER=true \
             -e DEEZER_LOG_LEVEL="DEBUG" \
-            -v "$(pwd)/data:/app/data" \
             deezer-engine:test run
-          
+
+          # Copy strat file to container then run
+          docker cp ./test_data/strategies.yml engine-test:/app/data/strategies.yml
+          docker start engine-test
+
           sleep 10
           
           LOGS=$(docker logs engine-test 2>&1)

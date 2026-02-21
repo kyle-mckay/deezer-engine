@@ -92,6 +92,9 @@ def get_collection_name(logger, type, name=None, id=None):
         case "smarttracklist":
             if _is_name_empty():
                 collection = f"{prefix}{name}"
+        case "file":
+            if _is_name_empty():
+                collection = f"{prefix}{name}"
             else:
                 collection = "unknown"
     
