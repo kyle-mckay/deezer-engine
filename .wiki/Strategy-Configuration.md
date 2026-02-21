@@ -32,7 +32,7 @@ Every source entry supports these optional fields:
 | `album` | `id` | All tracks from a specific album ID. |
 | `artist` | `id` | Iterates through an artist's discography. |
 | `smarttracklist` | `name` | Curated: `discovery`, `new-releases`, `inspired-by-1` to `5`. |
-| `file` | `format` | Export tracks to a file on your computer. |
+| `file` | `format` | Imports tracks from a file on your computer. |
 
 #### `favorites`
 
@@ -113,7 +113,7 @@ Deezer's curated lists: `https://www.deezer.com/us/smarttracklist/<list name>`
 
 #### `file`
 
-Imports your tracklist from a local file in either JSON or CSV format. This is useful for restoring prior backups or exports.
+Imports your tracklist from a local file in either JSON or CSV format. This is useful for restoring prior backups or exports. **Requires there to be an `id` column containing the deezer song ID.**
 
 ```yaml
     source:
