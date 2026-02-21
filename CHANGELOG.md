@@ -10,6 +10,10 @@
 
 - fix: add sigint support for script and container (#70) (@kylemmkay)
 
+### Maintenance
+
+- chore: correct source file description (@kylemmkay)
+
 ## v0.9.2 - 2026-01-27
 
 ### Fixes
