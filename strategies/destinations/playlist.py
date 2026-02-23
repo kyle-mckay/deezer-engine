@@ -21,6 +21,8 @@ import random
 from datetime import timedelta
 from utils.signals import shutdown_event
 from utils.deezer_auth import get_authenticated_session
+from utils.cache_manager import get_collection_name
+from utils.db_manager import sync_to_collections, is_collection_cached, fetch_collection
 from utils.config_loader import get_global_value
 
 def run(client, config, logger, dest_data, tracks):
@@ -49,7 +51,8 @@ def run(client, config, logger, dest_data, tracks):
 
     try:
         playlist = client.get_playlist(target_id)
-        
+        collection = get_collection_name(logger, "playlist", id=target_id)
+
         # Extract IDs from tracks
         track_ids = []
         for track in tracks:
@@ -57,12 +60,17 @@ def run(client, config, logger, dest_data, tracks):
             track_ids.append(track_id)
         
         # Get current tracks from the playlist
-        dst_ids = [str(t.id) for t in playlist.get_tracks()]
-        current_set = set(dst_ids)
+        if is_collection_cached(collection, dest_data, logger):
+            logger.debug(f"Using cached collection for playlist {target_id}")
+            current_set = set(str(track['id']) for track in fetch_collection(collection, logger))
+        else:
+            logger.debug(f"Fetching current tracks for playlist {target_id} from Deezer API")
+            dst_ids = [str(t.id) for t in playlist.get_tracks()]
+            current_set = set(dst_ids)
         target_set = set(track_ids)
         
         logger.debug(f"Targeting playlist: '{playlist.title}' (ID: {target_id})")
-        logger.debug(f"Current playlist size: {len(dst_ids)} | Target size: {len(track_ids)}")
+        logger.debug(f"Current playlist size: {len(current_set)} | Target size: {len(target_set)}")
 
         # Prepare for Writes
         session.headers.update({
@@ -74,22 +82,22 @@ def run(client, config, logger, dest_data, tracks):
         # --- SMART STRATEGY ---
         if method in ['smartreplace', 'smart']:
             logger.info(f"Syncing {len(tracks)} to '{playlist.title}' (Smart Sync)")
-            to_add = [tid for tid in track_ids if str(tid) not in current_set]
-            to_remove = [tid for tid in dst_ids if str(tid) not in target_set]
+            to_add = [tid for tid in target_set if str(tid) not in current_set]
+            to_remove = [tid for tid in current_set if str(tid) not in target_set]
             
             if not to_add and not to_remove:
-                logger.info(f"Successfully completed: {playlist.title}")
-                return
-
-            logger.debug(f"Smart Sync - To Add: {to_add}")
-            logger.debug(f"Smart Sync - To Remove: {to_remove}")
-            
-            if to_remove:
-                logger.debug(f"Removing {len(to_remove)} tracks...")
-                _gateway_request(session, "playlist.deleteSongs", target_id, api_token, to_remove, client.chunk_size, logger)
-            if to_add:
-                logger.debug(f"Adding {len(to_add)} tracks...")
-                _gateway_request(session, "playlist.addSongs", target_id, api_token, to_add, client.chunk_size, logger)
+                # Already in sync
+                logger.debug(f"Smart Sync not needed for '{playlist.title}' - already in sync.")
+            else:
+                logger.debug(f"Smart Sync - To Add: {to_add}")
+                logger.debug(f"Smart Sync - To Remove: {to_remove}")
+                
+                if to_remove:
+                    logger.debug(f"Removing {len(to_remove)} tracks...")
+                    _gateway_request(session, "playlist.deleteSongs", target_id, api_token, to_remove, client.chunk_size, logger)
+                if to_add:
+                    logger.debug(f"Adding {len(to_add)} tracks...")
+                    _gateway_request(session, "playlist.addSongs", target_id, api_token, to_add, client.chunk_size, logger)
 
         # --- APPEND / INSERT STRATEGY ---
         elif method in ['append', 'insert']:
@@ -113,6 +121,9 @@ def run(client, config, logger, dest_data, tracks):
                 _gateway_request(session, "playlist.addSongs", target_id, api_token, track_ids, client.chunk_size, logger)
 
         logger.info(f"Sync complete for '{playlist.title}'.")
+
+        
+        sync_to_collections(tracks, logger, collection)
         logger.debug("<<< END: strategies.destinations.playlist.run")
 
     except Exception as e:
