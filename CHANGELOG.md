@@ -8,6 +8,7 @@
 
 ### Fixes
 
+- fix: when saving a destination the final tracklist is cached (closes #73) (#80) (@kylemmkay)
 - fix: smart lists not saving / fetching collection (#69) (@kylemmkay)
 
 ## v0.10.0 - 2026-02-21
