@@ -1,10 +1,14 @@
 # Changelog
 
-## v0.10.1 - 2026-02-23
+## v0.11.0 - 2026-02-23
 
-### Maintenance
+### Enhancements
 
 - enhance: improve performance for fetching and change API limiting behaviour. (#78) (@kylemmkay)
+
+### Fixes
+
+- fix: smart lists not saving / fetching collection (#69) (@kylemmkay)
 
 ## v0.10.0 - 2026-02-21
 

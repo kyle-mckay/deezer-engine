@@ -92,7 +92,7 @@ get_priority() {
 
     if [[ "$prefix" =~ ^major$ || "$input" =~ "major" || "$input" =~ "breaking" || "$input" =~ "!" ]]; then
         echo 3
-    elif [[ "$prefix" =~ ^(minor|feat) || "$input" =~ "feature" || "$input" =~ "feat" || "$input" =~ "enhancement" ]] || \
+    elif [[ "$prefix" =~ ^(minor|feat) || "$input" =~ "feature" || "$input" =~ "feat" || "$input" =~ "enhancement" || "$input" =~ "enhance" ]] || \
          [[ "$prefix" == "" && "$input" =~ "minor" ]]; then
         echo 2
     elif [[ "$prefix" =~ ^(patch|fix) || "$input" =~ "bug" || "$input" =~ "patch" ]]; then
