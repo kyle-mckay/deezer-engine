@@ -5,10 +5,11 @@
 ### Enhancements
 
 - enhance: improve performance for fetching and change API limiting behaviour. (#78) (@kylemmkay)
+-  	enhance: allow destination playlist to pull from collection cache (closes #73) (#80)
 
 ### Fixes
 
-- fix: when saving a destination the final tracklist is cached (closes #73) (#80) (@kylemmkay)
+- fix: when saving a destination the final tracklist is cached (#80) (@kylemmkay)
 - fix: smart lists not saving / fetching collection (#69) (@kylemmkay)
 
 ## v0.10.0 - 2026-02-21
