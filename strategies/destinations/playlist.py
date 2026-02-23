@@ -86,22 +86,22 @@ def run(client, config, logger, dest_data, tracks):
             
             if to_remove:
                 logger.debug(f"Removing {len(to_remove)} tracks...")
-                _gateway_request(session, "playlist.deleteSongs", target_id, api_token, to_remove, client.batch_size, logger)
+                _gateway_request(session, "playlist.deleteSongs", target_id, api_token, to_remove, client.chunk_size, logger)
             if to_add:
                 logger.debug(f"Adding {len(to_add)} tracks...")
-                _gateway_request(session, "playlist.addSongs", target_id, api_token, to_add, client.batch_size, logger)
+                _gateway_request(session, "playlist.addSongs", target_id, api_token, to_add, client.chunk_size, logger)
 
         # --- APPEND / INSERT STRATEGY ---
         elif method in ['append', 'insert']:
             logger.info(f"Syncing {len(tracks)} to '{playlist.title}' (Appending)")
-            _gateway_request(session, "playlist.addSongs", target_id, api_token, track_ids, client.batch_size, logger)
+            _gateway_request(session, "playlist.addSongs", target_id, api_token, track_ids, client.chunk_size, logger)
 
         # --- REPLACE STRATEGY ---
         else:
             logger.info(f"Syncing {len(tracks)} tracks to '{playlist.title}' (Full Replace)")
             if dst_ids:
                 logger.debug(f"Wiping existing {len(dst_ids)} tracks for clean replace.")
-                _gateway_request(session, "playlist.deleteSongs", target_id, api_token, dst_ids, client.batch_size, logger)
+                _gateway_request(session, "playlist.deleteSongs", target_id, api_token, dst_ids, client.chunk_size, logger)
                 
                 # Dynamic wait for cloud consistency
                 wait_time = max(math.ceil((len(dst_ids) / 1000) * 10), 5)
@@ -110,7 +110,7 @@ def run(client, config, logger, dest_data, tracks):
             
             if track_ids:
                 logger.debug(f"Injecting {len(track_ids)} tracks...")
-                _gateway_request(session, "playlist.addSongs", target_id, api_token, track_ids, client.batch_size, logger)
+                _gateway_request(session, "playlist.addSongs", target_id, api_token, track_ids, client.chunk_size, logger)
 
         logger.info(f"Sync complete for '{playlist.title}'.")
         logger.debug("<<< END: strategies.destinations.playlist.run")
@@ -119,9 +119,9 @@ def run(client, config, logger, dest_data, tracks):
         logger.error(f"Sync failed for '{target_id}': {e}")
         logger.debug("Traceback:", exc_info=True)
 
-def _gateway_request(session, method, playlist_id, token, ids, batch_size, logger):
+def _gateway_request(session, method, playlist_id, token, ids, chunk_size, logger):
     """
-    Handles batch communication with the Deezer Gateway.
+    Processes playlist operations in chunks to avoid API limits.
     """
     total = len(ids)
     count = 0
@@ -132,13 +132,13 @@ def _gateway_request(session, method, playlist_id, token, ids, batch_size, logge
     last_log_time = start_log_time
     log_interval = get_global_value('log_interval',120)
     total_tracks = len(ids)
-    for i in range(0, len(ids), batch_size):
+    for i in range(0, len(ids), chunk_size):
 
         if shutdown_event.is_set():
             logger.warning(f"Interrupt detected. Stopping playlist update.")
             break
 
-        batch = ids[i:i + batch_size]
+        batch = ids[i:i + chunk_size]
         cid = random.randint(100000000, 999999999)
         url = f"https://www.deezer.com/ajax/gw-light.php?method={method}&input=3&api_version=1.0&api_token={token}&cid={cid}"
         

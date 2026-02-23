@@ -90,7 +90,9 @@ setup_run(){
 # Strip quotes from environment variables if present
 [ -n "$DEEZER_USER_ID" ] && DEEZER_USER_ID=$(strip_quotes "$DEEZER_USER_ID") && export DEEZER_USER_ID
 [ -n "$DEEZER_ARL_TOKEN" ] && DEEZER_ARL_TOKEN=$(strip_quotes "$DEEZER_ARL_TOKEN") && export DEEZER_ARL_TOKEN
-[ -n "$DEEZER_BATCH_SIZE" ] && DEEZER_BATCH_SIZE=$(strip_quotes "$DEEZER_BATCH_SIZE") && export DEEZER_BATCH_SIZE
+[ -n "$DEEZER_CHUNK_SIZE" ] && DEEZER_CHUNK_SIZE=$(strip_quotes "$DEEZER_CHUNK_SIZE") && export DEEZER_CHUNK_SIZE
+[ -n "$DEEZER_API_BATCH_SIZE" ] && DEEZER_API_BATCH_SIZE=$(strip_quotes "$DEEZER_API_BATCH_SIZE") && export DEEZER_API_BATCH_SIZE
+[ -n "$DEEZER_RATE_LIMIT" ] && DEEZER_RATE_LIMIT=$(strip_quotes "$DEEZER_RATE_LIMIT") && export DEEZER_RATE_LIMIT
 [ -n "$DEEZER_LOG_LEVEL" ] && DEEZER_LOG_LEVEL=$(strip_quotes "$DEEZER_LOG_LEVEL") && export DEEZER_LOG_LEVEL
 [ -n "$DEEZER_WRITE_LOGS" ] && DEEZER_WRITE_LOGS=$(strip_quotes "$DEEZER_WRITE_LOGS") && export DEEZER_WRITE_LOGS
 [ -n "$DEEZER_SCHEDULE" ] && DEEZER_SCHEDULE=$(strip_quotes "$DEEZER_SCHEDULE") && export DEEZER_SCHEDULE

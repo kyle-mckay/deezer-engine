@@ -17,7 +17,7 @@ import logging
 import os
 from utils.paths import get_cache_dir
 from utils.deezer_auth import get_tracks
-from utils.cache_manager import handle_cached_data
+from utils.cache_manager import handle_cached_data, get_collection_name
 from utils.config_loader import get_global_value
 
 def run(client, config, logger, source_data):
@@ -44,14 +44,17 @@ def run(client, config, logger, source_data):
         logger.debug(f"Resolved cache path: {cache_file}")
         logger.info(f"Fetching tracks from favorites...")
 
+        # Get collection name for database caching
+        collection_name = get_collection_name(logger, "favorites", id=user_id)
+
         def fetch_favorites():
             """Called by handle_cached_data only if cache is invalid/missing."""
             logger.debug(f"Cache miss/expiry for User {masked_id}. Initiating live API fetch.")
             context_name = f"favorites__{user_id}"
             return get_tracks(client.get_user_tracks(user_id), logger, "favorites", user_id, cache_file)
 
-        # Execution via Cache Manager
-        tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_favorites, "favorites")
+        # Execution via Cache Manager (with database collection support)
+        tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_favorites, "favorites", collection_name=collection_name)
         
         # Data Samples for Debugging
         if tracks:

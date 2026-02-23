@@ -9,7 +9,9 @@ config:
   # https://www.deezer.com/us/profile/ABC123
   user_id: "YOUR_NUMERIC_USER_ID" # Found in your profile URL
   log_level: "INFO" # Options: DEBUG, INFO, WARNING, ERROR
-  batch_size: 50  # Deezer batch size, recommended to leave unchanged
+  chunk_size: 50  # Max tracks processed in batch operation's. (Adding/removing from playlist, db checkpoint caching)
+  api_batch_size: 50  # API rate limit check interval (requests before pausing), recommended to leave unchanged
+  rate_limit: 60  # Maximum API requests per minute, recommended to leave unchanged
   print_banner: true # Whether to print the startup banner
   playlist_cap: 5000
   favorites_cap: 10000

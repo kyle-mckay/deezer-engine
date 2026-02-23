@@ -17,7 +17,7 @@ import re
 import logging
 from utils.paths import get_cache_dir 
 from utils.deezer_auth import get_tracks
-from utils.cache_manager import handle_cached_data
+from utils.cache_manager import handle_cached_data, get_collection_name
 from utils.config_loader import get_global_value
 
 def get_sanitized_name(title):
@@ -60,6 +60,9 @@ def run(client, config, logger, source_data):
             logger.debug("Stack trace:", exc_info=True)
             return []
         
+        # Get collection name for database caching
+        collection_name = get_collection_name(logger, "album", id=album_id)
+        
         def fetch_album():
             """Closure triggered only if cache is invalid or missing."""
             logger.debug(f"Initiating live API fetch for album: {album.id}")
@@ -67,8 +70,8 @@ def run(client, config, logger, source_data):
             # get_tracks handles the heavy lifting of API interaction
             return get_tracks(album.get_tracks(), logger, album, context_name, cache_file)
 
-        # Execution via Cache Manager
-        tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_album, "album")
+        # Execution via Cache Manager (with database collection support)
+        tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_album, "album", collection_name=collection_name)
 
         # Consolidated INFO: Single summary line
         logger.debug(f"Loaded {len(tracks)} tracks from album '{album.title}'.")

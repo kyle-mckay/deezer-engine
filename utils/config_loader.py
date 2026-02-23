@@ -59,7 +59,9 @@ def load_config_with_env_overrides():
     Supported environment variables:
     - DEEZER_USER_ID: Deezer user ID
     - DEEZER_ARL_TOKEN: Deezer ARL authentication token
-    - DEEZER_BATCH_SIZE: Batch size for API operations
+    - DEEZER_CHUNK_SIZE: Chunk size for database checkpoint operations
+    - DEEZER_API_BATCH_SIZE: API rate limit check interval (requests per batch)
+    - DEEZER_RATE_LIMIT: Maximum API requests per minute
     - DEEZER_LOG_LEVEL: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     - DEEZER_WRITE_LOGS: Whether to write logs to file (true/false)
     - DEEZER_PRINT_BANNER: Whether to print the startup banner (true/false)
@@ -82,7 +84,9 @@ def load_config_with_env_overrides():
     env_mappings = {
         'DEEZER_USER_ID': 'user_id',
         'DEEZER_ARL_TOKEN': 'arl_token',
-        'DEEZER_BATCH_SIZE': 'batch_size',
+        'DEEZER_CHUNK_SIZE': 'chunk_size',
+        'DEEZER_API_BATCH_SIZE': 'api_batch_size',
+        'DEEZER_RATE_LIMIT': 'rate_limit',
         'DEEZER_LOG_LEVEL': 'log_level',
         'DEEZER_WRITE_LOGS': 'write_logs',
         'DEEZER_PRINT_BANNER': 'print_banner',
@@ -97,7 +101,7 @@ def load_config_with_env_overrides():
             # Type conversions
 
             # Integers
-            if config_key in ['batch_size', 'playlist_cap', 'favorites_cap', 'retention']:
+            if config_key in ['chunk_size', 'api_batch_size', 'rate_limit', 'playlist_cap', 'favorites_cap', 'retention']:
                 try:
                     value = int(value)
                 except ValueError:

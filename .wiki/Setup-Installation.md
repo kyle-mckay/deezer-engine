@@ -36,7 +36,9 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | `user_id` | `DEEZER_USER_ID` | **Yes** | N/A | Your numeric Deezer user ID (found in profile URL). |
 | `log_level` | `DEEZER_LOG_LEVEL` | No | `INFO` | Verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
 | `write_logs` | `DEEZER_WRITE_LOGS` | No | `true` | Whether to write logs to `/app/data/logs/`. |
-| `batch_size` | `DEEZER_BATCH_SIZE` | No | `50` | Max tracks processed in batch operation's. (Adding/removing from playlist, db checkpoint caching) |
+| `chunk_size` | `DEEZER_CHUNK_SIZE` | No | `50` | Max tracks processed in batch operation's. (Adding/removing from playlist, db checkpoint caching) |
+| `api_batch_size` | `DEEZER_API_BATCH_SIZE` | No | `50` | API rate limit check interval (requests before pausing for rate limiting). |
+| `rate_limit` | `DEEZER_RATE_LIMIT` | No | `60` | Maximum API requests per minute (for rate limiting). |
 | `log_interval` | `DEEZER_LOG_INTERVAL` | No | `120` | How many seconds before you get an update on progress when pulling tack data. |
 | `print_banner` | `DEEZER_PRINT_BANNER` | No | `true` | Toggle the startup license/brand banner. |
 | `playlist_cap` | `DEEZER_PLAYLIST_CAP` | No | `5000` | Max tracks allowed in **any** destination playlist (Deezer limit is 5k). |

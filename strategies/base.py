@@ -75,11 +75,11 @@ class StrategyController:
         
     def chunk_list(self, data_list):
         """
-        Yield successive n-sized chunks based on the global batch_size.
+        Yield successive n-sized chunks based on the global chunk_size.
         """
-        n = self.client.batch_size
+        n = self.client.chunk_size
         if self.logger.isEnabledFor(logging.DEBUG):
-            self.logger.debug(f"Chunking {len(data_list)} items into batches of {n} for API processing.")
+            self.logger.debug(f"Chunking {len(data_list)} items into chunks of {n} for processing.")
             
         for i in range(0, len(data_list), n):
             self.logger.debug(f"Processing batch { (i // n) + 1} of {(len(data_list) + n - 1) // n}")

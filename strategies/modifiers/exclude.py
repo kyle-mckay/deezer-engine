@@ -56,7 +56,7 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
         try:
             # Check if cache exists
  
-            if collection_name != "unknown" and is_collection_cached(collection_name, config, logger):
+            if collection_name != "unknown" and is_collection_cached(collection_name, src, logger):
                 logger.debug(f"Tracks for source {collection_name} are cached. Pulling from cache")
                 exclude_tracks = fetch_collection(collection_name, logger)
             else:

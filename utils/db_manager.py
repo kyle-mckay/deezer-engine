@@ -76,7 +76,46 @@ def fetch_collection(source_name, logger=None):
         if logger:
             logger.debug(f"<<< END: utils.db_manager.fetch_collection")
 
-def sync_to_collections(tracklist, logger):
+def validate_sync_integrity(original_tracks, synced_tracks, logger):
+    """
+    Compares original fetched tracks with synced tracks from the database.
+    Ensures data integrity after sync_to_collections.
+    """
+    logger.debug(">>> START: utils.db_manager.validate_sync_integrity")
+    
+    if not original_tracks or not synced_tracks:
+        logger.warning("Sync validation skipped: One or both track lists are empty.")
+        return
+    
+    # Get track IDs from both sources
+    original_ids = {str(t.get('id')) for t in original_tracks}
+    synced_ids = {str(t.get('id')) for t in synced_tracks}
+    
+    logger.debug(f"Original track count: {len(original_ids)}, Synced track count: {len(synced_ids)}")
+    
+    # Check if all original tracks were synced
+    missing_ids = original_ids - synced_ids
+    if missing_ids:
+        error_msg = f"Data integrity error: {len(missing_ids)} tracks missing from synced collection. Missing IDs: {missing_ids}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    
+    # Check if extra tracks were added (shouldn't happen)
+    extra_ids = synced_ids - original_ids
+    if extra_ids:
+        error_msg = f"Data integrity error: {len(extra_ids)} unexpected tracks in synced collection. Extra IDs: {extra_ids}"
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+    
+    if original_ids == synced_ids:
+        logger.debug(f"Sync validation passed: All {len(original_ids)} track IDs match between original and synced data.")
+        logger.debug("<<< END: utils.db_manager.validate_sync_integrity")
+    else:
+        error_msg = "Sync validation failed: Track ID mismatch detected."
+        logger.error(error_msg)
+        raise ValueError(error_msg)
+
+def sync_to_collections(tracklist, logger, collection_name=None):
     """
     Parses a tracklist where each track contains its own source info.
     Inserts IDs into 'tracks' and maps them in 'collections'.
@@ -87,7 +126,13 @@ def sync_to_collections(tracklist, logger):
         return
     
     # Use a set to handle unique pairs of (id, source) from the input
-    unique_pairs = {(str(t['id']), t.get('collection', 'unknown')) for t in tracklist}
+    # If collection_name is provided, use it as default; otherwise use track's collection or 'unknown'
+    if collection_name:
+        unique_pairs = {(str(t['id']), collection_name) for t in tracklist}
+        logger.debug(f"Using provided collection_name: '{collection_name}' for all tracks.")
+    else:
+        unique_pairs = {(str(t['id']), t.get('collection', 'unknown')) for t in tracklist}
+    
     unique_track_ids = {tid for tid, source in unique_pairs}
 
     logger.debug(f"DB: Syncing {len(unique_track_ids)} unique track IDs.")
@@ -97,13 +142,24 @@ def sync_to_collections(tracklist, logger):
             cursor = conn.cursor()
 
             # extracts (id, collection, date_cached) from the payload
-            unique_pairs = {
-                (
-                    str(t['id']), 
-                    t.get('collection', 'unknown'), 
-                    t.get('date_cached')
-                ) for t in tracklist
-            }
+            if collection_name:
+                # Use provided collection_name for all tracks
+                unique_pairs = {
+                    (
+                        str(t['id']), 
+                        collection_name,
+                        t.get('date_cached')
+                    ) for t in tracklist
+                }
+            else:
+                # Use collection from each track object
+                unique_pairs = {
+                    (
+                        str(t['id']), 
+                        t.get('collection', 'unknown'), 
+                        t.get('date_cached')
+                    ) for t in tracklist
+                }
             
             # Unique track IDs for the master tracks table
             unique_track_ids = {tid for tid, source, timestamp in unique_pairs}
@@ -323,6 +379,8 @@ def is_collection_cached(source_name, config, logger=None):
         logger.debug(f">>> START: utils.db_manager.is_collection_cached ({source_name})")
 
     retention_hrs = config.get('retention', get_global_value('retention', default = 0))
+    if logger:
+        logger.debug(f"Retention hours for '{source_name}': {retention_hrs}")
     query = """
     SELECT date_cached FROM collections 
     WHERE source_name = ? 
@@ -345,7 +403,10 @@ def is_collection_cached(source_name, config, logger=None):
             is_valid = cache_time > expiration_time
             
             if logger:
-                logger.debug(f"Cache verify: {'Valid' if is_valid else 'Expired'} (Age: {cache_time})")
+                if is_valid:
+                    logger.debug(f"Cache verify: {'Valid' if is_valid else 'Expired'} (Age: {cache_time} > Exp: {expiration_time})")
+                else:
+                    logger.debug(f"Cache verify: {'Valid' if is_valid else 'Expired'} (Age: {cache_time} < Exp: {expiration_time})")
                 
             return is_valid
             

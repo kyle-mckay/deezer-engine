@@ -21,7 +21,7 @@ import logging
 from datetime import datetime
 from utils.deezer_auth import get_authenticated_session
 from utils.paths import get_cache_dir
-from utils.cache_manager import handle_cached_data
+from utils.cache_manager import handle_cached_data, get_collection_name
 from utils.config_loader import get_global_value
 
 def run(client, config, logger, source_data):
@@ -45,6 +45,9 @@ def run(client, config, logger, source_data):
         cache_file = str(get_cache_dir() / f"smart_{list_name}.json")
 
         logger.info(f"Fetching tracks for smarttracklist: '{list_name}'...")
+
+        # Get collection name for database caching
+        collection_name = get_collection_name(logger, "smarttracklist", name=list_name)
 
         def fetch_smart_list():
             """Internal logic for live retrieval when cache is invalid."""
@@ -111,8 +114,8 @@ def run(client, config, logger, source_data):
             logger.debug(f"Sample Track IDs from source: {track_ids[:5]}")
             return tracks
 
-        # Execute via Cache Manager
-        results = handle_cached_data(cache_file, retention_hrs, logger, fetch_smart_list, "smarttracklist")
+        # Execute via Cache Manager (with database collection support)
+        results = handle_cached_data(cache_file, retention_hrs, logger, fetch_smart_list, "smarttracklist", collection_name=collection_name)
         
         # Consolidated INFO: One line for the user
         logger.debug(f"Loaded {len(results)} tracks from SmartTracklist '{list_name}'.")

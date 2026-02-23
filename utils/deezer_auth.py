@@ -52,17 +52,17 @@ def get_authenticated_client(config, logger):
         masked_arl = f"{arl[:6]}...{arl[-6:]}" if len(arl) > 12 else "***"
         logger.debug(f"Auth headers prepared with ARL: {masked_arl}")
 
-    # Read batch size from config (default: 50)
-    batch_size = config.get('config', {}).get('batch_size', 50)
-    logger.debug(f"Global batch size set to: {batch_size}")
+    # Read chunk size from config (default: 50)
+    chunk_size = config.get('config', {}).get('chunk_size', get_global_value('chunk_size', 50))
+    logger.debug(f"Global chunk size set to: {chunk_size}")
 
     try:
         logger.debug("Attempting to instantiate deezer.Client...")
             
         client = deezer.Client(headers=headers)
         
-        # Store the batch size on the client for later use
-        client.batch_size = batch_size
+        # Store the chunk size on the client for later use in operations
+        client.chunk_size = chunk_size
 
         # Test connection using the numeric user_id
         if user_id:
@@ -156,7 +156,7 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     logger.debug(f">>> START: utils.deezer_auth.get_tracks ({source_type})")
     logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
 
-    def fetch_track_with_retry(t_id, max_retries=5):
+    def fetch_track_with_retry(t_id, max_retries=5, add_delay=True):
         """
         Helper to fetch track data handling both Rate Limits and Network Drops.
         """
@@ -165,8 +165,9 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                 logger.debug("fetch_track_with_retry interrupted! Returning partial results.")
                 return None
             try:
-                # Small jitter to keep requests non-rhythmic
-                time.sleep(random.uniform(0.2, 0.5))
+                # Only add jitter on first attempt and when needed (database enrichment)
+                if attempt == 0 and add_delay:
+                    time.sleep(random.uniform(0.1, 0.3))
                 return client.get_track(t_id)
             
             except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as net_err:
@@ -214,7 +215,8 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     elif source_type != "database":
         collection = f"{item_type}__{item_id}"
     
-    update_int = get_global_value('batch_size', default=50)
+    # chunk_size: Database checkpoint interval (how many tracks to process before saving to DB)
+    chunk_size = get_global_value('chunk_size', 50)
     cached_tracks = []
 
     total_len = len(iterable) if hasattr(iterable, '__len__') else "unknown"
@@ -222,26 +224,49 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     last_log_time = start_log_time
     log_interval = get_global_value('log_interval',120)
     
+    # Only database enrichment needs delays (not normal source collection)
+    is_database_enrichment = source_type == "database"
+
+    rate_limit = get_global_value('rate_limit', 60)
+    api_batch_size = get_global_value('api_batch_size', 50)
+    target_time_per_batch = (api_batch_size / rate_limit) * 60
+
+    # Track the start time for the batch of requests
+    start_time = time.time()
+
     for i, track in enumerate(iterable, 1):
         try:
             if shutdown_event.is_set():
                 logger.warning("Track collection interrupted! Returning partial results.")
                 return cached_tracks
 
-            # Every 40 requests, take a longer pause to prevent sustained high-load triggers
-            if i % 40 == 0:
-                logger.debug("Cooldown period: Sleeping for 3 seconds to respect API limits...")
-                time.sleep(3)
+            # Check rate limiting at configured intervals to prevent sustained high-load triggers
+            if i % api_batch_size == 0 and is_database_enrichment:
+                elapsed_time = time.time() - start_time
+                items_per_second = api_batch_size / elapsed_time if elapsed_time > 0 else 0
+                logger.debug(f"Time taken for {api_batch_size} requests: {elapsed_time:.2f} seconds ({items_per_second:.2f} items/sec)")
+                
+                # If we're under the target time, sleep to maintain rate limit
+                if elapsed_time < target_time_per_batch:
+                    sleep_time = target_time_per_batch - elapsed_time
+                    logger.debug(f"Rate limit cooldown: Sleeping for {sleep_time:.2f} seconds to maintain {rate_limit} req/min limit")
+                    time.sleep(sleep_time)
+                else:
+                    logger.debug("No cooldown needed, proceeding to next batch immediately.")
+                
+                # Reset the start time for the next batch
+                start_time = time.time()
 
             if source_type == "database" and (identifier == "tracks" or identifier == "stats"):
                 t_id = track.get('id') if isinstance(track, dict) else track
                 
                 # Use the retry helper for heavy metadata fetching
-                track_obj = fetch_track_with_retry(t_id)
+                track_obj = fetch_track_with_retry(t_id, add_delay=True)
                 if not track_obj:
                     # Error message provided in fetch_track_with_retry
                     continue
-                    
+                
+                # ~ 0.5 tracks/s faster due to single as_dict() call vs 20+ individual getattr() operations - ~ 2 t/s
                 d = track_obj.as_dict()
                 
                 if identifier == "tracks":
@@ -287,17 +312,15 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                         'date_cached': date_time
                     })
             else:
-                # fetch for source ID collection
-                d = track.as_dict()
+                # fetch for source ID collection - extract ID directly for performance
+                track_id = track.id if hasattr(track, 'id') else track.as_dict().get('id')
                 tracks.append({
-                    'id': str(d.get('id')),
-                    'collection': f"{collection}",
+                    'id': str(track_id),
+                    'collection': collection,
                     'date_cached': date_time
                 })
 
-            # Progress logging
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Processed track {track}: {i}/{total_len}")
+            logger.debug(f"Processed track {track}: {i}/{total_len}")
             
             current_time = time.time()
             if current_time - last_log_time >= log_interval:
@@ -328,9 +351,9 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                     logger.info(f"Fetching '{source_type}': {suffix}")
                 last_log_time = current_time 
 
-            # If performing database enrichment, perform periodic checkpoint at batch_size
-            if source_type == "database" and identifier == "tracks" and i % update_int == 0:
-                logger.debug(f"Database Checkpoint: Pushing batch of {len(tracks)} tracks to database")
+            # If performing database enrichment, perform periodic checkpoint at chunk_size interval
+            if source_type == "database" and identifier == "tracks" and i % chunk_size == 0:
+                logger.debug(f"Database Checkpoint: Pushing chunk of {len(tracks)} tracks to database")
                 update_track_metadata(tracks,logger)
 
                 # Merge to total result and reset working batch
@@ -351,8 +374,7 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     
         tracks = cached_tracks
 
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(f"Successfully transformed {len(tracks)} tracks.")
+    logger.debug(f"Successfully transformed {len(tracks)} tracks.")
     
     logger.debug("<<< END: utils.deezer_auth.get_tracks")
     return tracks

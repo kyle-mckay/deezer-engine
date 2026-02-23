@@ -17,7 +17,7 @@ import re
 import logging
 from utils.paths import get_cache_dir 
 from utils.deezer_auth import get_tracks
-from utils.cache_manager import handle_cached_data
+from utils.cache_manager import handle_cached_data, get_collection_name
 from utils.config_loader import get_global_value
 
 def get_sanitized_name(title):
@@ -59,14 +59,17 @@ def run(client, config, logger, source_data):
 
         logger.info(f"Fetching tracks for playlist: '{playlist.title}' (ID {playlist_id})...")
 
+        # Get collection name for database caching
+        collection_name = get_collection_name(logger, "playlist", id=playlist_id)
+
         def fetch_playlist():
             # This logic is triggered only if cache is invalid
             logger.debug(f"Cache miss or expired. Initiating live fetch for '{playlist.title}'")
             context_name = f"playlist__{playlist.title}__{playlist.id}"
             return get_tracks(playlist.get_tracks(), logger, playlist, context_name, cache_file)
 
-        # Process data
-        tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_playlist, "playlist")
+        # Process data (with database collection support)
+        tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_playlist, "playlist", collection_name=collection_name)
 
         if tracks:
             sample_ids = [t.get('id') for t in tracks[:5]]
