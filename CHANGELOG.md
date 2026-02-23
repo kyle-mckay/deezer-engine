@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.10.1 - 2026-02-23
+
+### Maintenance
+
+- enhance: improve performance for fetching and change API limiting behaviour. (#78) (@kylemmkay)
+
 ## v0.10.0 - 2026-02-21
 
 ### Enhancements
