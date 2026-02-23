@@ -266,19 +266,23 @@ Define where the final list is saved.
 
 #### `playlist`
 
+**ID** (required) - The playlist ID you wish to save to: `https://www.deezer.com/us/playlist/<playlist_id>`
+**Order** (optional) - The method of adding/removing songs from the destination:
+
 | Mode | Behavior |
 | --- | --- |
 | `smart` | Compares the pipeline to the playlist; only adds/removes changes. |
 | `replace` | Wipes the playlist entirely and adds the new pipeline (Preserves sort order). |
 | `insert` | Appends tracks to the existing playlist without removing anything. |
 
-**ID** (required) - The playlist ID you wish to save to: `https://www.deezer.com/us/playlist/<playlist_id>`
+**Retention** (optional) - How old the collection for this playlist is before it's considered stale and needs to be refreshed. Defaults to `0` (no caching, always fetch live).
 
 ```yaml
 destination:
   - type: "playlist"
     id: "01234567"
     order: "smart"
+    retention: 24
 ```
 
 ### `file`
