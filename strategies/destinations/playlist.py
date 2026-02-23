@@ -21,6 +21,8 @@ import random
 from datetime import timedelta
 from utils.signals import shutdown_event
 from utils.deezer_auth import get_authenticated_session
+from utils.cache_manager import get_collection_name
+from utils.db_manager import sync_to_collections
 from utils.config_loader import get_global_value
 
 def run(client, config, logger, dest_data, tracks):
@@ -78,18 +80,18 @@ def run(client, config, logger, dest_data, tracks):
             to_remove = [tid for tid in dst_ids if str(tid) not in target_set]
             
             if not to_add and not to_remove:
-                logger.info(f"Successfully completed: {playlist.title}")
-                return
-
-            logger.debug(f"Smart Sync - To Add: {to_add}")
-            logger.debug(f"Smart Sync - To Remove: {to_remove}")
-            
-            if to_remove:
-                logger.debug(f"Removing {len(to_remove)} tracks...")
-                _gateway_request(session, "playlist.deleteSongs", target_id, api_token, to_remove, client.chunk_size, logger)
-            if to_add:
-                logger.debug(f"Adding {len(to_add)} tracks...")
-                _gateway_request(session, "playlist.addSongs", target_id, api_token, to_add, client.chunk_size, logger)
+                # Already in sync
+                logger.debug(f"Smart Sync not needed for '{playlist.title}' - already in sync.")
+            else:
+                logger.debug(f"Smart Sync - To Add: {to_add}")
+                logger.debug(f"Smart Sync - To Remove: {to_remove}")
+                
+                if to_remove:
+                    logger.debug(f"Removing {len(to_remove)} tracks...")
+                    _gateway_request(session, "playlist.deleteSongs", target_id, api_token, to_remove, client.chunk_size, logger)
+                if to_add:
+                    logger.debug(f"Adding {len(to_add)} tracks...")
+                    _gateway_request(session, "playlist.addSongs", target_id, api_token, to_add, client.chunk_size, logger)
 
         # --- APPEND / INSERT STRATEGY ---
         elif method in ['append', 'insert']:
@@ -113,6 +115,9 @@ def run(client, config, logger, dest_data, tracks):
                 _gateway_request(session, "playlist.addSongs", target_id, api_token, track_ids, client.chunk_size, logger)
 
         logger.info(f"Sync complete for '{playlist.title}'.")
+
+        collection = get_collection_name(logger, "playlist", id=target_id)
+        sync_to_collections(tracks, logger, collection)
         logger.debug("<<< END: strategies.destinations.playlist.run")
 
     except Exception as e:
