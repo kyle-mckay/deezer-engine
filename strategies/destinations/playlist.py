@@ -107,12 +107,12 @@ def run(client, config, logger, dest_data, tracks):
         # --- REPLACE STRATEGY ---
         else:
             logger.info(f"Syncing {len(tracks)} tracks to '{playlist.title}' (Full Replace)")
-            if dst_ids:
-                logger.debug(f"Wiping existing {len(dst_ids)} tracks for clean replace.")
-                _gateway_request(session, "playlist.deleteSongs", target_id, api_token, dst_ids, client.chunk_size, logger)
+            if current_set:
+                logger.debug(f"Wiping existing {len(current_set)} tracks for clean replace.")
+                _gateway_request(session, "playlist.deleteSongs", target_id, api_token, current_set, client.chunk_size, logger)
                 
                 # Dynamic wait for cloud consistency
-                wait_time = max(math.ceil((len(dst_ids) / 1000) * 10), 5)
+                wait_time = max(math.ceil((len(current_set) / 1000) * 10), 5)
                 logger.debug(f"Cooldown: Waiting {wait_time}s for cloud database consistency...")
                 time.sleep(wait_time)
             
@@ -134,6 +134,7 @@ def _gateway_request(session, method, playlist_id, token, ids, chunk_size, logge
     """
     Processes playlist operations in chunks to avoid API limits.
     """
+    ids = list(ids)
     total = len(ids)
     count = 0
     verb = "Removed" if "delete" in method else "Added"
