@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.11.1 - 2026-02-25
+
+### Fixes
+
+- fix: missed some data conversions with the introduction of destination chache logic (@kylemmkay)
+
 ## v0.11.0 - 2026-02-23
 
 ### Enhancements
