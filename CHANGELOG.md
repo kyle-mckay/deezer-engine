@@ -1,10 +1,14 @@
 # Changelog
 
-## v0.11.1 - 2026-02-25
+## v0.11.1 - 2026-03-13
 
 ### Fixes
 
 - fix: missed some data conversions with the introduction of destination chache logic (@kylemmkay)
+
+### Maintenance
+
+- chore: Update logging to cache format instances and include call-site context for non-info logs (#88) (@kylemmkay)
 
 ## v0.11.0 - 2026-02-23
 
