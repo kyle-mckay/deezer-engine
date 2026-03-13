@@ -4,6 +4,7 @@
 
 ### Fixes
 
+- fix: new log format expected in container verification (@kylemmkay)
 - fix: missed some data conversions with the introduction of destination chache logic (@kylemmkay)
 
 ### Maintenance
