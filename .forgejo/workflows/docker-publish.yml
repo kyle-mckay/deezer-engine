@@ -109,7 +109,8 @@ jobs:
           fi
 
           # 2. Check for Config Warning 
-          if [[ "$LOGS" != *"[WARNING] - Strategies file"* ]] && [[ "$LOGS" != *"[DEBUG] - --- Processing Strategy"* ]]; then
+          if ! printf '%s\n' "$LOGS" | grep -Eq "\[WARNING\]( \[[^]]+\])? - Strategies file" \
+            && ! printf '%s\n' "$LOGS" | grep -Eq "\[DEBUG\]( \[[^]]+\])? - --- Processing Strategy"; then
               echo "Error: Required log patterns not found."
               exit 1
           else
@@ -117,7 +118,7 @@ jobs:
           fi
 
           # 3. Check for Engine Logic 
-          if [[ "$LOGS" != *"[ERROR] - ARL token is missing"* ]]; then
+          if ! printf '%s\n' "$LOGS" | grep -Eq "\[ERROR\]( \[[^]]+\])? - ARL token is missing"; then
             echo "❌ Engine check failed: Missing ARL error not found."
             exit 1
           else
