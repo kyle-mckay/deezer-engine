@@ -30,20 +30,41 @@ class ColorFormatter(logging.Formatter):
     BOLD_RED = "\033[1;31m"   # Critical
     RESET = "\033[0m"
 
-    # Format: <date> - [name] [LogLevel] - message
-    log_format = "%(asctime)s - [%(name)s] [%(levelname)s] - %(message)s"
+    info_format = "%(asctime)s - [%(name)s] [%(levelname)s] - %(message)s"
+    detailed_format = (
+        "%(asctime)s - [%(name)s] [%(levelname)s] "
+        "[%(module)s.%(funcName)s:%(lineno)d] - %(message)s"
+    )
 
-    FORMATS = {
-        logging.DEBUG: GREY + log_format + RESET,
-        logging.INFO: DEFAULT + log_format + RESET,
-        logging.WARNING: ORANGE + log_format + RESET,
-        logging.ERROR: RED + log_format + RESET,
-        logging.CRITICAL: BOLD_RED + log_format + RESET
-    }
+    def __init__(self, datefmt="%Y-%m-%d %H:%M:%S"):
+        super().__init__(datefmt=datefmt)
+        # Cache formatter instances to avoid rebuilding on every log
+        self._formatters = {
+            logging.DEBUG: logging.Formatter(
+                self.GREY + self.detailed_format + self.RESET,
+                datefmt=datefmt,
+            ),
+            logging.INFO: logging.Formatter(
+                self.DEFAULT + self.info_format + self.RESET,
+                datefmt=datefmt,
+            ),
+            logging.WARNING: logging.Formatter(
+                self.ORANGE + self.detailed_format + self.RESET,
+                datefmt=datefmt,
+            ),
+            logging.ERROR: logging.Formatter(
+                self.RED + self.detailed_format + self.RESET,
+                datefmt=datefmt,
+            ),
+            logging.CRITICAL: logging.Formatter(
+                self.BOLD_RED + self.detailed_format + self.RESET,
+                datefmt=datefmt,
+            ),
+        }
+        self._fallback = logging.Formatter(self.info_format, datefmt=datefmt)
 
     def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno, self.log_format)
-        formatter = logging.Formatter(log_fmt, datefmt="%Y-%m-%d %H:%M:%S")
+        formatter = self._formatters.get(record.levelno, self._fallback)
         return formatter.format(record)
 
 def setup_logger(name="DeezerEngine", level=logging.INFO, log_to_file=True):
@@ -74,7 +95,8 @@ def setup_logger(name="DeezerEngine", level=logging.INFO, log_to_file=True):
             fh = logging.FileHandler(log_filename, encoding='utf-8')
             # Consistent format for file logs (without ANSI codes)
             clean_format = logging.Formatter(
-                "%(asctime)s - [%(name)s] [%(levelname)s] - %(message)s", 
+                "%(asctime)s - [%(name)s] [%(levelname)s] "
+                "[%(module)s.%(funcName)s:%(lineno)d] - %(message)s",
                 datefmt="%Y-%m-%d %H:%M:%S"
             )
             fh.setFormatter(clean_format)
