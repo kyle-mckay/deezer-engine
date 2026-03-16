@@ -91,7 +91,11 @@ def load_config_with_env_overrides():
         'DEEZER_WRITE_LOGS': 'write_logs',
         'DEEZER_PRINT_BANNER': 'print_banner',
         'DEEZER_PLAYLIST_CAP': 'playlist_cap',
-        'DEEZER_FAVORITES_CAP': 'favorites_cap'
+        'DEEZER_FAVORITES_CAP': 'favorites_cap',
+        'DEEZER_RETENTION': 'retention',
+        'DEEZER_FILE_RETENTION': 'file_retention',
+        'DEEZER_TRACK_STATS_REFRESH': 'track_stats_refresh',
+        'DEEZER_ALBUM_STATS_REFRESH': 'album_stats_refresh'
     }
     
     for env_var, config_key in env_mappings.items():
@@ -101,7 +105,7 @@ def load_config_with_env_overrides():
             # Type conversions
 
             # Integers
-            if config_key in ['chunk_size', 'api_batch_size', 'rate_limit', 'playlist_cap', 'favorites_cap', 'retention']:
+            if config_key in ['chunk_size', 'api_batch_size', 'rate_limit', 'playlist_cap', 'favorites_cap', 'retention', 'file_retention', 'track_stats_refresh', 'album_stats_refresh']:
                 try:
                     value = int(value)
                 except ValueError:

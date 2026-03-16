@@ -29,13 +29,8 @@ from strategies.base import StrategyController
 from utils.database import initialize_all
 from utils.cache_manager import get_collection_name
 from utils.signals import shutdown_event
-from utils.db_manager import get_unprocessed_track_ids, update_track_metadata,fetch_collection, is_collection_cached, get_expired_track_ids, update_tracks_partial_batch, update_unprocessed, refresh_stats
+from utils.db_manager import get_unprocessed_track_ids, update_track_metadata,fetch_collection, is_collection_cached, get_expired_track_ids, update_tracks_partial_batch, update_unprocessed, refresh_stats, release_expired_blocklisted_entities
 from __version__ import __version__, __banner__
-
-def signal_handler(sig, frame):
-    """Callback for SIGINT/SIGTERM to trigger a graceful exit."""
-    print(f"\n[!] Signal {sig} received. Will exit after current strategy finishes...")
-    shutdown_event.set()
 
 def load_configs(type,logger = None):
     """Load configuration and strategies with environment variable overrides."""
@@ -144,10 +139,6 @@ def process_destinations(s_data, controller, logger, strategy_name):
         logger.warning(f"Strategy '{strategy_name}' has no destination defined.")
 
 def main():
-    # Register signal handlers for Ctrl+C (SIGINT) and Docker stop (SIGTERM)
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
     # 1. Load data
     config = load_configs("config")
 
@@ -169,6 +160,15 @@ def main():
 
     logger = setup_logger("DeezerEngine", actual_level, log_to_file=should_write_logs)
     
+    # Register signal handlers for CTRL+C (SIGINT) and termination/docker stop (SIGTERM).
+    def signal_handler(sig, frame):
+        """Logs once and sets the shared shutdown event."""
+        logger.warning(f"Signal {sig} received. Finishing current operation then exiting cleanly...")
+        shutdown_event.set()
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     # Issue the warning if config was bad
     if warning_needed:
         logger.warning(f"Unsupported log level '{user_log_level}' found in config.yml. Defaulting to 'INFO'.")
@@ -195,6 +195,7 @@ def main():
     # Initialize database
     logger.debug("Initializing database components...")
     initialize_all(logger)
+    release_expired_blocklisted_entities(logger)
     
     # 3. Authenticate
     logger.debug("Requesting Deezer authentication...")
@@ -210,7 +211,7 @@ def main():
     for i, s_data in enumerate(strategies_config['playlists'],1):
         # Check for shutdown signal
         if shutdown_event.is_set():
-            logger.info("Shutdown signal acknowledged. Skipping remaining strategies.")
+            logger.debug("Shutdown acknowledged. No more strategies will be run.")
             break
 
         strategy_name = s_data.get('name', 'unnamed_strategy')
@@ -237,14 +238,13 @@ def main():
 
             # Modifier Phase
             if shutdown_event.is_set():
-                logger.info("Shutdown signal acknowledged. Skipping remaining strategies.")
+                logger.debug("Shutdown acknowledged. Skipping modifier and destination phases.")
                 break
-            update_unprocessed
             process_modifiers(s_data, controller, source_metadata, logger, strategy_name)
 
             # Destination Phase
             if shutdown_event.is_set():
-                logger.info("Shutdown signal acknowledged. Skipping remaining strategies.")
+                logger.debug("Shutdown acknowledged. Skipping destination phase.")
                 break
             process_destinations(s_data, controller, logger, strategy_name)
 

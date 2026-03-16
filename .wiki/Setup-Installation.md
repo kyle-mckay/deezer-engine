@@ -46,6 +46,7 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | `retention` | `DEEZER_RETENTION` | No | `0` | Hours to use cached 'source' data before fetching live. |
 | `file_retention` | `DEEZER_FILE_RETENTION` | No | `168` | The hours to retain a file export. |
 | `track_stats_refresh` | `DEEZER_TRACK_STATS_REFRESH` | No | `90` | Days before refreshing dynamic metadata like track rank. |
+| `album_stats_refresh` | `DEEZER_ALBUM_STATS_REFRESH` | No | `90` | Days before refreshing dynamic metadata like album fans and availability. |
 
 ### Logic Hierarchy
 

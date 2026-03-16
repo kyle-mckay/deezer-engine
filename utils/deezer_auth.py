@@ -24,6 +24,64 @@ import json
 from datetime import datetime, timedelta
 from utils.logger import setup_logger
 from utils.config_loader import get_global_value
+from utils.signals import shutdown_event
+
+# Error codes/types that should NOT trigger blocklisting on fetch cancellation.
+NON_BLOCKLIST_ERROR_CODES = {
+    "429",
+    "ConnectionError",
+    "ReadTimeout",
+    "ConnectTimeout",
+    "Timeout",
+}
+
+# Transient/network-like patterns that should not trigger blocklisting.
+NON_BLOCKLIST_ERROR_PATTERNS = (
+    "timed out",
+    "timeout",
+    "connection",
+    "temporarily unavailable",
+    "service unavailable",
+    "network",
+    "quota",
+)
+
+def extract_error_code(err):
+    """Extract a compact error code/type from Deezer or network exceptions."""
+    if err is None:
+        return "unknown"
+
+    if isinstance(err, (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout, requests.exceptions.ConnectTimeout, requests.exceptions.Timeout)):
+        return type(err).__name__
+
+    err_str = str(err)
+    err_str_lower = err_str.lower()
+
+    if "429" in err_str_lower or "quota" in err_str_lower:
+        return "429"
+
+    marker = "'code':"
+    marker_index = err_str_lower.find(marker)
+    if marker_index != -1:
+        remainder = err_str[marker_index + len(marker):].strip()
+        code_chars = []
+        for ch in remainder:
+            if ch.isdigit():
+                code_chars.append(ch)
+            elif code_chars:
+                break
+        if code_chars:
+            return "".join(code_chars)
+
+    return type(err).__name__
+
+def should_blocklist_failed_fetch(error_code, error_detail):
+    """Returns True when a cancelled fetch should be blocklisted."""
+    if error_code in NON_BLOCKLIST_ERROR_CODES:
+        return False
+
+    detail = str(error_detail).lower() if error_detail is not None else ""
+    return not any(pattern in detail for pattern in NON_BLOCKLIST_ERROR_PATTERNS)
 
 def get_authenticated_client(config, logger):
     """
@@ -151,44 +209,69 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     """
     Transforms Deezer API objects into a list of dictionaries with rate-limiting protection.
     """
-    from utils.signals import shutdown_event
-    from utils.db_manager import update_track_metadata
+    from utils.db_manager import update_track_metadata, mark_track_metadata_fetch_failed
     logger.debug(f">>> START: utils.deezer_auth.get_tracks ({source_type})")
     logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
 
-    def fetch_track_with_retry(t_id, max_retries=5, add_delay=True):
+    def fetch_track_with_retry(t_id, max_retries=get_global_value('max_retries', 5)):
         """
         Helper to fetch track data handling both Rate Limits and Network Drops.
         """
+        last_error_code = "unknown"
+        last_error_detail = None
         for attempt in range(max_retries):
             if shutdown_event.is_set():
                 logger.debug("fetch_track_with_retry interrupted! Returning partial results.")
                 return None
             try:
-                # Only add jitter on first attempt and when needed (database enrichment)
-                if attempt == 0 and add_delay:
+                # Add small delay to avoid rate limiting
+                if attempt == 0:
                     time.sleep(random.uniform(0.1, 0.3))
                 return client.get_track(t_id)
             
             except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as net_err:
+                last_error_code = extract_error_code(net_err)
+                last_error_detail = str(net_err)
                 wait_time = (5 * (attempt + 1))  # 5s, 10s, 15s...
-                logger.debug(f"Network retry (Track {t_id}): {net_err}. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
+                if attempt < max_retries - 1:
+                    logger.debug(f"Network retry (Track {t_id}): {net_err}. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
                 
             except Exception as e:
                 # Check for rate limiting in the error message
                 err_str = str(e).lower()
                 if "429" in err_str or "quota" in err_str:
+                    last_error_code = "429"
+                    last_error_detail = str(e)
                     wait_time = (2 ** attempt) + random.uniform(1, 3)
-                    # Rate limits remain WARNING to notify user of throttling
-                    logger.warning(f"Rate limited (Track {t_id})! Retrying in {wait_time:.2f}s...")
+                    if attempt < max_retries - 1:
+                        # Rate limits remain WARNING to notify user of throttling.
+                        logger.warning(f"Rate limited (Track {t_id})! Retrying in {wait_time:.2f}s...")
+                    else:
+                        logger.warning(
+                            f"Rate limited (Track {t_id}) on final attempt. Cooling down for {wait_time:.2f}s before cancellation."
+                        )
                     time.sleep(wait_time)
                 else:
+                    last_error_code = extract_error_code(e)
+                    last_error_detail = str(e)
                     # Other API errors
                     logger.debug(f"Unexpected API error for {t_id}: {e} (Attempt {attempt+1}/{max_retries})")
-                    time.sleep(3)
+                    if attempt < max_retries - 1:
+                        time.sleep(3)
         
         logger.error(f"CANCELLED: Failed to retrieve track {t_id} after {max_retries} attempts.")
+        if should_blocklist_failed_fetch(last_error_code, last_error_detail):
+            logger.warning(
+                f"Blocklisting track {t_id} after repeated fetch failures. "
+                f"code={last_error_code}, deezer_response={last_error_detail}"
+            )
+            try:
+                mark_track_metadata_fetch_failed(t_id, last_error_code, logger)
+            except Exception as db_err:
+                logger.debug(f"Failed to persist track failure state for {t_id}: {db_err}")
+        else:
+            logger.debug(f"Skipped blocklisting track {t_id} due to transient/non-blocking error ({last_error_code}).")
         return None
 
     display_name = identifier
@@ -237,7 +320,7 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     for i, track in enumerate(iterable, 1):
         try:
             if shutdown_event.is_set():
-                logger.warning("Track collection interrupted! Returning partial results.")
+                logger.debug("Shutdown acknowledged mid-track collection. Returning partial results.")
                 return cached_tracks
 
             # Check rate limiting at configured intervals to prevent sustained high-load triggers
@@ -261,7 +344,7 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                 t_id = track.get('id') if isinstance(track, dict) else track
                 
                 # Use the retry helper for heavy metadata fetching
-                track_obj = fetch_track_with_retry(t_id, add_delay=True)
+                track_obj = fetch_track_with_retry(t_id)
                 if not track_obj:
                     # Error message provided in fetch_track_with_retry
                     continue
@@ -337,7 +420,7 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                 percent = f"{i/total_len:.1%}"
 
                 # 4. Create suffix
-                suffix = f"{percent} complete (ETA: {eta_str})..."
+                suffix = f"{percent} ({i}/{total_len}) complete (ETA: {eta_str})..."
 
                 if source_type == "database":
                     logger.info(f"Database '{identifier}' enrichment: {suffix}")
@@ -378,3 +461,256 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     
     logger.debug("<<< END: utils.deezer_auth.get_tracks")
     return tracks
+
+def get_albums(client, logger, identifier, album_ids=None):
+    """
+    Fetches album metadata from Deezer API with rate-limiting protection.
+    """
+    from utils.db_manager import update_album_metadata, populate_album_genres, populate_track_genres_for_album, mark_album_metadata_fetch_failed
+    
+    logger.debug(f">>> START: utils.deezer_auth.get_albums ({identifier})")
+
+    def fetch_album_with_retry(album_id, max_retries=get_global_value('max_retries', 5)):
+        """
+        Helper to fetch album data handling both Rate Limits and Network Drops.
+        """
+        last_error_code = "unknown"
+        last_error_detail = None
+        for attempt in range(max_retries):
+            if shutdown_event.is_set():
+                logger.debug("fetch_album_with_retry interrupted! Returning partial results.")
+                return None
+            try:
+                # Add small delay to avoid rate limiting
+                if attempt == 0:
+                    time.sleep(random.uniform(0.1, 0.3))
+                return client.get_album(album_id)
+            
+            except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as net_err:
+                last_error_code = extract_error_code(net_err)
+                last_error_detail = str(net_err)
+                wait_time = (5 * (attempt + 1))  # 5s, 10s, 15s...
+                if attempt < max_retries - 1:
+                    logger.debug(f"Network retry (Album {album_id}): {net_err}. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                
+            except Exception as e:
+                # Check for rate limiting in the error message
+                err_str = str(e).lower()
+                if "429" in err_str or "quota" in err_str:
+                    last_error_code = "429"
+                    last_error_detail = str(e)
+                    wait_time = (2 ** attempt) + random.uniform(1, 3)
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Rate limited (Album {album_id})! Retrying in {wait_time:.2f}s...")
+                    else:
+                        logger.warning(
+                            f"Rate limited (Album {album_id}) on final attempt. Cooling down for {wait_time:.2f}s before cancellation."
+                        )
+                    time.sleep(wait_time)
+                else:
+                    last_error_code = extract_error_code(e)
+                    last_error_detail = str(e)
+                    # Other API errors
+                    logger.debug(f"Unexpected API error for album {album_id}: {e} (Attempt {attempt+1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        time.sleep(3)
+        
+        logger.error(f"CANCELLED: Failed to retrieve album {album_id} after {max_retries} attempts.")
+        if should_blocklist_failed_fetch(last_error_code, last_error_detail):
+            logger.warning(
+                f"Blocklisting album {album_id} after repeated fetch failures. "
+                f"code={last_error_code}, deezer_response={last_error_detail}"
+            )
+            try:
+                mark_album_metadata_fetch_failed(album_id, last_error_code, logger)
+            except Exception as db_err:
+                logger.debug(f"Failed to persist album failure state for {album_id}: {db_err}")
+        else:
+            logger.debug(f"Skipped blocklisting album {album_id} due to transient/non-blocking error ({last_error_code}).")
+        return None
+    
+    albums = []
+    cached_albums = []
+    date_time = datetime.now().isoformat()
+    chunk_size = get_global_value('chunk_size', 50)
+    
+    # Validate input
+    if not album_ids:
+        logger.warning("No album IDs provided for enrichment.")
+        return albums
+    
+    # Setup rate limiting
+    rate_limit = get_global_value('rate_limit', 60)
+    api_batch_size = get_global_value('api_batch_size', 50)
+    target_time_per_batch = (api_batch_size / rate_limit) * 60
+    
+    total_albums = len(album_ids) if hasattr(album_ids, '__len__') else "unknown"
+    start_log_time = time.time()
+    last_log_time = start_log_time
+    log_interval = get_global_value('log_interval', 120)
+    
+    # Track the start time for the batch of requests
+    start_time = time.time()
+    
+    try:
+        for i, album_id in enumerate(album_ids, 1):
+            try:
+                if shutdown_event.is_set():
+                    logger.debug("Shutdown acknowledged mid-album collection. Returning partial results.")
+                    return cached_albums
+                
+                # Check rate limiting at configured intervals
+                if i % api_batch_size == 0:
+                    elapsed_time = time.time() - start_time
+                    items_per_second = api_batch_size / elapsed_time if elapsed_time > 0 else 0
+                    logger.debug(f"Time taken for {api_batch_size} album requests: {elapsed_time:.2f} seconds ({items_per_second:.2f} items/sec)")
+                    
+                    # If we're under the target time, sleep to maintain rate limit
+                    if elapsed_time < target_time_per_batch:
+                        sleep_time = target_time_per_batch - elapsed_time
+                        logger.debug(f"Rate limit cooldown: Sleeping for {sleep_time:.2f} seconds to maintain {rate_limit} req/min limit")
+                        time.sleep(sleep_time)
+                    
+                    # Reset the start time for the next batch
+                    start_time = time.time()
+                
+                # Fetch album data using retry helper
+                album_obj = fetch_album_with_retry(album_id)
+                if not album_obj:
+                    # Error message provided in fetch_album_with_retry
+                    continue
+                
+                # Convert to dictionary
+                d = album_obj.as_dict()
+                
+                # Warn if API returned a different album ID (redirect/canonical version)
+                if d.get('id') != album_id:
+                    logger.debug(f"API redirect: Requested album {album_id}, but API returned {d.get('id')}. Using requested ID to match database stub.")
+                
+                if identifier == "database":
+                    # Full metadata collection
+                    albums.append({
+                        'id': album_id,  # Use requested ID to match database stub
+                        'title': d.get('title'),
+                        'upc': d.get('upc'),
+                        'link': d.get('link'),
+                        'share': d.get('share'),
+                        'cover': d.get('cover'),
+                        'cover_small': d.get('cover_small'),
+                        'cover_medium': d.get('cover_medium'),
+                        'cover_big': d.get('cover_big'),
+                        'cover_xl': d.get('cover_xl'),
+                        'md5_image': d.get('md5_image'),
+                        'genres': json.dumps(d.get('genres', [])),
+                        'label': d.get('label'),
+                        'nb_tracks': d.get('nb_tracks'),
+                        'duration': d.get('duration', 0),
+                        'fans': d.get('fans', 0),
+                        'release_date': d.get('release_date'),
+                        'record_type': d.get('record_type'),
+                        'available': d.get('available', True),
+                        'tracklist': d.get('tracklist'),
+                        'explicit_lyrics': d.get('explicit_lyrics', False),
+                        'explicit_content_lyrics': d.get('explicit_content_lyrics', 0),
+                        'explicit_content_cover': d.get('explicit_content_cover', 0),
+                        'contributors': json.dumps(d.get('contributors', [])),
+                        'artist_id': d.get('artist', {}).get('id'),
+                        'artist_name': d.get('artist', {}).get('name'),
+                        'date_cached': date_time
+                    })
+                else:
+                    # Partial enrichment (stats) - only refreshable fields
+                    albums.append({
+                        'id': album_id,  # Use requested ID to match database stub
+                        'fans': d.get('fans', 0),
+                        'available': d.get('available', True),
+                        'date_cached': date_time
+                    })
+                
+                logger.debug(f"Processed album {album_id}: {i}/{total_albums}")
+
+                # If performing full album enrichment, perform periodic checkpoint at chunk_size interval
+                if identifier == "database" and i % chunk_size == 0:
+                    logger.debug(f"Database Checkpoint: Pushing chunk of {len(albums)} albums to database")
+                    logger.debug(f"Album IDs in checkpoint: {[a.get('id') for a in albums]}")
+                    try:
+                        update_album_metadata(albums, logger)
+                        populate_album_genres(albums, logger)
+                        for checkpoint_album in albums:
+                            if shutdown_event.is_set():
+                                logger.debug("Shutdown acknowledged mid-checkpoint track-genre population. Deferring remaining albums to next run.")
+                                break
+                            try:
+                                populate_track_genres_for_album(checkpoint_album.get('id'), logger)
+                            except Exception as album_err:
+                                logger.warning(f"Failed to populate track genres for album {checkpoint_album.get('id')}: {album_err}")
+                        logger.debug(f"Database Checkpoint: update_album_metadata, populate_album_genres, and populate_track_genres_for_album completed successfully.")
+                    except Exception as checkpoint_err:
+                        logger.error(f"Database Checkpoint: update_album_metadata, populate_album_genres, or populate_track_genres_for_album raised exception: {checkpoint_err}")
+                        logger.exception("Stack trace for checkpoint error:")
+                        raise
+
+                    # Merge to total result and reset working batch
+                    cached_albums.extend(albums)
+                    albums = []
+                    if shutdown_event.is_set():
+                        return cached_albums
+                
+                # Log progress at configured intervals
+                current_time = time.time()
+                if current_time - last_log_time >= log_interval:
+                    elapsed_time = current_time - start_log_time
+                    items_remaining = total_albums - i if isinstance(total_albums, int) else "unknown"
+                    
+                    if isinstance(total_albums, int):
+                        time_per_item = elapsed_time / i
+                        eta_seconds = items_remaining * time_per_item
+                        eta_str = str(timedelta(seconds=int(eta_seconds)))
+                        percent = f"{i/total_albums:.1%}"
+                        suffix = f"{percent} ({i}/{total_albums}) complete (ETA: {eta_str})..."
+                    else:
+                        suffix = f"{i} albums processed..."
+                    
+                    logger.info(f"Album '{identifier}' enrichment: {suffix}")
+                    last_log_time = current_time
+                
+            except Exception as e:
+                logger.debug(f"Non-critical loop error at index {i} (Album {album_id}): {e}")
+                time.sleep(1)
+                continue
+        
+        # Full album enrichment cleanup
+        if identifier == "database":
+            if albums:
+                logger.debug(f"Database Cleanup: Saving remaining {len(albums)} albums...")
+                logger.debug(f"Album IDs to save: {[a.get('id') for a in albums]}")
+                try:
+                    update_album_metadata(albums, logger)
+                    populate_album_genres(albums, logger)
+                    for cleanup_album in albums:
+                        if shutdown_event.is_set():
+                            logger.debug("Shutdown acknowledged mid-cleanup track-genre population. Deferring remaining albums to next run.")
+                            break
+                        try:
+                            populate_track_genres_for_album(cleanup_album.get('id'), logger)
+                        except Exception as album_err:
+                            logger.warning(f"Failed to populate track genres for album {cleanup_album.get('id')}: {album_err}")
+                    logger.debug(f"Database Cleanup: update_album_metadata, populate_album_genres, and populate_track_genres_for_album call completed successfully.")
+                except Exception as cleanup_err:
+                    logger.error(f"Database Cleanup: update_album_metadata, populate_album_genres, or populate_track_genres_for_album raised exception: {cleanup_err}")
+                    logger.exception("Stack trace for cleanup error:")
+                    raise
+                cached_albums.extend(albums)
+
+            albums = cached_albums
+
+        logger.debug(f"Successfully transformed {len(albums)} albums.")
+        
+    except Exception as e:
+        logger.error(f"Critical error in get_albums: {e}")
+        raise
+    finally:
+        logger.debug("<<< END: utils.deezer_auth.get_albums")
+    
+    return albums

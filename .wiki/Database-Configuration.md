@@ -84,25 +84,53 @@ Pipleline Order of Operations:
 | `cover_medium` | The url of the album's cover in size medium. | url | `false` |
 | `cover_big` | The url of the album's cover in size big. | url | `false` |
 | `cover_xl` | The url of the album's cover in size xl. | url | `false` |
-| `md5_image` | | string | `false` |
-| `genres` | List of genre object | list |
+| `md5_image` | The album cover hash | string | `false` |
+| `genre_id` (external) | The album's primary genre id | int | `false` |
 | `label` | The album's label name | string | `false` |
-| `provider` | The album's provider name | string | `false` |
-| `nb_tracks` | | int | `false` |
+| `nb_tracks` | The number of tracks | int | `false` |
 | `duration` | The album's duration (seconds) | int | `false` |
 | `fans` | The number of album's Fans | int | `true` |
 | `release_date` | The album's release date | date | `false` |
 | `record_type` | The record type of the album (EP / ALBUM / etc..) | string | `false` |
-| `available` | | boolean | `true` |
-| `alternative` | Return an alternative album object if the current album is not available | object | `false` |
+| `available` | Whether the album is available | boolean | `true` |
 | `tracklist` | API Link to the tracklist of this album | url | `false` |
-| `explicit_lyrics` | Whether the album contains explicit lyrics | boolean | `true` |
+| `explicit_lyrics` | Whether the album contains explicit lyrics | boolean | `false` |
 | `explicit_content_lyrics` | The explicit content lyrics values (0:Not Explicit; 1:Explicit; 2:Unknown; 3:Edited; 4:Partially Explicit (Album "lyrics" only); 5:Partially Unknown (Album "lyrics" only); 6:No Advice Available; 7:Partially No Advice Available (Album "lyrics" only)) | int | `false` |
 | `explicit_content_cover` | The explicit cover values (0:Not Explicit; 1:Explicit; 2:Unknown; 3:Edited; 4:Partially Explicit (Album "lyrics" only); 5:Partially Unknown (Album "lyrics" only); 6:No Advice Available; 7:Partially No Advice Available (Album "lyrics" only)) | int | `false` |
 | `contributors` | Return a list of contributors on the album | list | `false` |
-| `fallback` | Return fallback album with id and status | object | `false` |
-| `artist_id` | The artists id | int | `false` |
+| `artist_id` (external) | The artists id | int | `false` |
+| `artist_name` | The artists name | string | `false` |
 | `date_cached` | The date the data was last cached | date | `true` |
+
+### Genres
+
+| Name | Description | Type | Gets refresh? |
+| --- | --- | --- | --- |
+| `id` (primary) | The genre id | int | `false` |
+| `name` | The genre name | string | `false` |
+
+### Album_Genres
+
+| Name | Description | Type | Gets refresh? |
+| --- | --- | --- | --- |
+| `album_id` (external) | The album id | int | `false` |
+| `genre_id` (external) | The genre id | int | `false` |
+
+### Track_Genres
+
+| Name | Description | Type | Gets refresh? |
+| --- | --- | --- | --- |
+| `track_id` (external) | The track id | int | `false` |
+| `genre_id` (external) | The genre id | int | `false` |
+
+### Schema_Version
+
+| Name | Description | Type | Gets refresh? |
+| --- | --- | --- | --- |
+| `id` (primary) | The schema version row id | int | `false` |
+| `migration_name` | The applied migration name | string | `false` |
+| `applied_at` | The migration timestamp | date | `false` |
+| `script_version` | The script version when the migration was applied | string | `false` |
 
 ### Collections (Cached Source Contents)
 

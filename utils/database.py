@@ -19,6 +19,7 @@ import os
 from pathlib import Path
 from datetime import datetime
 from .paths import get_data_dir
+from .db_migrations import run_migrations
 
 def get_db_path():
     """
@@ -106,7 +107,12 @@ def init_tracks_table(logger=None):
         track_token TEXT,
         artist_id INTEGER,
         album_id INTEGER,
-        date_cached TEXT          -- ISO 8601 format: YYYY-MM-DD
+        blacklist_id INTEGER,
+        blocklisted INTEGER NOT NULL DEFAULT 0,
+        date_cached TEXT,          -- ISO 8601 format: YYYY-MM-DD
+        FOREIGN KEY (artist_id) REFERENCES artists(id),
+        FOREIGN KEY (album_id) REFERENCES albums(id),
+        FOREIGN KEY (blacklist_id) REFERENCES blocklist(id)
     );
     """
     try:
@@ -150,12 +156,216 @@ def init_collections_table(logger=None):
         if logger:
             logger.debug("<<< END: utils.database.init_collections_table")
 
+def init_artists_table(logger=None):
+    """Initializes the artists table for storing artist metadata."""
+    if logger:
+        logger.debug(">>> START: utils.database.init_artists_table")
+
+    query = """
+    CREATE TABLE IF NOT EXISTS artists (
+        id INTEGER PRIMARY KEY,
+        date_cached TEXT          -- ISO 8601 format: YYYY-MM-DD
+    );
+    """
+    try:
+        with get_connection(logger) as conn:
+            conn.execute(query)
+            if logger:
+                logger.debug("Database: 'artists' table ready.")
+    except Exception as e:
+        if logger:
+            logger.critical(f"Critical Database Failure (Artists): {e}")
+        raise
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.database.init_artists_table")
+
+def init_albums_table(logger=None):
+    """Initializes the albums table for storing album metadata."""
+    if logger:
+        logger.debug(">>> START: utils.database.init_albums_table")
+
+    query = """
+    CREATE TABLE IF NOT EXISTS albums (
+        id INTEGER PRIMARY KEY,
+        title TEXT,
+        upc TEXT,
+        link TEXT,
+        share TEXT,
+        cover TEXT,
+        cover_small TEXT,
+        cover_medium TEXT,
+        cover_big TEXT,
+        cover_xl TEXT,
+        md5_image TEXT,
+        genre_id INTEGER,
+        label TEXT,
+        nb_tracks INTEGER,
+        duration INTEGER,
+        fans INTEGER,
+        release_date TEXT,
+        record_type TEXT,
+        available INTEGER,
+        tracklist TEXT,
+        explicit_lyrics INTEGER,
+        explicit_content_lyrics INTEGER,
+        explicit_content_cover INTEGER,
+        contributors TEXT, -- JSON string
+        artist_id INTEGER,
+        artist_name TEXT,
+        blacklist_id INTEGER,
+        blocklisted INTEGER NOT NULL DEFAULT 0,
+        date_cached TEXT,
+        UNIQUE(id),
+        FOREIGN KEY (artist_id) REFERENCES artists(id),
+        FOREIGN KEY (blacklist_id) REFERENCES blocklist(id)
+    );
+    """
+    try:
+        with get_connection(logger) as conn:
+            conn.execute(query)
+            if logger:
+                logger.debug("Database: 'albums' table ready.")
+    except Exception as e:
+        if logger:
+            logger.critical(f"Critical Database Failure (Albums): {e}")
+        raise
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.database.init_albums_table")
+
+def init_genres_table(logger=None):
+    """Initializes the genres table for normalized genre storage."""
+    if logger:
+        logger.debug(">>> START: utils.database.init_genres_table")
+
+    query = """
+    CREATE TABLE IF NOT EXISTS genres (
+        id INTEGER PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL
+    );
+    """
+    try:
+        with get_connection(logger) as conn:
+            conn.execute(query)
+            if logger:
+                logger.debug("Database: 'genres' table ready.")
+    except Exception as e:
+        if logger:
+            logger.critical(f"Critical Database Failure (Genres): {e}")
+        raise
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.database.init_genres_table")
+
+def init_album_genres_table(logger=None):
+    """Initializes the album_genres junction table for album-genre relationships."""
+    if logger:
+        logger.debug(">>> START: utils.database.init_album_genres_table")
+
+    query = """
+    CREATE TABLE IF NOT EXISTS album_genres (
+        album_id INTEGER,
+        genre_id INTEGER,
+        FOREIGN KEY (album_id) REFERENCES albums (id) ON DELETE CASCADE,
+        FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE,
+        PRIMARY KEY (album_id, genre_id)
+    );
+    """
+    try:
+        with get_connection(logger) as conn:
+            conn.execute(query)
+            if logger:
+                logger.debug("Database: 'album_genres' table ready.")
+    except Exception as e:
+        if logger:
+            logger.critical(f"Critical Database Failure (Album_Genres): {e}")
+        raise
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.database.init_album_genres_table")
+
+def init_track_genres_table(logger=None):
+    """Initializes the track_genres denormalized cache table for track-genre relationships."""
+    if logger:
+        logger.debug(">>> START: utils.database.init_track_genres_table")
+
+    query = """
+    CREATE TABLE IF NOT EXISTS track_genres (
+        track_id INTEGER,
+        genre_id INTEGER,
+        FOREIGN KEY (track_id) REFERENCES tracks (id) ON DELETE CASCADE,
+        FOREIGN KEY (genre_id) REFERENCES genres (id) ON DELETE CASCADE,
+        PRIMARY KEY (track_id, genre_id)
+    );
+    """
+    try:
+        with get_connection(logger) as conn:
+            conn.execute(query)
+            if logger:
+                logger.debug("Database: 'track_genres' table ready.")
+    except Exception as e:
+        if logger:
+            logger.critical(f"Critical Database Failure (Track_Genres): {e}")
+        raise
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.database.init_track_genres_table")
+
+def init_blocklist_table(logger=None):
+    """Initializes the blocklist table for failed track/album metadata fetches."""
+    if logger:
+        logger.debug(">>> START: utils.database.init_blocklist_table")
+
+    query = """
+    CREATE TABLE IF NOT EXISTS blocklist (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_type TEXT NOT NULL,
+        entity_id INTEGER NOT NULL,
+        total_errors INTEGER NOT NULL DEFAULT 0,
+        streak_errors INTEGER NOT NULL DEFAULT 0,
+        last_error_code TEXT,
+        last_failed_at TEXT,
+        blocklist_expires_at TEXT,
+        UNIQUE(entity_type, entity_id)
+    );
+    """
+    try:
+        with get_connection(logger) as conn:
+            conn.execute(query)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_blocklist_expires_at ON blocklist (blocklist_expires_at);")
+            if logger:
+                logger.debug("Database: 'blocklist' table ready.")
+    except Exception as e:
+        if logger:
+            logger.critical(f"Critical Database Failure (Blocklist): {e}")
+        raise
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.database.init_blocklist_table")
+
 def initialize_all(logger=None):
     """Run all initialization functions for the database."""
     if logger:
         logger.debug(">>> START: utils.database.initialize_all")
+
+    # Check if database already exists before initialization
+    is_fresh = not DB_PATH.exists()
+    
+    # Initialize all tables (safe with CREATE TABLE IF NOT EXISTS)
+    # artists and albums must be created before tracks due to FK constraints
+    init_artists_table(logger)
+    init_blocklist_table(logger)
+    init_albums_table(logger)
     init_tracks_table(logger)
+    init_genres_table(logger)
+    init_album_genres_table(logger)
+    init_track_genres_table(logger)
     init_collections_table(logger)
+    
+    # Run migrations to update existing schemas
+    run_migrations(logger, is_fresh)
+    
     if logger:
         logger.debug(f"Database: Initialized")
         logger.debug("<<< END: utils.database.initialize_all")

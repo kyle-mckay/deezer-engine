@@ -1,0 +1,23 @@
+-- Expand albums table with missing columns
+-- SQLite will raise an error if columns already exist, which is handled by the migration system
+ALTER TABLE albums ADD COLUMN upc TEXT;
+ALTER TABLE albums ADD COLUMN link TEXT;
+ALTER TABLE albums ADD COLUMN share TEXT;
+ALTER TABLE albums ADD COLUMN cover_small TEXT;
+ALTER TABLE albums ADD COLUMN cover_medium TEXT;
+ALTER TABLE albums ADD COLUMN cover_big TEXT;
+ALTER TABLE albums ADD COLUMN cover_xl TEXT;
+ALTER TABLE albums ADD COLUMN md5_image TEXT;
+ALTER TABLE albums ADD COLUMN genre_id INTEGER;
+ALTER TABLE albums ADD COLUMN label TEXT;
+ALTER TABLE albums ADD COLUMN nb_tracks INTEGER;
+ALTER TABLE albums ADD COLUMN duration INTEGER;
+ALTER TABLE albums ADD COLUMN fans INTEGER;
+ALTER TABLE albums ADD COLUMN record_type TEXT;
+ALTER TABLE albums ADD COLUMN available INTEGER;
+ALTER TABLE albums ADD COLUMN tracklist TEXT;
+ALTER TABLE albums ADD COLUMN explicit_lyrics INTEGER;
+ALTER TABLE albums ADD COLUMN explicit_content_lyrics INTEGER;
+ALTER TABLE albums ADD COLUMN explicit_content_cover INTEGER;
+ALTER TABLE albums ADD COLUMN contributors TEXT;
+ALTER TABLE albums ADD COLUMN artist_id INTEGER;

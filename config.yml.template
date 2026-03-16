@@ -15,4 +15,3 @@ config:
   print_banner: true # Whether to print the startup banner
   playlist_cap: 5000
   favorites_cap: 10000
-  track_stats_refresh: 7

@@ -1,11 +1,17 @@
 # Changelog
 
-## v0.11.1 - 2026-03-13
+## v0.12.0 - 2026-03-13
+
+### Enhancements
+
+- feat: add failure tracking logic for tracks/ablums removed from deezer (#82) (@kylemmkay)
+- enhance: add table initialization to support album and genre tables and table migration/update logic (#82) (@kylemmkay)
 
 ### Fixes
 
 - fix: new log format expected in container verification (@kylemmkay)
 - fix: missed some data conversions with the introduction of destination chache logic (@kylemmkay)
+- fix: cache degrading due to db scoping not defined properly (#82) (@kylemmkay)
 
 ### Maintenance
 
