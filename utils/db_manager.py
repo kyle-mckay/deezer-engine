@@ -37,7 +37,16 @@ def calculate_blocklist_expiry_iso(current_streak_errors, total_errors, last_fai
     """
     # Placeholder for future dynamic logic
     _ = (current_streak_errors, total_errors, last_failure_iso)
-    return (datetime.now() + timedelta(days=default_days)).isoformat()
+
+    configured_days = get_global_value("blocklist_expiry_days", default=default_days)
+    try:
+        expiry_days = int(configured_days)
+        if expiry_days < 0:
+            expiry_days = default_days
+    except (TypeError, ValueError):
+        expiry_days = default_days
+
+    return (datetime.now() + timedelta(days=expiry_days)).isoformat()
 
 def _blocklist_where_clause(include_blocklisted):
     """Returns SQL predicate for including or excluding blocklisted entities."""

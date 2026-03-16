@@ -47,6 +47,7 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | `file_retention` | `DEEZER_FILE_RETENTION` | No | `168` | The hours to retain a file export. |
 | `track_stats_refresh` | `DEEZER_TRACK_STATS_REFRESH` | No | `90` | Days before refreshing dynamic metadata like track rank. |
 | `album_stats_refresh` | `DEEZER_ALBUM_STATS_REFRESH` | No | `90` | Days before refreshing dynamic metadata like album fans and availability. |
+| `blocklist_expiry_days` | `DEEZER_BLOCKLIST_EXPIRY_DAYS` | No | `7` | Days a failed track/album remains blocklisted before becoming eligible again. Set `0` to disable active blocklisting while still tracking failures. |
 
 ### Logic Hierarchy
 

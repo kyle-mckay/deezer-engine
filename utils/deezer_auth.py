@@ -77,6 +77,14 @@ def extract_error_code(err):
 
 def should_blocklist_failed_fetch(error_code, error_detail):
     """Returns True when a cancelled fetch should be blocklisted."""
+    configured_days = get_global_value("blocklist_expiry_days", default=7)
+    try:
+        expiry_days = int(configured_days)
+        if expiry_days == 0:
+            return False
+    except (TypeError, ValueError):
+        pass
+
     if error_code in NON_BLOCKLIST_ERROR_CODES:
         return False
 
