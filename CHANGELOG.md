@@ -1,9 +1,10 @@
 # Changelog
 
-## v0.12.0 - 2026-03-13
+## v0.12.0 - 2026-03-16
 
 ### Enhancements
 
+- feat: add genre collection during metadata enrichment (closes #18) (#82) (@kylemmkay)
 - feat: add failure tracking logic for tracks/ablums removed from deezer (#82) (@kylemmkay)
 - enhance: add table initialization to support album and genre tables and table migration/update logic (#82) (@kylemmkay)
 
