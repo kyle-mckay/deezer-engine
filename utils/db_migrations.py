@@ -14,7 +14,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 """
-Scans migrations/ directory for V{number}__{description}.sql files and applies pending ones.
+Database migration runner.
+
+Migration policy:
+- The `migrations/` directory is the single source of truth for schema shape.
+- `V001__*.sql` is the current baseline schema for fresh databases.
+- Higher versions are incremental migrations from that baseline.
+- Migration execution is strict: any SQL failure aborts the current version.
+- Post-migration validation runs `PRAGMA foreign_key_check` and `PRAGMA integrity_check`.
 """
 import os
 import re
@@ -83,14 +90,13 @@ def _get_applied_versions(logger=None):
         return set()
 
 
-def _get_pending_migrations(logger=None):
-    """Scan migrations directory and return list of pending migrations in order."""
+def _get_all_migrations(logger=None):
+    """Scan migrations directory and return all migrations in ascending version order."""
     if not MIGRATIONS_DIR.is_dir():
         if logger:
             logger.warning(f"Database: Migrations directory not found at {MIGRATIONS_DIR}")
         return []
-    
-    # Parse all migration files
+
     migrations = []
     for filename in sorted(os.listdir(MIGRATIONS_DIR)):
         parsed = _parse_migration_file(filename)
@@ -102,11 +108,59 @@ def _get_pending_migrations(logger=None):
                 'filename': filename,
                 'filepath': MIGRATIONS_DIR / filename
             })
-    
-    # Filter to only pending (not yet applied)
-    applied_versions = _get_applied_versions(logger)
-    pending = [m for m in migrations if m['version'] not in applied_versions]
-    return pending
+
+    migrations.sort(key=lambda m: m['version'])
+    return migrations
+
+
+def _validate_migration_index(migrations, logger=None):
+    """Fail fast on duplicate migration versions."""
+    if logger:
+        logger.debug(">>> START: utils.db_migrations._validate_migration_index")
+
+    seen = set()
+    duplicates = set()
+    for migration in migrations:
+        version = migration['version']
+        if version in seen:
+            duplicates.add(version)
+        seen.add(version)
+
+    if duplicates:
+        dupes = ", ".join(str(v) for v in sorted(duplicates))
+        if logger:
+            logger.critical(f"Duplicate migration versions detected: {dupes}")
+        raise RuntimeError(f"Duplicate migration versions detected: {dupes}")
+
+    if logger:
+        logger.debug("Migration index validation passed.")
+        logger.debug("<<< END: utils.db_migrations._validate_migration_index")
+
+
+def _validate_known_applied_versions(applied_versions, discovered_versions, logger=None):
+    """
+    Breaking-change guard.
+    If DB contains versions not present in current migrations, user must recreate DB.
+    """
+    if logger:
+        logger.debug(">>> START: utils.db_migrations._validate_known_applied_versions")
+
+    unknown = applied_versions - discovered_versions
+    if unknown:
+        unknown_str = ", ".join(str(v) for v in sorted(unknown))
+        if logger:
+            logger.critical(
+                "Database contains applied migrations not present in this migration baseline: "
+                f"{unknown_str}. Delete the existing database file and allow Deezer Engine to recreate it."
+            )
+        raise RuntimeError(
+            "Database contains applied migrations that are not present in this code version "
+            f"({unknown_str}). This release uses a new migration baseline. "
+        )
+
+    if logger:
+        logger.debug("Applied migration versions are compatible with current migration set.")
+        logger.debug("<<< END: utils.db_migrations._validate_known_applied_versions")
 
 def _backup_database(logger=None):
     """Create a timestamped backup of the database before migrations."""
@@ -141,16 +195,73 @@ def _backup_database(logger=None):
             logger.debug("<<< END: utils.db_migrations._backup_database")
 
 
-def run_migrations(logger=None, is_fresh=False):
-    """Scan migrations/ directory and apply all pending migrations."""
+def _run_foreign_key_check(conn, logger=None):
+    """Validate foreign key consistency after migrations complete."""
+    if logger:
+        logger.debug(">>> START: utils.db_migrations._run_foreign_key_check")
+
+    try:
+        violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+        if violations:
+            if logger:
+                logger.critical(f"Foreign key validation failed with {len(violations)} violation(s): {violations}")
+            raise RuntimeError(f"Foreign key validation failed with {len(violations)} violation(s).")
+
+        if logger:
+            logger.debug("Foreign key validation passed.")
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.db_migrations._run_foreign_key_check")
+
+
+def _run_integrity_check(conn, logger=None):
+    """Validate low-level SQLite database integrity after migrations complete."""
+    if logger:
+        logger.debug(">>> START: utils.db_migrations._run_integrity_check")
+
+    try:
+        result = conn.execute("PRAGMA integrity_check").fetchone()
+        integrity_status = result[0] if result else None
+
+        if integrity_status != "ok":
+            if logger:
+                logger.critical(f"SQLite integrity check failed: {integrity_status}")
+            raise RuntimeError(f"SQLite integrity check failed: {integrity_status}")
+
+        if logger:
+            logger.debug("SQLite integrity check passed.")
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.db_migrations._run_integrity_check")
+
+
+def run_migrations(logger=None):
+    """Apply pending SQL migrations from `migrations/` in strict version order."""
     from .database import get_connection
+    from .database import DB_PATH
     
     if logger:
         logger.debug(">>> START: utils.db_migrations.run_migrations")
 
+    pre_migration_db_exists = DB_PATH.exists()
+    pre_migration_db_size = DB_PATH.stat().st_size if pre_migration_db_exists else 0
+    is_fresh_or_empty_db = (not pre_migration_db_exists) or pre_migration_db_size == 0
+
+    if logger and is_fresh_or_empty_db:
+        logger.debug(
+            "Database: Fresh/empty database initialization detected; schema will be created from baseline migrations."
+        )
+
     _init_schema_version_table(logger)
-    
-    pending = _get_pending_migrations(logger)
+
+    migrations = _get_all_migrations(logger)
+    _validate_migration_index(migrations, logger)
+
+    applied_versions = _get_applied_versions(logger)
+    discovered_versions = {m['version'] for m in migrations}
+    _validate_known_applied_versions(applied_versions, discovered_versions, logger)
+
+    pending = [m for m in migrations if m['version'] not in applied_versions]
 
     if logger:
         logger.debug(f"Database: Using migrations from {MIGRATIONS_DIR}")
@@ -158,13 +269,14 @@ def run_migrations(logger=None, is_fresh=False):
     if not pending:
         if logger:
             logger.debug("Database: No pending migrations")
-        return
     else:
         if logger:
             logger.info(f"Database: {len(pending)} pending migrations found")
 
-    if not is_fresh:
+    if pending and pre_migration_db_exists and pre_migration_db_size > 0:
         _backup_database(logger)
+    elif pending and logger and is_fresh_or_empty_db:
+        logger.debug("Database: Skipping pre-migration backup for fresh/empty database.")
 
     try:
         with get_connection(logger) as conn:
@@ -177,12 +289,10 @@ def run_migrations(logger=None, is_fresh=False):
                     logger.debug(f"Applying database patch: {version} - {description}")
                 
                 try:
-                    # Read and execute SQL file
-                    sql = filepath.read_text()
+                    sql = filepath.read_text(encoding="utf-8")
                     cursor = conn.cursor()
                     cursor.executescript(sql)
                     
-                    # Record migration
                     timestamp = datetime.now().isoformat()
                     cursor.execute(
                         "INSERT INTO schema_version (version, description, applied_at, script_version) VALUES (?, ?, ?, ?)",
@@ -194,27 +304,19 @@ def run_migrations(logger=None, is_fresh=False):
                         logger.info(f"Applied database patch: {version} - {description}")
                         
                 except Exception as e:
-                    # SQLite raises "duplicate column name" errors if column already exists
-                    # For migrations that idempotently add columns, we can ignore these specific errors
-                    error_str = str(e).lower()
-                    if "duplicate column name" in error_str or "already exists" in error_str:
-                        if logger:
-                            logger.debug(f"Migration {version}: Ignoring duplicate column error (column likely already exists)")
-                        # Still record that the migration was applied
-                        timestamp = datetime.now().isoformat()
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "INSERT INTO schema_version (version, description, applied_at, script_version) VALUES (?, ?, ?, ?)",
-                            (version, description, timestamp, __version__)
-                        )
-                        conn.commit()
-                        if logger:
-                            logger.info(f"Applied database patch: {version} - {description}")
-                    else:
-                        conn.rollback()
-                        if logger:
-                            logger.critical(f"Migration {version} failed: {e}")
-                        raise
+                    conn.rollback()
+                    if logger:
+                        logger.critical(f"Migration {version} failed: {e}")
+                    raise
+
+            _run_foreign_key_check(conn, logger)
+            _run_integrity_check(conn, logger)
+
+            if logger:
+                if pending:
+                    logger.info("Database: Migration validation checks passed")
+                else:
+                    logger.debug("Database: Migration validation checks passed")
 
     except Exception as e:
         if logger:

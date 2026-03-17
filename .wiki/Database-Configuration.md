@@ -140,3 +140,27 @@ Pipleline Order of Operations:
 | `track_id` | The ID of the track which source it has been mapped to. One source per column, can contain the same ID in this column. | int | `true` |
 | `source_name` | The name of the source that contained this track | string | `true` |
 | `date_cached` | The date the data was last cached | date | `true` |
+
+### Blocklist
+
+The blocklist system tracks metadata fetch failures for tracks and albums. When the Deezer API fails to return metadata for an entity, the failure is recorded and the entity is marked as blocklisted to prevent repeated failed fetch attempts.
+
+| Name | Description | Type |
+| --- | --- | --- |
+| `id` (primary) | The blocklist entry's unique identifier | int |
+| `entity_type` | The type of entity: `'track'` or `'album'` | text |
+| `entity_id` | The primary key ID of the track or album being tracked | int |
+| `total_errors` | Lifetime count of all metadata fetch failures for this entity | int |
+| `streak_errors` | Count of consecutive fetch failures since the last successful metadata cache. Resets to 1 when metadata is successfully cached after a failure. | int |
+| `last_error_code` | The most recent API/transport error code or type (e.g., `"404"`, `"ConnectionError"`) | text |
+| `last_failed_at` | ISO 8601 timestamp of the most recent metadata fetch failure | text |
+| `blocklist_applied_at` | ISO 8601 timestamp when blocklisting became active for this entity. Used by the expiry mechanism to determine when to release the block. | text |
+
+#### Tracks & Albums Blocklist Columns
+
+Both `tracks` and `albums` tables include blocklist-related columns:
+
+| Column | Description | Type |
+| --- | --- | --- |
+| `blacklist_id` | Foreign key reference to the `blocklist` table's `id`. Links the entity to its failure tracking record. | int |
+| `blocklisted` | Boolean flag (0 = not blocklisted, 1 = blocklisted). Prevents the engine from attempting metadata enrichment for blocklisted entities. | int |

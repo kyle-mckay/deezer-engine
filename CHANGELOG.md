@@ -2,6 +2,12 @@
 
 ## v0.12.0 - 2026-03-16
 
+### Breaking Changes
+
+- breaking: overhaul database init and migration process (#93) (@kylemmkay)
+    - Databases from prior migration epochs are no longer supported and must be deleted to allow the app to recreate them with the new baseline schema.
+    - The migration history has been reset with a new baseline, so all existing databases will be rejected on startup until they are deleted.
+
 ### Enhancements
 
 - feat: add genre collection during metadata enrichment (closes #18) (#82) (@kylemmkay)

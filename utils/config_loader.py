@@ -56,15 +56,7 @@ def load_config_with_env_overrides():
     Load config.yml and apply environment variable overrides.
     Environment variables take precedence over file values.
     
-    Supported environment variables:
-    - DEEZER_USER_ID: Deezer user ID
-    - DEEZER_ARL_TOKEN: Deezer ARL authentication token
-    - DEEZER_CHUNK_SIZE: Chunk size for database checkpoint operations
-    - DEEZER_API_BATCH_SIZE: API rate limit check interval (requests per batch)
-    - DEEZER_RATE_LIMIT: Maximum API requests per minute
-    - DEEZER_LOG_LEVEL: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-    - DEEZER_WRITE_LOGS: Whether to write logs to file (true/false)
-    - DEEZER_PRINT_BANNER: Whether to print the startup banner (true/false)
+    See wiki for all environment overrides
     """
     data_dir = get_data_dir()
     config_path = data_dir / 'config.yml'
@@ -95,7 +87,8 @@ def load_config_with_env_overrides():
         'DEEZER_RETENTION': 'retention',
         'DEEZER_FILE_RETENTION': 'file_retention',
         'DEEZER_TRACK_STATS_REFRESH': 'track_stats_refresh',
-        'DEEZER_ALBUM_STATS_REFRESH': 'album_stats_refresh'
+        'DEEZER_ALBUM_STATS_REFRESH': 'album_stats_refresh',
+        'DEEZER_BLOCKLIST_EXPIRY_DAYS': 'blocklist_expiry_days'
     }
     
     for env_var, config_key in env_mappings.items():
@@ -105,7 +98,7 @@ def load_config_with_env_overrides():
             # Type conversions
 
             # Integers
-            if config_key in ['chunk_size', 'api_batch_size', 'rate_limit', 'playlist_cap', 'favorites_cap', 'retention', 'file_retention', 'track_stats_refresh', 'album_stats_refresh']:
+            if config_key in ['chunk_size', 'api_batch_size', 'rate_limit', 'playlist_cap', 'favorites_cap', 'retention', 'file_retention', 'track_stats_refresh', 'album_stats_refresh', 'blocklist_expiry_days']:
                 try:
                     value = int(value)
                 except ValueError:
@@ -310,7 +303,9 @@ def check_for_updates(current_version, containerized, logger):
         
         # Codeberg/Gitea uses 'name' for the tag/release title in the 'latest' endpoint
         latest_version = extract_version(response.json().get('name'))
+        logger.debug(f"Latest version from Codeberg: {latest_version}")
         current_version = extract_version(current_version)
+        logger.debug(f"Current source version: {current_version}")
 
         if latest_version and version_to_int(latest_version) > version_to_int(current_version):
             logger.warning("=" * 60)
