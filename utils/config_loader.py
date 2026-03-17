@@ -303,7 +303,9 @@ def check_for_updates(current_version, containerized, logger):
         
         # Codeberg/Gitea uses 'name' for the tag/release title in the 'latest' endpoint
         latest_version = extract_version(response.json().get('name'))
+        logger.debug(f"Latest version from Codeberg: {latest_version}")
         current_version = extract_version(current_version)
+        logger.debug(f"Current source version: {current_version}")
 
         if latest_version and version_to_int(latest_version) > version_to_int(current_version):
             logger.warning("=" * 60)

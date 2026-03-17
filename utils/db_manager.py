@@ -28,6 +28,7 @@ DB_PATH = get_db_path()
 def _get_connection():
     """Internal helper to provide a connection with row factory enabled."""
     conn = sqlite3.connect(DB_PATH)
+    conn.execute("PRAGMA foreign_keys = ON;")
     conn.row_factory = sqlite3.Row
     return conn
 
