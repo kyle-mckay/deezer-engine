@@ -31,47 +31,38 @@ def _get_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-def calculate_blocklist_expiry_iso(current_streak_errors, total_errors, last_failure_iso, default_days=7):
-    """
-    Calculates the next blocklist expiry timestamp.
-    """
-    # Placeholder for future dynamic logic
-    _ = (current_streak_errors, total_errors, last_failure_iso)
-
-    configured_days = get_global_value("blocklist_expiry_days", default=default_days)
-    try:
-        expiry_days = int(configured_days)
-        if expiry_days < 0:
-            expiry_days = default_days
-    except (TypeError, ValueError):
-        expiry_days = default_days
-
-    return (datetime.now() + timedelta(days=expiry_days)).isoformat()
-
 def _blocklist_where_clause(include_blocklisted):
     """Returns SQL predicate for including or excluding blocklisted entities."""
     return "1=1" if include_blocklisted else "COALESCE(blocklisted, 0) = 0"
 
 def release_expired_blocklisted_entities(logger=None):
     """
-    Startup reconciliation: unblocks tracks/albums whose blocklist expiry has passed.
+    Startup reconciliation: unblocks tracks/albums once blocklist_expiry_days has elapsed
+    since the blocklist event timestamp.
     """
     if logger:
         logger.debug(">>> START: utils.db_manager.release_expired_blocklisted_entities")
 
-    now_iso = datetime.now().isoformat()
+    configured_days = get_global_value("blocklist_expiry_days", default=7)
+    try:
+        expiry_days = int(configured_days)
+        if expiry_days < 0:
+            expiry_days = 0
+    except (TypeError, ValueError):
+        expiry_days = 7
+
+    cutoff_iso = (datetime.now() - timedelta(days=expiry_days)).isoformat()
     select_query = """
     SELECT entity_type, entity_id
     FROM blocklist
-    WHERE blocklist_expires_at IS NOT NULL
-      AND blocklist_expires_at != ''
-      AND blocklist_expires_at <= ?
+    WHERE COALESCE(NULLIF(blocklist_applied_at, ''), NULLIF(last_failed_at, '')) IS NOT NULL
+      AND COALESCE(NULLIF(blocklist_applied_at, ''), NULLIF(last_failed_at, '')) <= ?
     """
 
     try:
         with _get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute(select_query, (now_iso,))
+            cursor.execute(select_query, (cutoff_iso,))
             expired = cursor.fetchall()
 
             if not expired:
@@ -88,24 +79,86 @@ def release_expired_blocklisted_entities(logger=None):
             if track_ids:
                 placeholders = ','.join('?' * len(track_ids))
                 cursor.execute(
-                    f"UPDATE tracks SET blocklisted = 0 WHERE id IN ({placeholders})",
+                    f"""
+                    UPDATE tracks
+                    SET blocklisted = 0,
+                        blacklist_id = NULL
+                    WHERE id IN ({placeholders})
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM blocklist ab
+                          WHERE ab.entity_type = 'album'
+                            AND ab.entity_id = tracks.album_id
+                            AND COALESCE(NULLIF(ab.blocklist_applied_at, ''), NULLIF(ab.last_failed_at, '')) IS NOT NULL
+                      )
+                    """,
                     track_ids
                 )
                 tracks_unblocked = cursor.rowcount
+                cursor.execute(
+                    f"UPDATE blocklist SET blocklist_applied_at = NULL WHERE entity_type = 'track' AND entity_id IN ({placeholders})",
+                    track_ids
+                )
 
             if album_ids:
                 placeholders = ','.join('?' * len(album_ids))
                 cursor.execute(
-                    f"UPDATE albums SET blocklisted = 0 WHERE id IN ({placeholders})",
+                    f"UPDATE albums SET blocklisted = 0, blacklist_id = NULL WHERE id IN ({placeholders})",
                     album_ids
                 )
                 albums_unblocked = cursor.rowcount
+                cursor.execute(
+                    f"UPDATE blocklist SET blocklist_applied_at = NULL WHERE entity_type = 'album' AND entity_id IN ({placeholders})",
+                    album_ids
+                )
+
+                # Album release cascades to tracks, but tracks with their own active
+                # track blocklist remain blocked and are reattached to their own blocklist row.
+                cursor.execute(
+                    f"""
+                    UPDATE tracks
+                    SET blocklisted = 1,
+                        blacklist_id = (
+                            SELECT tb.id
+                            FROM blocklist tb
+                            WHERE tb.entity_type = 'track'
+                              AND tb.entity_id = tracks.id
+                            LIMIT 1
+                        )
+                    WHERE album_id IN ({placeholders})
+                      AND EXISTS (
+                          SELECT 1
+                          FROM blocklist tb
+                          WHERE tb.entity_type = 'track'
+                            AND tb.entity_id = tracks.id
+                            AND COALESCE(NULLIF(tb.blocklist_applied_at, ''), NULLIF(tb.last_failed_at, '')) IS NOT NULL
+                      )
+                    """,
+                    album_ids
+                )
+
+                cursor.execute(
+                    f"""
+                    UPDATE tracks
+                    SET blocklisted = 0,
+                        blacklist_id = NULL
+                    WHERE album_id IN ({placeholders})
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM blocklist tb
+                          WHERE tb.entity_type = 'track'
+                            AND tb.entity_id = tracks.id
+                            AND COALESCE(NULLIF(tb.blocklist_applied_at, ''), NULLIF(tb.last_failed_at, '')) IS NOT NULL
+                      )
+                    """,
+                    album_ids
+                )
 
             conn.commit()
 
             if logger:
                 logger.debug(
-                    f"Reopened expired blocklist entries: tracks={tracks_unblocked}, albums={albums_unblocked}"
+                    f"Reopened blocklist entries using blocklist_expiry_days={expiry_days}: tracks={tracks_unblocked}, albums={albums_unblocked}"
                 )
     except Exception as e:
         if logger:
@@ -134,18 +187,31 @@ def _mark_entity_metadata_fetch_failed(entity_type, entity_table, entity_id, err
     WHERE id = ?
     LIMIT 1
     """
-    select_by_entity_query = "SELECT id, total_errors, streak_errors, last_failed_at FROM blocklist WHERE entity_type = ? AND entity_id = ? LIMIT 1"
+    select_by_entity_query = """
+    SELECT id, entity_type, entity_id, total_errors, streak_errors, last_failed_at
+    FROM blocklist
+    WHERE entity_type = ? AND entity_id = ?
+    LIMIT 1
+    """
     update_blocklist_query = """
     UPDATE blocklist
     SET total_errors = ?,
         streak_errors = ?,
         last_error_code = ?,
         last_failed_at = ?,
-        blocklist_expires_at = ?
+        blocklist_applied_at = ?
     WHERE id = ?
     """
     insert_blocklist_query = """
-    INSERT INTO blocklist (entity_type, entity_id, total_errors, streak_errors, last_error_code, last_failed_at, blocklist_expires_at)
+    INSERT INTO blocklist (
+        entity_type,
+        entity_id,
+        total_errors,
+        streak_errors,
+        last_error_code,
+        last_failed_at,
+        blocklist_applied_at
+    )
     VALUES (?, ?, ?, ?, ?, ?, ?)
     """
     attach_query = f"UPDATE {entity_table} SET blacklist_id = ?, blocklisted = 1 WHERE id = ?"
@@ -166,7 +232,7 @@ def _mark_entity_metadata_fetch_failed(entity_type, entity_table, entity_id, err
         if row is None:
             if logger:
                 logger.debug(f"{entity_type.capitalize()} failure update skipped: unable to resolve {entity_type} {entity_id} row.")
-            return
+            return None
 
         current_blacklist_id = row[0]
         entity_date_cached = row[1]
@@ -208,14 +274,16 @@ def _mark_entity_metadata_fetch_failed(entity_type, entity_table, entity_id, err
                     recovered_since_last_failure = str(entity_date_cached) > str(previous_last_failure)
 
             next_streak_errors = 1 if recovered_since_last_failure else (current_streak_errors + 1)
-            blocklist_expiry = calculate_blocklist_expiry_iso(
-                current_streak_errors,
-                current_total_errors,
-                previous_last_failure
-            )
             cursor.execute(
                 update_blocklist_query,
-                (next_total_errors, next_streak_errors, normalized_error, failed_at, blocklist_expiry, blocklist_id)
+                (
+                    next_total_errors,
+                    next_streak_errors,
+                    normalized_error,
+                    failed_at,
+                    failed_at,
+                    blocklist_id,
+                )
             )
             if logger and recovered_since_last_failure:
                 logger.debug(
@@ -227,15 +295,23 @@ def _mark_entity_metadata_fetch_failed(entity_type, entity_table, entity_id, err
         else:
             next_total_errors = 1
             next_streak_errors = 1
-            blocklist_expiry = calculate_blocklist_expiry_iso(0, 0, None)
             cursor.execute(
                 insert_blocklist_query,
-                (entity_type, entity_id, next_total_errors, next_streak_errors, normalized_error, failed_at, blocklist_expiry)
+                (
+                    entity_type,
+                    entity_id,
+                    next_total_errors,
+                    next_streak_errors,
+                    normalized_error,
+                    failed_at,
+                    failed_at,
+                )
             )
             blocklist_id = cursor.lastrowid
 
         cursor.execute(attach_query, (blocklist_id, entity_id))
         conn.commit()
+        return blocklist_id
 
 def mark_track_metadata_fetch_failed(track_id, error_code, logger=None):
     """
@@ -270,13 +346,39 @@ def mark_album_metadata_fetch_failed(album_id, error_code, logger=None):
         logger.debug(f">>> START: utils.db_manager.mark_album_metadata_fetch_failed ({album_id})")
 
     try:
-        _mark_entity_metadata_fetch_failed(
+        blocklist_id = _mark_entity_metadata_fetch_failed(
             entity_type="album",
             entity_table="albums",
             entity_id=album_id,
             error_code=error_code,
             logger=logger,
         )
+
+        if blocklist_id is not None:
+            with _get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    UPDATE tracks
+                    SET blocklisted = 1,
+                        blacklist_id = ?
+                    WHERE album_id = ?
+                    """,
+                    (blocklist_id, album_id),
+                )
+                cascaded_track_count = cursor.rowcount
+                conn.commit()
+
+            if logger:
+                if cascaded_track_count > 0:
+                    logger.debug(
+                        f"Album blocklist cascaded to {cascaded_track_count} tracks: album_id={album_id}, blocklist_id={blocklist_id}."
+                    )
+                else:
+                    logger.debug(
+                        f"Album blocklist cascade matched no tracks: album_id={album_id}, blocklist_id={blocklist_id}."
+                    )
+
         if logger:
             logger.debug(f"Album failure recorded in blocklist: id={album_id}, code={error_code}")
     except Exception as e:
