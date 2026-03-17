@@ -326,6 +326,7 @@ def init_blocklist_table(logger=None):
         streak_errors INTEGER NOT NULL DEFAULT 0,
         last_error_code TEXT,
         last_failed_at TEXT,
+        blocklist_expires_at TEXT,
         blocklist_applied_at TEXT,
         UNIQUE(entity_type, entity_id)
     );
@@ -333,6 +334,7 @@ def init_blocklist_table(logger=None):
     try:
         with get_connection(logger) as conn:
             conn.execute(query)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_blocklist_expires_at ON blocklist (blocklist_expires_at);")
             if logger:
                 logger.debug("Database: 'blocklist' table ready.")
     except Exception as e:
