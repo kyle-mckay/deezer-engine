@@ -243,6 +243,15 @@ def run_migrations(logger=None):
     if logger:
         logger.debug(">>> START: utils.db_migrations.run_migrations")
 
+    pre_migration_db_exists = DB_PATH.exists()
+    pre_migration_db_size = DB_PATH.stat().st_size if pre_migration_db_exists else 0
+    is_fresh_or_empty_db = (not pre_migration_db_exists) or pre_migration_db_size == 0
+
+    if logger and is_fresh_or_empty_db:
+        logger.debug(
+            "Database: Fresh/empty database initialization detected; schema will be created from baseline migrations."
+        )
+
     _init_schema_version_table(logger)
 
     migrations = _get_all_migrations(logger)
@@ -264,8 +273,10 @@ def run_migrations(logger=None):
         if logger:
             logger.info(f"Database: {len(pending)} pending migrations found")
 
-    if pending and DB_PATH.exists():
+    if pending and pre_migration_db_exists and pre_migration_db_size > 0:
         _backup_database(logger)
+    elif pending and logger and is_fresh_or_empty_db:
+        logger.debug("Database: Skipping pre-migration backup for fresh/empty database.")
 
     try:
         with get_connection(logger) as conn:
