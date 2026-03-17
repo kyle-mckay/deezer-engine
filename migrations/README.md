@@ -39,6 +39,7 @@ When a baseline reset occurs:
 
 - Migration SQL must be deterministic.
 - Migration execution is strict: any SQL error fails the migration.
+- After migration resolution, Deezer Engine runs `PRAGMA foreign_key_check` and `PRAGMA integrity_check`.
 - Do not rely on "ignore duplicate" behavior.
 - Prefer explicit preconditions in SQL when needed.
 
@@ -47,4 +48,5 @@ When a baseline reset occurs:
 1. Apply migrations to an empty test database.
 2. Verify startup and core workflows.
 3. Confirm `schema_version` includes newly applied versions.
-4. Update documentation if schema behavior changed.
+4. Confirm foreign key and integrity validation pass in logs.
+5. Update documentation if schema behavior changed.

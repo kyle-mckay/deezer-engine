@@ -21,6 +21,7 @@ Migration policy:
 - `V001__*.sql` is the current baseline schema for fresh databases.
 - Higher versions are incremental migrations from that baseline.
 - Migration execution is strict: any SQL failure aborts the current version.
+- Post-migration validation runs `PRAGMA foreign_key_check` and `PRAGMA integrity_check`.
 """
 import os
 import re
@@ -194,6 +195,46 @@ def _backup_database(logger=None):
             logger.debug("<<< END: utils.db_migrations._backup_database")
 
 
+def _run_foreign_key_check(conn, logger=None):
+    """Validate foreign key consistency after migrations complete."""
+    if logger:
+        logger.debug(">>> START: utils.db_migrations._run_foreign_key_check")
+
+    try:
+        violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+        if violations:
+            if logger:
+                logger.critical(f"Foreign key validation failed with {len(violations)} violation(s): {violations}")
+            raise RuntimeError(f"Foreign key validation failed with {len(violations)} violation(s).")
+
+        if logger:
+            logger.debug("Foreign key validation passed.")
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.db_migrations._run_foreign_key_check")
+
+
+def _run_integrity_check(conn, logger=None):
+    """Validate low-level SQLite database integrity after migrations complete."""
+    if logger:
+        logger.debug(">>> START: utils.db_migrations._run_integrity_check")
+
+    try:
+        result = conn.execute("PRAGMA integrity_check").fetchone()
+        integrity_status = result[0] if result else None
+
+        if integrity_status != "ok":
+            if logger:
+                logger.critical(f"SQLite integrity check failed: {integrity_status}")
+            raise RuntimeError(f"SQLite integrity check failed: {integrity_status}")
+
+        if logger:
+            logger.debug("SQLite integrity check passed.")
+    finally:
+        if logger:
+            logger.debug("<<< END: utils.db_migrations._run_integrity_check")
+
+
 def run_migrations(logger=None):
     """Apply pending SQL migrations from `migrations/` in strict version order."""
     from .database import get_connection
@@ -219,12 +260,11 @@ def run_migrations(logger=None):
     if not pending:
         if logger:
             logger.debug("Database: No pending migrations")
-        return
     else:
         if logger:
             logger.info(f"Database: {len(pending)} pending migrations found")
 
-    if DB_PATH.exists():
+    if pending and DB_PATH.exists():
         _backup_database(logger)
 
     try:
@@ -257,6 +297,15 @@ def run_migrations(logger=None):
                     if logger:
                         logger.critical(f"Migration {version} failed: {e}")
                     raise
+
+            _run_foreign_key_check(conn, logger)
+            _run_integrity_check(conn, logger)
+
+            if logger:
+                if pending:
+                    logger.info("Database: Migration validation checks passed")
+                else:
+                    logger.debug("Database: Migration validation checks passed")
 
     except Exception as e:
         if logger:
