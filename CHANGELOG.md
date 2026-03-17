@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.12.0 - 2026-03-16
+## v0.12.0 - 2026-03-17
 
 ### Breaking Changes
 
@@ -16,6 +16,7 @@
 
 ### Fixes
 
+- fix: finish implementation of blocklisting (closes #91) (#93) (@kylemmkay)
 - fix: new log format expected in container verification (@kylemmkay)
 - fix: missed some data conversions with the introduction of destination chache logic (@kylemmkay)
 - fix: cache degrading due to db scoping not defined properly (#82) (@kylemmkay)
