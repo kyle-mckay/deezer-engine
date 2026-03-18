@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.1 - 2026-03-18
+
+### Maintenance
+
+- chore: cleanup and remove the manual `>>> START` / `<<< END` logs (closes #89) (#98) (@kylemmkay)
+
 ## v0.12.0 - 2026-03-17
 
 ### Breaking Changes
