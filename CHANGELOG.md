@@ -6,6 +6,10 @@
 
 - feat: add global variable for `max_tries` for `get_tracks` and `get_albums` (closes #84) (#99) (@kylemmkay)
 
+### Fixes
+
+- fix: eta not showing until a successfull get for track/album metadata (closes #90) (#99) (@kylemmkay)
+
 ### Maintenance
 
 - chore: cleanup and remove the manual `>>> START` / `<<< END` logs (closes #89) (#98) (@kylemmkay)
