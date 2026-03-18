@@ -4,6 +4,7 @@
 
 ### Enhancements
 
+- enhance: streamline get_ functions to perform other tasks if on cooldown (closes #85) (#103) (@kylemmkay)
 - feat: add global variable for `max_tries` for `get_tracks` and `get_albums` (closes #84) (#99) (@kylemmkay)
 
 ### Fixes
