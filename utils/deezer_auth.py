@@ -91,6 +91,31 @@ def should_blocklist_failed_fetch(error_code, error_detail):
     detail = str(error_detail).lower() if error_detail is not None else ""
     return not any(pattern in detail for pattern in NON_BLOCKLIST_ERROR_PATTERNS)
 
+def log_enrichment_progress(logger, log_prefix, i, total_items, last_log_time, start_log_time, log_interval):
+    """
+    Log enrichment progress at configured intervals. Called for every loop iteration.
+    Returns updated last_log_time if logging occurred, otherwise returns original last_log_time.
+    """
+    logger.debug(f"log_enrichment_progress called: log_prefix='{log_prefix}', i={i}, total_items={total_items}, last_log_time={last_log_time}, start_log_time={start_log_time}, log_interval={log_interval}")
+    current_time = time.time()
+    if current_time - last_log_time >= log_interval:
+        elapsed_time = current_time - start_log_time
+        
+        if isinstance(total_items, int):
+            items_remaining = total_items - i
+            time_per_item = elapsed_time / i
+            eta_seconds = items_remaining * time_per_item
+            eta_str = str(timedelta(seconds=int(eta_seconds)))
+            percent = f"{i/total_items:.1%}"
+            suffix = f"{percent} ({i}/{total_items}) complete (ETA: {eta_str})..."
+        else:
+            suffix = f"{i} items processed..."
+        
+        logger.info(f"{log_prefix} enrichment: {suffix}")
+        return current_time
+    
+    return last_log_time
+
 def get_authenticated_client(config, logger):
     """
     Initializes the Deezer Client using an ARL cookie.
@@ -323,6 +348,10 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
             if shutdown_event.is_set():
                 logger.debug("Shutdown acknowledged mid-track collection. Returning partial results.")
                 return cached_tracks
+            
+            # Log progress at configured intervals
+            log_prefix = f"Database '{identifier}'" if source_type == "database" else f"'{source_type}'"
+            last_log_time = log_enrichment_progress(logger, log_prefix, i, total_len, last_log_time, start_log_time, log_interval)
 
             # Check rate limiting at configured intervals to prevent sustained high-load triggers
             if i % api_batch_size == 0 and is_database_enrichment:
@@ -404,36 +433,7 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                     'date_cached': date_time
                 })
 
-            logger.debug(f"Processed track {track}: {i}/{total_len}")
-            
-            current_time = time.time()
-            if current_time - last_log_time >= log_interval:
-                # 1. Calculate progress
-                elapsed_time = current_time - start_log_time
-                items_remaining = total_len - i
-                
-                # 2. Calculate average time and ETA
-                time_per_item = elapsed_time / i
-                eta_seconds = items_remaining * time_per_item
-                
-                # 3. Format seconds 
-                eta_str = str(timedelta(seconds=int(eta_seconds)))
-                percent = f"{i/total_len:.1%}"
-
-                # 4. Create suffix
-                suffix = f"{percent} ({i}/{total_len}) complete (ETA: {eta_str})..."
-
-                if source_type == "database":
-                    logger.info(f"Database '{identifier}' enrichment: {suffix}")
-                elif source_type == "favorites":
-                    logger.info(f"Fetching '{source_type}': {suffix}")
-                elif identifier.startswith("playlist__"):
-                    logger.info(f"Fetching playlist '{display_name}': {suffix}")
-                elif identifier.startswith("album__"):
-                    logger.info(f"Fetching album '{display_name}': {suffix}")
-                else:
-                    logger.info(f"Fetching '{source_type}': {suffix}")
-                last_log_time = current_time 
+            logger.debug(f"Processed track {track}: {i}/{total_len}") 
 
             # If performing database enrichment, perform periodic checkpoint at chunk_size interval
             if source_type == "database" and identifier == "tracks" and i % chunk_size == 0:
@@ -558,6 +558,9 @@ def get_albums(client, logger, identifier, album_ids=None):
                     logger.debug("Shutdown acknowledged mid-album collection. Returning partial results.")
                     return cached_albums
                 
+                # Log progress at configured intervals
+                last_log_time = log_enrichment_progress(logger, f"Album '{identifier}'", i, total_albums, last_log_time, start_log_time, log_interval)
+                
                 # Check rate limiting at configured intervals
                 if i % api_batch_size == 0:
                     elapsed_time = time.time() - start_time
@@ -654,24 +657,6 @@ def get_albums(client, logger, identifier, album_ids=None):
                     albums = []
                     if shutdown_event.is_set():
                         return cached_albums
-                
-                # Log progress at configured intervals
-                current_time = time.time()
-                if current_time - last_log_time >= log_interval:
-                    elapsed_time = current_time - start_log_time
-                    items_remaining = total_albums - i if isinstance(total_albums, int) else "unknown"
-                    
-                    if isinstance(total_albums, int):
-                        time_per_item = elapsed_time / i
-                        eta_seconds = items_remaining * time_per_item
-                        eta_str = str(timedelta(seconds=int(eta_seconds)))
-                        percent = f"{i/total_albums:.1%}"
-                        suffix = f"{percent} ({i}/{total_albums}) complete (ETA: {eta_str})..."
-                    else:
-                        suffix = f"{i} albums processed..."
-                    
-                    logger.info(f"Album '{identifier}' enrichment: {suffix}")
-                    last_log_time = current_time
                 
             except Exception as e:
                 logger.debug(f"Non-critical loop error at index {i} (Album {album_id}): {e}")
