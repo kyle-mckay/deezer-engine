@@ -559,6 +559,9 @@ def get_unprocessed_track_ids(logger=None, include_blocklisted=False):
     Retrieves all track IDs from the database that have not yet been 
     enriched with metadata.
     """
+    if logger:
+        logger.debug(f"Querying unprocessed track IDs (include_blocklisted={include_blocklisted}).")
+
     track_filter = _blocklist_where_clause(include_blocklisted)
     query = f"""
     SELECT id
@@ -590,6 +593,9 @@ def get_unprocessed_album_ids(logger=None, include_blocklisted=False):
     Retrieves all album IDs from the database that have not yet been 
     enriched with metadata OR have not completed genre mapping.
     """
+    if logger:
+        logger.debug(f"Querying unprocessed album IDs (include_blocklisted={include_blocklisted}).")
+
     album_filter = _blocklist_where_clause(include_blocklisted)
     query = f"""
     SELECT id
@@ -627,6 +633,9 @@ def reset_album_genres_by_track_ids(track_ids, logger=None):
         if logger:
             logger.debug("No track IDs provided. Skipping album genre reset.")
         return 0
+
+    if logger:
+        logger.debug(f"Resetting album genre mappings for tracks_missing_genres_count={len(track_ids)}.")
     
     try:
         with _get_connection() as conn:
@@ -762,6 +771,12 @@ def update_tracks_partial_batch(track_list, logger=None):
 
     sample_track = track_list[0]
     update_keys = [k for k in sample_track.keys() if k != 'id']
+
+    if logger:
+        logger.debug(
+            f"Refreshing partial track stats for track_count={len(track_list)} with update_fields={update_keys}."
+        )
+
     set_clause = ", ".join([f"{k} = ?" for k in update_keys])
     query = f"UPDATE tracks SET {set_clause} WHERE id = ?;"
 
@@ -1102,13 +1117,19 @@ def populate_album_genres(album_list, logger=None):
             if logger:
                 logger.debug(f"Retroactively populating track genres for {len(enriched_album_ids)} enriched albums")
             
-            for album_id in enriched_album_ids:
+            total_enriched_albums = len(enriched_album_ids)
+            for album_position, album_id in enumerate(enriched_album_ids, start=1):
                 if shutdown_event.is_set():
                     if logger:
                         logger.debug("Shutdown acknowledged during per-album track-genre backfill. Remaining albums deferred to next run.")
                     break
                 try:
-                    populate_track_genres_for_album(album_id, logger)
+                    populate_track_genres_for_album(
+                        album_id,
+                        logger,
+                        album_position=album_position,
+                        album_total=total_enriched_albums,
+                    )
                 except Exception as album_err:
                     if logger:
                         logger.warning(f"Failed to populate track genres for album {album_id}: {album_err}")
@@ -1195,13 +1216,16 @@ def populate_track_genres(logger=None):
             logger.exception("Stack trace for track genre population error:")
         raise
 
-def populate_track_genres_for_album(album_id, logger=None):
+def populate_track_genres_for_album(album_id, logger=None, album_position=None, album_total=None):
     """
     Populates track_genres for a specific album.   
     """
     try:
         with _get_connection() as conn:
             cursor = conn.cursor()
+            progress_suffix = ""
+            if album_position is not None and album_total is not None:
+                progress_suffix = f" ({album_position}/{album_total})"
             
             # Check if album has any genres
             cursor.execute("SELECT COUNT(*) FROM album_genres WHERE album_id = ?", (album_id,))
@@ -1214,7 +1238,10 @@ def populate_track_genres_for_album(album_id, logger=None):
                 )
                 conn.commit()
                 if logger:
-                    logger.debug(f"Album {album_id} has no genres to populate. Marked tracks as genre_mapped=1.")
+                    logger.debug(
+                        f"Album {album_id}{progress_suffix} has no genres to populate. "
+                        f"Marked tracks as genre_mapped=1."
+                    )
                 return 0
             
             # Populate track-genres for this album's tracks
@@ -1238,7 +1265,10 @@ def populate_track_genres_for_album(album_id, logger=None):
             conn.commit()
             
             if logger:
-                logger.debug(f"Populated {rows_affected} track-genre relationships for album {album_id}, marked {tracks_marked} tracks as genre_mapped=1")
+                logger.debug(
+                    f"Populated {rows_affected} track-genre relationships for album {album_id}{progress_suffix}, "
+                    f"marked {tracks_marked} tracks as genre_mapped=1"
+                )
             
             return rows_affected
     
@@ -1251,6 +1281,9 @@ def get_albums_missing_genres(logger=None, include_blocklisted=False):
     """
     Retrieves all album IDs that have not completed genre mapping.
     """
+    if logger:
+        logger.debug(f"Querying albums missing genre mappings (include_blocklisted={include_blocklisted}).")
+
     try:
         with _get_connection() as conn:
             cursor = conn.cursor()
@@ -1282,6 +1315,9 @@ def get_tracks_missing_genres(logger=None, include_blocklisted=False):
     """
     Retrieves all track IDs that have not completed genre mapping.
     """
+    if logger:
+        logger.debug(f"Querying tracks missing genre mappings (include_blocklisted={include_blocklisted}).")
+
     try:
         with _get_connection() as conn:
             cursor = conn.cursor()
@@ -1316,6 +1352,9 @@ def update_albums_partial_batch(album_list, logger=None):
     """
     if not album_list:
         return
+
+    if logger:
+        logger.debug(f"Refreshing partial album stats for album_count={len(album_list)}.")
 
     query = """
     UPDATE albums SET
@@ -1503,6 +1542,12 @@ def get_expired_track_ids(logger=None, include_blocklisted=False):
     Returns a list of track IDs where date_cached is older than n days. Should ignore unprocessed (new) ids.
     """
     track_stats_refresh=get_global_value("track_stats_refresh",default = 90)
+    if logger:
+        logger.debug(
+            f"Querying expired track stats with refresh_days={track_stats_refresh} "
+            f"(include_blocklisted={include_blocklisted})."
+        )
+
     track_filter = _blocklist_where_clause(include_blocklisted)
     query = f"""
     SELECT id 
@@ -1547,6 +1592,12 @@ def get_expired_album_ids(logger=None, include_blocklisted=False):
     Returns a list of album IDs where date_cached is older than n days. Should ignore unprocessed (new) ids.
     """
     album_stats_refresh = get_global_value("album_stats_refresh", default=90)
+    if logger:
+        logger.debug(
+            f"Querying expired album stats with refresh_days={album_stats_refresh} "
+            f"(include_blocklisted={include_blocklisted})."
+        )
+
     album_filter = _blocklist_where_clause(include_blocklisted)
     query = f"""
     SELECT id 

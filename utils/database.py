@@ -46,6 +46,8 @@ def get_connection(logger=None):
     Accepts a logger instance for debugging.
     """
     try:
+        if logger:
+            logger.debug(f"Starting SQLite connection setup for database: {DB_PATH}")
         if not DB_PATH.parent.exists():
             if logger:
                 logger.debug(f"Creating missing database directory: {DB_PATH.parent}")
@@ -66,10 +68,13 @@ def get_connection(logger=None):
 
 def initialize_all(logger=None):
     """Initialize database by applying baseline + incremental SQL migrations only."""
+    if logger:
+        logger.debug("Starting database initialization (migrations).")
+
     run_migrations(logger)
     
     if logger:
-        logger.debug(f"Database: Initialized")
+        logger.debug("Database initialization completed.")
 
 if __name__ == "__main__":
     from .logger import setup_logger

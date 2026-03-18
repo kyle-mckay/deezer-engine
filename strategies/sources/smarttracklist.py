@@ -39,6 +39,7 @@ def run(client, config, logger, source_data):
         # Security: Mask ARL in debug logs
         masked_arl = f"{arl[:6]}...{arl[-6:]}" if arl else "None"
         logger.debug(f"Params: name='{list_name}', retention={retention_hrs}h, arl={masked_arl}")
+        logger.debug(f"SmartTracklist source start: name='{list_name}', retention={retention_hrs}h")
 
         cache_file = str(get_cache_dir() / f"smart_{list_name}.json")
 
@@ -52,6 +53,7 @@ def run(client, config, logger, source_data):
             logger.debug(f"Cache miss for smarttracklist '{list_name}'. Starting live retrieval...")
             
             warm_url = f"https://www.deezer.com/us/smarttracklist/{list_name}"
+            logger.debug(f"SmartTracklist live fetch start: warm_url='{warm_url}'")
             session, api_token = get_authenticated_session(arl, logger, warm_url)
             
             if not session or not api_token:
@@ -72,6 +74,7 @@ def run(client, config, logger, source_data):
             ]
 
             track_ids = []
+            selected_method = "none"
             for method, payload in fetch_strategies:
                 cid = random.randint(100000000, 999999999)
                 gw_url = f"https://www.deezer.com/ajax/gw-light.php?method={method}&input=3&api_version=1.0&api_token={api_token}&cid={cid}"
@@ -82,6 +85,7 @@ def run(client, config, logger, source_data):
                     if items:
                         track_ids = [str(i.get('SNG_ID') or i.get('id')) for i in items]
                         if track_ids:
+                            selected_method = method
                             logger.debug(f"Success: {len(track_ids)} tracks found via {method}")
                             break
                 except Exception as e:
@@ -92,6 +96,8 @@ def run(client, config, logger, source_data):
             if not track_ids:
                 logger.debug(f"AJAX methods failed for {list_name}. Falling back to Regex scrape.")
                 track_ids = re.findall(r'"SNG_ID":"?(\d+)"?', page_text)
+                if track_ids:
+                    selected_method = "regex_fallback"
 
             if not track_ids:
                 logger.error(f"Failed to find any tracks for '{list_name}' after trying all strategies.")
@@ -110,6 +116,9 @@ def run(client, config, logger, source_data):
                 })
             
             logger.debug(f"Sample Track IDs from source: {track_ids[:5]}")
+            logger.debug(
+                f"SmartTracklist live fetch end: method={selected_method}, unique_ids={len(track_ids)}"
+            )
             return tracks
 
         # Execute via Cache Manager (with database collection support)
@@ -117,6 +126,7 @@ def run(client, config, logger, source_data):
         
         # Consolidated INFO: One line for the user
         logger.debug(f"Loaded {len(results)} tracks from SmartTracklist '{list_name}'.")
+        logger.debug(f"SmartTracklist source end: name='{list_name}', returned={len(results)}")
         return results
 
     except Exception as e:

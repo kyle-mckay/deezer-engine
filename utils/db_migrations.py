@@ -224,6 +224,14 @@ def run_migrations(logger=None):
     pending = [m for m in migrations if m['version'] not in applied_versions]
 
     if logger:
+        logger.debug(
+            "Database: Migration run started "
+            f"(pending_count={len(pending)}, discovered_count={len(discovered_versions)}, "
+            f"applied_count={len(applied_versions)}, db_exists={pre_migration_db_exists}, "
+            f"db_size_bytes={pre_migration_db_size})"
+        )
+
+    if logger:
         logger.debug(f"Database: Using migrations from {MIGRATIONS_DIR}")
     
     if not pending:
@@ -237,6 +245,9 @@ def run_migrations(logger=None):
         _backup_database(logger)
     elif pending and logger and is_fresh_or_empty_db:
         logger.debug("Database: Skipping pre-migration backup for fresh/empty database.")
+
+    executed_count = 0
+    run_failed = False
 
     try:
         with get_connection(logger) as conn:
@@ -259,6 +270,7 @@ def run_migrations(logger=None):
                         (version, description, timestamp, __version__)
                     )
                     conn.commit()
+                    executed_count += 1
                     
                     if logger:
                         logger.info(f"Applied database patch: {version} - {description}")
@@ -279,10 +291,19 @@ def run_migrations(logger=None):
                     logger.debug("Database: Migration validation checks passed")
 
     except Exception as e:
+        run_failed = True
         if logger:
             logger.critical(f"Database migrations failed: {e}")
         raise
     finally:
         if logger:
-            logger.debug("Database: All migrations completed.")
+            log_message = (
+                "Database: Migration run completed "
+                f"(status={'failed' if run_failed else 'ok'}, executed_count={executed_count}, "
+                f"pending_count={len(pending)})"
+            )
+            if run_failed or executed_count == 0:
+                logger.debug(log_message)
+            else:
+                logger.info(log_message)
 

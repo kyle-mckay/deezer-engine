@@ -38,6 +38,10 @@ def run(client, config, logger, dest_data, tracks):
         logger.error("Destination 'playlist' requires a playlist 'ID'.")
         return
 
+    logger.debug(
+        f"Playlist destination start: target_id={target_id}, method={method}, incoming_tracks={len(tracks)}"
+    )
+
     # Use Utility for Auth
     masked_id = f"{user_id[0]}...{user_id[-1]}" if len(user_id) > 2 else "***"
     logger.debug(f"Authenticating for playlist {target_id} using ARL and UserID: {masked_id}")
@@ -120,6 +124,10 @@ def run(client, config, logger, dest_data, tracks):
                 _gateway_request(session, "playlist.addSongs", target_id, api_token, track_ids, client.chunk_size, logger)
 
         logger.info(f"Sync complete for '{playlist.title}'.")
+        logger.debug(
+            f"Playlist destination end: target_id={target_id}, method={method}, "
+            f"target_unique={len(target_set)}"
+        )
 
         
         sync_to_collections(tracks, logger, collection)
@@ -136,6 +144,11 @@ def _gateway_request(session, method, playlist_id, token, ids, chunk_size, logge
     total = len(ids)
     count = 0
     verb = "Removed" if "delete" in method else "Added"
+    total_batches = (total + chunk_size - 1) // chunk_size if chunk_size else 0
+    logger.debug(
+        f"Gateway request start: method={method}, playlist_id={playlist_id}, tracks={total}, "
+        f"chunk_size={chunk_size}, batches={total_batches}"
+    )
     
     current_time = time.time()
     start_log_time = time.time()
@@ -202,4 +215,4 @@ def _gateway_request(session, method, playlist_id, token, ids, chunk_size, logge
             last_log_time = current_time 
         time.sleep(0.5)
     
-    logger.debug(f"Done: {verb} {count} tracks.")
+    logger.debug(f"Gateway request end: method={method}, {verb.lower()}={count}, requested={total}")
