@@ -7,7 +7,7 @@ strategies.yml
 # --- TEMP FILES ---
 cache/
 tmp/
-db/
+/db/
 backups/
 deezer_engine.db
 
