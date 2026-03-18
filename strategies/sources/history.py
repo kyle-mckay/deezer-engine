@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 from utils.deezer_auth import get_authenticated_session
 from utils.config_loader import get_global_value
-from utils.cache_manager import get_collection_name
+from utils.collections import get_collection_name
 from utils.infrastructure.paths import get_data_dir
 
 def get_deezer_history(limit, logger):

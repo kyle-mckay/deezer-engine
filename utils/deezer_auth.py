@@ -543,8 +543,8 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
         update_track_metadata,
         mark_track_metadata_fetch_failed,
         update_tracks_partial_batch,
-        sync_to_collections,
     )
+    from utils.collections import sync_to_collections
     logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
 
     display_name = identifier

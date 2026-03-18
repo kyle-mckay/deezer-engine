@@ -439,186 +439,22 @@ def blocklist_albums_for_unavailable_tracks(logger=None):
         raise
 
 def fetch_collection(source_name, logger=None, include_blocklisted=False):
-    """
-    Retrieves all tracks and their full metadata associated with a specific source.
-    """
-    # SQL JOIN: Get track metadata where the track exists in the specified collection
-    track_filter = _blocklist_where_clause(include_blocklisted)
-    query = f"""
-    SELECT t.* FROM tracks t
-    JOIN collections c ON t.id = c.track_id
-        WHERE c.source_name = ?
-            AND {track_filter};
-    """
-    
-    collection_data = []
-    
-    try:
-        with _get_connection() as conn:
-            cursor = conn.execute(query, (source_name,))
-            rows = cursor.fetchall()
-            
-            for row in rows:
-                # Convert the sqlite3.Row to a standard dictionary
-                track = dict(row)
-                
-                # Parse 'JSON strings' back into Python objects
-                if track.get('available_countries'):
-                    track['available_countries'] = json.loads(track['available_countries'])
-                if track.get('contributors'):
-                    track['contributors'] = json.loads(track['contributors'])
-                
-                collection_data.append(track)
-            
-            if logger:
-                logger.debug(f"DB: Retrieved {len(collection_data)} tracks for '{source_name}'.")
-                
-            return collection_data
-            
-    except Exception as e:
-        if logger:
-            logger.error(f"DB Error: Failed to fetch '{source_name}': {e}")
-        return []
+    """Compatibility wrapper for utils.collections.cache_queries.fetch_collection."""
+    from utils.collections.cache_queries import fetch_collection as _fetch_collection
+
+    return _fetch_collection(source_name, logger, include_blocklisted)
 
 def validate_sync_integrity(original_tracks, synced_tracks, logger):
-    """
-    Compares original fetched tracks with synced tracks from the database.
-    Ensures data integrity after sync_to_collections.
-    """
-    if not original_tracks or not synced_tracks:
-        logger.warning("Sync validation skipped: One or both track lists are empty.")
-        return
-    
-    # Get track IDs from both sources
-    original_ids = {str(t.get('id')) for t in original_tracks}
-    synced_ids = {str(t.get('id')) for t in synced_tracks}
-    
-    logger.debug(f"Original track count: {len(original_ids)}, Synced track count: {len(synced_ids)}")
-    
-    # Check if all original tracks were synced
-    missing_ids = original_ids - synced_ids
-    if missing_ids:
-        error_msg = f"Data integrity error: {len(missing_ids)} tracks missing from synced collection. Missing IDs: {missing_ids}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-    
-    # Check if extra tracks were added (shouldn't happen)
-    extra_ids = synced_ids - original_ids
-    if extra_ids:
-        error_msg = f"Data integrity error: {len(extra_ids)} unexpected tracks in synced collection. Extra IDs: {extra_ids}"
-        logger.error(error_msg)
-        raise ValueError(error_msg)
-    
-    if original_ids == synced_ids:
-        logger.debug(f"Sync validation passed: All {len(original_ids)} track IDs match between original and synced data.")
-    else:
-        error_msg = "Sync validation failed: Track ID mismatch detected."
-        logger.error(error_msg)
-        raise ValueError(error_msg)
+    """Compatibility wrapper for utils.collections.sync.validate_sync_integrity."""
+    from utils.collections.sync import validate_sync_integrity as _validate_sync_integrity
+
+    return _validate_sync_integrity(original_tracks, synced_tracks, logger)
 
 def sync_to_collections(tracklist, logger, collection_name=None):
-    """
-    Parses a tracklist where each track contains its own source info.
-    Inserts IDs into 'tracks' and maps them in 'collections'.
-    """
-    if not tracklist:
-        if collection_name:
-            try:
-                with _get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "DELETE FROM collections WHERE source_name = ?",
-                        (collection_name,)
-                    )
-                    conn.commit()
-                    logger.debug(f"DB: Cleared {cursor.rowcount} cached tracks from '{collection_name}'.")
-            except Exception as e:
-                logger.error(f"DB Sync failed: {e}")
-            return
+    """Compatibility wrapper for utils.collections.sync.sync_to_collections."""
+    from utils.collections.sync import sync_to_collections as _sync_to_collections
 
-        logger.debug("Sync skipped: No tracks provided in payload.")
-        return
-    
-    # Use a set to handle unique pairs of (id, source) from the input
-    # If collection_name is provided, use it as default; otherwise use track's collection or 'unknown'
-    if collection_name:
-        unique_pairs = {(str(t['id']), collection_name) for t in tracklist}
-        logger.debug(f"Using provided collection_name: '{collection_name}' for all tracks.")
-    else:
-        unique_pairs = {(str(t['id']), t.get('collection', 'unknown')) for t in tracklist}
-    
-    unique_track_ids = {tid for tid, source in unique_pairs}
-    
-    logger.debug(f"DB: Syncing {len(unique_track_ids)} unique track IDs.")
-
-    try:
-        with _get_connection() as conn:
-            cursor = conn.cursor()
-            date_time = datetime.now().isoformat()
-
-            # extracts (id, collection, date_cached) from the payload
-            if collection_name:
-                # Use provided collection_name for all tracks
-                unique_pairs = {
-                    (
-                        str(t['id']), 
-                        collection_name,
-                        date_time
-                    ) for t in tracklist
-                }
-            else:
-                # Use collection from each track object
-                unique_pairs = {
-                    (
-                        str(t['id']), 
-                        t.get('collection', 'unknown'), 
-                        date_time
-                    ) for t in tracklist
-                }
-            
-            # Unique track IDs for the master tracks table
-            unique_track_ids = {tid for tid, source, timestamp in unique_pairs}
-            
-            # Update 'tracks' table. Metadata is fetched in a later step.
-            track_entries = [(tid,) for tid in unique_track_ids]
-            cursor.executemany(
-                "INSERT OR IGNORE INTO tracks (id) VALUES (?)", 
-                track_entries
-            )
-            
-            # Replace each touched collection atomically without affecting other collections.
-            incoming_ids_by_collection = {}
-            for track_id, source_name, _timestamp in unique_pairs:
-                incoming_ids_by_collection.setdefault(source_name, set()).add(track_id)
-
-            for source_name, incoming_ids in incoming_ids_by_collection.items():
-                if incoming_ids:
-                    placeholders = ','.join('?' * len(incoming_ids))
-                    delete_query = f"DELETE FROM collections WHERE source_name = ? AND track_id NOT IN ({placeholders})"
-                    delete_params = [source_name, *sorted(incoming_ids)]
-                    cursor.execute(delete_query, delete_params)
-                else:
-                    cursor.execute(
-                        "DELETE FROM collections WHERE source_name = ?",
-                        (source_name,)
-                    )
-
-                if logger and cursor.rowcount > 0:
-                    logger.debug(f"DB: Removed {cursor.rowcount} stale tracks from ['{source_name}']")
-
-            # Update 'collections' table
-
-            collection_entries = [(tid, source, timestamp) for tid, source, timestamp in unique_pairs]
-            cursor.executemany(
-                "INSERT OR REPLACE INTO collections (track_id, source_name, date_cached) VALUES (?, ?, ?)", 
-                collection_entries
-            )
-
-            conn.commit()
-            logger.debug("DB: Transaction committed successfully.")
-
-    except Exception as e:
-        logger.error(f"DB Sync failed: {e}")
+    return _sync_to_collections(tracklist, logger, collection_name)
 
 def get_unprocessed_track_ids(logger=None, include_blocklisted=False):
     """
@@ -1696,42 +1532,7 @@ def get_expired_album_ids(logger=None, include_blocklisted=False):
         return []
 
 def is_collection_cached(source_name, config, logger=None):
-    """
-    Checks if a collection exists and was cached within the retention window.
-    """
-    retention_hrs = config.get('retention', get_global_value('retention', default = 0))
-    if logger:
-        logger.debug(f"Retention hours for '{source_name}': {retention_hrs}")
-    query = """
-    SELECT date_cached FROM collections 
-    WHERE source_name = ? 
-    ORDER BY date_cached DESC LIMIT 1;
-    """
-    
-    try:
-        with _get_connection() as conn:
-            cursor = conn.execute(query, (source_name,))
-            row = cursor.fetchone()
-            
-            if not row or not row['date_cached']:
-                if logger:
-                    logger.debug(f"Cache miss: '{source_name}' not found.")
-                return False
-            
-            cache_time = datetime.fromisoformat(row['date_cached'])
-            expiration_time = datetime.now() - timedelta(hours=retention_hrs)
-            
-            is_valid = cache_time > expiration_time
-            
-            if logger:
-                if is_valid:
-                    logger.debug(f"Cache verify: {'Valid' if is_valid else 'Expired'} (Age: {cache_time} > Exp: {expiration_time})")
-                else:
-                    logger.debug(f"Cache verify: {'Valid' if is_valid else 'Expired'} (Age: {cache_time} < Exp: {expiration_time})")
-                
-            return is_valid
-            
-    except Exception as e:
-        if logger:
-            logger.error(f"DB Error: Cache validation failed: {e}")
-        return False
+    """Compatibility wrapper for utils.collections.cache_queries.is_collection_cached."""
+    from utils.collections.cache_queries import is_collection_cached as _is_collection_cached
+
+    return _is_collection_cached(source_name, config, logger)

@@ -15,8 +15,7 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 import importlib
 import logging
-from utils.cache_manager import get_collection_name
-from utils.db_manager import is_collection_cached, fetch_collection, sync_to_collections
+from utils.collections import get_collection_name, is_collection_cached, fetch_collection, sync_to_collections
 
 def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """

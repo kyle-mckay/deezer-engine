@@ -27,9 +27,10 @@ from utils.config_loader import load_config_with_env_overrides, load_strategies_
 from utils.deezer_auth import get_authenticated_client, get_tracks
 from strategies.base import StrategyController
 from utils.database import initialize_all
-from utils.cache_manager import get_collection_name
+from utils.collections import get_collection_name
 from utils.infrastructure.signals import shutdown_event
-from utils.db_manager import get_unprocessed_track_ids, update_track_metadata,fetch_collection, is_collection_cached, get_expired_track_ids, update_tracks_partial_batch, update_unprocessed, refresh_stats, release_expired_blocklisted_entities
+from utils.collections import fetch_collection, is_collection_cached
+from utils.db_manager import get_unprocessed_track_ids, update_track_metadata, get_expired_track_ids, update_tracks_partial_batch, update_unprocessed, refresh_stats, release_expired_blocklisted_entities
 from __version__ import __version__, __banner__
 
 def load_configs(type,logger = None):

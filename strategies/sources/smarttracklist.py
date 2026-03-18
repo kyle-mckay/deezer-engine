@@ -21,7 +21,7 @@ import logging
 from datetime import datetime
 from utils.deezer_auth import get_authenticated_session
 from utils.infrastructure.paths import get_cache_dir
-from utils.cache_manager import handle_cached_data, get_collection_name
+from utils.collections import handle_cached_data, get_collection_name
 from utils.config_loader import get_global_value
 
 def run(client, config, logger, source_data):
