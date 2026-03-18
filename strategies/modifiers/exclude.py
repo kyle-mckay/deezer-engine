@@ -27,8 +27,6 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
     2. Compares them against 'current_tracks' (the pipeline from ./tmp/).
     3. Returns the filtered list to the Controller to overwrite ./tmp/.
     """
-    logger.debug(">>> START: strategies.modifiers.exclude.run")
-
     # 1. Resolve the exclude source dynamically
     source_data = mod_data.get('source')
     if not source_data:
@@ -37,6 +35,9 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
     
     if isinstance(source_data, dict):
             source_data = [source_data]
+    logger.debug(
+        f"Exclude modifier start: pipeline={len(current_tracks)}, sources={len(source_data)}"
+    )
     for src in source_data:
         source_type = src.get('type')
         source_id = src.get('id', None)
@@ -87,19 +88,26 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
             
             # Preserve the original order while filtering
             result = []
+            removed_ids = []
             for track in current_tracks:
                 track_id = str(track.get('id') if isinstance(track, dict) else track.id)
                 if track_id not in exclude_set:
                     result.append(track)
                 else:
-                    logger.debug(f"Excluding Track ID: {track_id}")
+                    removed_ids.append(track_id)
             
             removed_count = starting_count - len(result)
             logger.info(f"Action: Excluded {removed_count}/{starting_count} tracks based on {source_type}.")
+            if removed_ids:
+                logger.debug(
+                    f"Excluded sample IDs ({min(len(removed_ids), 5)} of {len(removed_ids)}): "
+                    f"{removed_ids[:5]}"
+                )
             
             logger.debug(f"Final pipeline count: {len(result)}")
-            logger.debug("<<< END: strategies.modifiers.exclude.run")
-                
+            logger.debug(
+                f"Exclude modifier end: source={source_type}, removed={removed_count}, remaining={len(result)}"
+            )
             return result
 
         except Exception as e:

@@ -23,7 +23,7 @@ import os
 from pathlib import Path
 from utils.logger import setup_logger
 from utils.paths import get_data_dir
-from utils.config_loader import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates, get_global_value
+from utils.config_loader import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates, get_global_value, get_bootstrap_logging_settings
 from utils.deezer_auth import get_authenticated_client, get_tracks
 from strategies.base import StrategyController
 from utils.database import initialize_all
@@ -139,18 +139,22 @@ def process_destinations(s_data, controller, logger, strategy_name):
         logger.warning(f"Strategy '{strategy_name}' has no destination defined.")
 
 def main():
-    # 1. Load data
+    # 1. Bootstrap logging before full config load
+    bootstrap_log_level, bootstrap_write_logs = get_bootstrap_logging_settings()
+    valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+    bootstrap_actual_level = bootstrap_log_level if bootstrap_log_level in valid_levels else 'INFO'
+    logger = setup_logger("DeezerEngine", bootstrap_actual_level, log_to_file=bootstrap_write_logs)
+
+    # 2. Load data
     config = load_configs("config")
 
-    # 2. Setup Logger & Validate Level
+    # 3. Validate remaining configuration and keep logger in sync
     user_log_level = config.get('config', {}).get('log_level', 'INFO').upper()
     should_write_logs = config.get('config', {}).get('write_logs', True)
     
     # Check if the level is officially recognized by the logging module
     # logging.getLevelName(str) returns the numeric level if valid, 
     # but only if it's a known string like 'DEBUG'.
-    valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
-    
     actual_level = user_log_level
     warning_needed = False
     
@@ -158,8 +162,14 @@ def main():
         actual_level = 'INFO'
         warning_needed = True
 
-    logger = setup_logger("DeezerEngine", actual_level, log_to_file=should_write_logs)
+    logger.setLevel(getattr(logging, actual_level, logging.INFO))
     
+    if bool(should_write_logs) != bool(bootstrap_write_logs):
+        logger.warning(
+            f"write_logs changed after startup bootstrap (bootstrap={bootstrap_write_logs}, configured={should_write_logs}). "
+            "A restart is required for file-handler changes to take effect."
+        )
+
     # Register signal handlers for CTRL+C (SIGINT) and termination/docker stop (SIGTERM).
     def signal_handler(sig, frame):
         """Logs once and sets the shared shutdown event."""

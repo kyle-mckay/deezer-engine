@@ -31,14 +31,13 @@ def run(client, config, logger, source_data):
     """
     Fetches tracks from a specific Deezer artist by iterating through their albums.
     """
-    logger.debug(">>> START: strategies.sources.artist.run")
-    
     try:
         if isinstance(source_data, dict):
             source_data = [source_data]
         # Extract configuration
         retention_hrs = source_data[0].get('retention', get_global_value('retention', default=0))
         artist_id = source_data[0].get('id')
+        logger.debug(f"Artist source start: artist_id={artist_id}, retention={retention_hrs}h")
         
         if not artist_id:
             logger.error("Source type 'artist' failed: missing 'id' in configuration.")
@@ -116,12 +115,13 @@ def run(client, config, logger, source_data):
             sample_ids = [t.get('id') for t in artist_tracks[:5]]
             logger.debug(f"Sample Track IDs from source: {sample_ids}")
 
+        logger.debug(
+            f"Artist source end: artist_id={artist_id}, albums={total_albums}, returned={len(artist_tracks)}"
+        )
+
         return artist_tracks
 
     except Exception as e:
         logger.error(f"Artist aggregation failed: {e}")
         logger.debug("Stack trace:", exc_info=True)
         return []
-        
-    finally:
-        logger.debug("<<< END: strategies.sources.artist.run")

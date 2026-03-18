@@ -15,30 +15,71 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 import os
 import re
+import logging
 import yaml
 from pathlib import Path
 import requests
 from utils.paths import get_data_dir
 from utils.logger import setup_logger
 
+config_logger = logging.getLogger("DeezerEngine")
+
+def get_bootstrap_logging_settings():
+    """
+    Resolve logging settings early, before full config loading.
+    """
+    log_level = os.getenv("DEEZER_LOG_LEVEL")
+    write_logs_env = os.getenv("DEEZER_WRITE_LOGS")
+
+    # Prioritize environment variables
+    if log_level is not None or write_logs_env is not None:
+        resolved_level = (log_level or "INFO").upper()
+        resolved_write_logs = True if write_logs_env is None else write_logs_env.lower() in ('true', '1', 'yes', 'on')
+        return resolved_level, resolved_write_logs
+
+    # Fall back to config.yml values
+    data_dir = get_data_dir()
+    config_path = data_dir / 'config.yml'
+    try:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f) or {}
+            cfg = config.get('config', {})
+            resolved_level = str(cfg.get('log_level', 'INFO')).upper()
+            resolved_write_logs = cfg.get('write_logs', True)
+            if isinstance(resolved_write_logs, str):
+                resolved_write_logs = resolved_write_logs.lower() in ('true', '1', 'yes', 'on')
+            return resolved_level, bool(resolved_write_logs)
+    except Exception:
+        return "INFO", True
+
 def get_global_value(key, default=None):
     """
     Retrieves a configuration value. 
     Checks environment variables (DEEZER_<KEY>) first, then falls back to config.yml.
     """
-
+    config_logger.debug(f"Resolving global config key='{key}' (default_provided={default is not None}).")
     if key.upper() == "CONTAINERIZED":
         env_key=key.upper()
     else:
         env_key = f"DEEZER_{key.upper()}"
+
+    is_sensitive_key = any(token in key.lower() for token in ("arl", "token", "secret", "password", "key"))
     
     # Check Environment Variables
     if env_key in os.environ:
         value = os.environ[env_key]
         if value.isdigit():
-            return int(value)
-        if value.lower() in ('true', 'yes', '1'): return True
-        if value.lower() in ('false', 'no', '0'): return False
+            value = int(value)
+        elif value.lower() in ('true', 'yes', '1'):
+            value = True
+        elif value.lower() in ('false', 'no', '0'):
+            value = False
+
+        display_value = "***" if is_sensitive_key else value
+        config_logger.debug(
+            f"Resolved key='{key}' from environment variable '{env_key}' "
+            f"(type={type(value).__name__}, value={display_value})."
+        )
         return value
 
     # Check config.yml
@@ -47,8 +88,19 @@ def get_global_value(key, default=None):
     try:
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f) or {}
-            return config.get('config', {}).get(key.lower(), default)
-    except Exception:
+            resolved_value = config.get('config', {}).get(key.lower(), default)
+            source = "config.yml" if key.lower() in config.get('config', {}) else "default"
+            display_value = "***" if is_sensitive_key else resolved_value
+            config_logger.debug(
+                f"Resolved key='{key}' from {source} "
+                f"(type={type(resolved_value).__name__}, value={display_value})."
+            )
+            return resolved_value
+    except Exception as e:
+        config_logger.debug(
+            f"Config read failed while resolving key='{key}' from '{config_path}': {e}. "
+            f"Using default value."
+        )
         return default
 
 def load_config_with_env_overrides():
@@ -60,12 +112,14 @@ def load_config_with_env_overrides():
     """
     data_dir = get_data_dir()
     config_path = data_dir / 'config.yml'
+    config_logger.debug(f"Loading configuration from '{config_path}' with environment overrides.")
     
     # Load base config from file
     try:
         with open(config_path, 'r') as f:
             config = yaml.safe_load(f) or {}
     except FileNotFoundError:
+        config_logger.debug(f"Config file not found at '{config_path}'. Starting from empty config.")
         config = {}
     
     # Ensure the 'config' section exists
@@ -109,6 +163,15 @@ def load_config_with_env_overrides():
                 value = value.lower() in ('true', '1', 'yes', 'on')
             
             config['config'][config_key] = value
+
+    applied_keys = [config_key for env_var, config_key in env_mappings.items() if env_var in os.environ]
+    if applied_keys:
+        config_logger.debug(
+            f"Configuration load completed. Applied {len(applied_keys)}/{len(env_mappings)} "
+            f"environment overrides: {', '.join(sorted(applied_keys))}."
+        )
+    else:
+        config_logger.debug("Configuration load completed. No environment overrides were applied.")
     
     return config
 
@@ -197,8 +260,6 @@ def load_strategies_with_env_overrides(logger):
     """
     Load strategies.yml, verify the schema recursively, and apply overrides.
     """
-    logger.debug(">>> START: utils.config_loader.load_strategies_with_env_overrides")
-    
     data_dir = get_data_dir()
     strategies_path = data_dir / 'strategies.yml'
     
@@ -245,7 +306,12 @@ def load_strategies_with_env_overrides(logger):
         else:
             logger.error(f"Strategy '{name}' failed validation and will be skipped.")
 
-    logger.debug("<<< END: utils.config_loader.load_strategies_with_env_overrides")
+    invalid_count = len(raw_playlists) - len(valid_playlists)
+    logger.debug(
+        f"Strategy loading completed. valid={len(valid_playlists)}, invalid={invalid_count}, "
+        f"total={len(raw_playlists)}"
+    )
+
     return {"playlists": valid_playlists}
 
 def version_to_int(version_str):

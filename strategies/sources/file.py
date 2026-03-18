@@ -13,7 +13,6 @@ def run(client, config, logger, source_data):
     """
     Fetches tracks an export file
     """
-    logger.debug(">>> START: strategies.sources.file.run")
     try:
         if isinstance(source_data, dict):
             source_data = [source_data]
@@ -61,7 +60,6 @@ def run(client, config, logger, source_data):
                 time.sleep(1)
                 continue
         
-        logger.debug("<<< END: strategies.sources.file.run")
         return tracks
 
     except Exception as e:

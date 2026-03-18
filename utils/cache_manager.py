@@ -36,7 +36,10 @@ def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, contex
         collection_name: Name of the collection in DB (required for DB lookups)
         fallback_on_error: If True, return expired cache on fetch failure
     """
-    logger.debug(f"Handling cache for context '{context}' with retention {retention_hrs} hours.")
+    logger.debug(
+        f"Starting cache handling for context='{context}', retention_hrs={retention_hrs}, "
+        f"collection_name='{collection_name}', fallback_on_error={fallback_on_error}"
+    )
     if collection_name:
         logger.debug(f"Collection name: '{collection_name}'")
     else:
@@ -49,6 +52,7 @@ def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, contex
                 cached_data = fetch_collection(collection_name, logger)
                 if cached_data:
                     logger.debug(f"Valid cache found in collections for '{collection_name}'. Loading {len(cached_data)} tracks from DB cache.")
+                    logger.debug(f"Cache handling completed for context='{context}' using valid DB cache with {len(cached_data)} tracks.")
                     return cached_data
         except Exception as e:
             logger.debug(f"DB cache lookup failed for '{collection_name}': {e}")
@@ -71,6 +75,7 @@ def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, contex
             except ValueError as integrity_error:
                 logger.warning(f"Sync integrity check failed for '{collection_name}'. Using fresh data for this run: {integrity_error}")
 
+        logger.debug(f"Cache handling completed for context='{context}' using fresh data with {len(data)} tracks.")
         return data
     except Exception as e:
         logger.error(f"Failed to fetch data for {context}, checking for fallback: {e}")
@@ -81,6 +86,7 @@ def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, contex
                 expired_data = fetch_collection(collection_name, logger)
                 if expired_data:
                     logger.debug(f"Falling back to expired cache for '{collection_name}' ({len(expired_data)} tracks).")
+                    logger.debug(f"Cache handling completed for context='{context}' using expired DB fallback with {len(expired_data)} tracks.")
                     return expired_data
             except Exception as fallback_e:
                 logger.debug(f"Fallback to expired DB cache failed: {fallback_e}")
@@ -90,17 +96,19 @@ def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, contex
             try:
                 logger.debug(f"Falling back to physical cache file: {cache_file}")
                 with open(cache_file, 'r') as f:
-                    return json.load(f)
+                    file_data = json.load(f)
+                logger.debug(f"Cache handling completed for context='{context}' using file fallback with {len(file_data)} tracks.")
+                return file_data
             except Exception as file_e:
                 logger.debug(f"Physical cache file fallback failed: {file_e}")
         
-        logger.warn(f"No cache available to fall back on for {context}.")
+        logger.warning(f"No cache available to fall back on for {context}.")
+        logger.debug(f"Cache handling completed for context='{context}' with empty result.")
         return []
 
 def get_collection_name(logger, type, name=None, id=None):
     """Using the provided variables, attempts to determine the expected 'source_name' in the collections table for cache matching"""
-    _log_tag = "utils.cache_manager.get_collection_name"
-    logger.debug(f">>> START: {_log_tag}")
+    logger.debug(f"Resolving collection name for type='{type}', name='{name}', id='{id}'")
     if not type:
         logger.warning(f"Unable to determine collection name, source type is empty.")
         return "unknown"
@@ -147,5 +155,4 @@ def get_collection_name(logger, type, name=None, id=None):
                 collection = "unknown"
     
     logger.debug(f"Collection name identified as: '{collection}'")
-    logger.debug(f"<<< END: {_log_tag}")
     return collection

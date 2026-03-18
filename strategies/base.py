@@ -86,7 +86,6 @@ class StrategyController:
 
     def handle_source(self, source_data, source_name = None):
         """Dynamically loads a source worker and appends its results to the strategy's tmp file."""
-        self.logger.debug(">>> START: strategies.base.handle_source")
         src_type = source_data.get('type')
         # Use 'name' if available (e.g. 'discovery'), otherwise fallback to type
         src_label = source_data.get('name', src_type) 
@@ -119,8 +118,6 @@ class StrategyController:
                 sync_to_collections(new_tracks,self.logger)
                 self.logger.debug(f"Source '{src_label}': Found {len(new_tracks)} tracks.")
             
-            self.logger.debug("<<< END: strategies.base.handle_source")
-
         except Exception as e:
             self.logger.error(f"Critical failure processing source '{src_label}': {e}")
             raise
@@ -130,7 +127,6 @@ class StrategyController:
         Dynamically loads a modifier worker to transform the current track list.
         If tracks_override is provided, it processes those tracks instead of reading from tmp.
         """
-        self.logger.debug(">>> START: strategies.base.handle_modifier")
         mod_type = mod_data.get('type')
         module_path = f"strategies.modifiers.{mod_type}"
         
@@ -160,7 +156,6 @@ class StrategyController:
                 else:
                     self.logger.debug(f"Applied '{mod_type}': Processed {current_length} tracks.")
             
-            self.logger.debug("<<< END: strategies.base.handle_modifier")
             return modified_tracks
 
         except Exception as e:
@@ -169,7 +164,6 @@ class StrategyController:
 
     def check_playlist_limit(self, dest_data, tracks):
         """Checks if the track list is approaching the environment-defined playlist cap and shrinks it if necessary."""
-        self.logger.debug(">>> START: strategies.base.check_playlist_limit")
         dest_type = dest_data.get('type', '').lower()
 
         try:
@@ -207,12 +201,10 @@ class StrategyController:
             self.logger.error(f"Error validating content limits for '{dest_type}': {e}")
         
         # Always return the (potentially modified) tracks list
-        self.logger.debug("<<< END: strategies.base.check_playlist_limit")
         return tracks
 
     def handle_destination(self, dest_data):
         """Dynamically loads the destination worker using the final tmp state."""
-        self.logger.debug(">>> START: strategies.base.handle_destination")
         dest_type = dest_data.get('type')
         # Dynamically load module based on type (e.g., strategies.destinations.playlist)
         module_path = f"strategies.destinations.{dest_type}"
@@ -233,4 +225,3 @@ class StrategyController:
         except Exception as e:
             self.logger.error(f"Failed to push to destination '{dest_type}': {e}")
             raise
-        self.logger.debug("<<< END: strategies.base.handle_destination")

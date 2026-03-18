@@ -28,8 +28,6 @@ def run(client, config, logger, source_data):
     """
     Fetches tracks from a specific Deezer playlist with local caching.
     """
-    logger.debug(">>> START: strategies.sources.playlists.run")
-    
     try:
         # Configuration extraction logic
         playlist_id = None
@@ -81,5 +79,3 @@ def run(client, config, logger, source_data):
         logger.error(f"Source execution failed: {e}")
         logger.debug("Stack trace:", exc_info=True)
         return []
-    finally:
-        logger.debug("<<< END: strategies.sources.playlists.run")

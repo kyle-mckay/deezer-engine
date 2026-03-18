@@ -47,10 +47,6 @@ def _parse_migration_file(filename):
 def _init_schema_version_table(logger=None):
     """Initializes the schema_version table if it doesn't exist."""
     from .database import get_connection
-    
-    if logger:
-        logger.debug(">>> START: utils.db_migrations._init_schema_version_table")
-
     try:
         with get_connection(logger) as conn:
             cursor = conn.cursor()
@@ -71,9 +67,6 @@ def _init_schema_version_table(logger=None):
         if logger:
             logger.critical(f"Critical Database Failure (Schema_Version): {e}")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_migrations._init_schema_version_table")
 
 
 def _get_applied_versions(logger=None):
@@ -115,9 +108,6 @@ def _get_all_migrations(logger=None):
 
 def _validate_migration_index(migrations, logger=None):
     """Fail fast on duplicate migration versions."""
-    if logger:
-        logger.debug(">>> START: utils.db_migrations._validate_migration_index")
-
     seen = set()
     duplicates = set()
     for migration in migrations:
@@ -134,7 +124,6 @@ def _validate_migration_index(migrations, logger=None):
 
     if logger:
         logger.debug("Migration index validation passed.")
-        logger.debug("<<< END: utils.db_migrations._validate_migration_index")
 
 
 def _validate_known_applied_versions(applied_versions, discovered_versions, logger=None):
@@ -142,9 +131,6 @@ def _validate_known_applied_versions(applied_versions, discovered_versions, logg
     Breaking-change guard.
     If DB contains versions not present in current migrations, user must recreate DB.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_migrations._validate_known_applied_versions")
-
     unknown = applied_versions - discovered_versions
     if unknown:
         unknown_str = ", ".join(str(v) for v in sorted(unknown))
@@ -160,19 +146,14 @@ def _validate_known_applied_versions(applied_versions, discovered_versions, logg
 
     if logger:
         logger.debug("Applied migration versions are compatible with current migration set.")
-        logger.debug("<<< END: utils.db_migrations._validate_known_applied_versions")
 
 def _backup_database(logger=None):
     """Create a timestamped backup of the database before migrations."""
     from .database import DB_PATH
-    
-    if logger:
-        logger.debug(">>> START: utils.db_migrations._backup_database")
 
     if not DB_PATH.exists():
         if logger:
             logger.debug("Database: No existing database found, skipping backup.")
-            logger.debug("<<< END: utils.db_migrations._backup_database")
         return
 
     try:
@@ -190,58 +171,37 @@ def _backup_database(logger=None):
         if logger:
             logger.warning(f"Database: Failed to create backup - {e}")
 
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_migrations._backup_database")
-
 
 def _run_foreign_key_check(conn, logger=None):
     """Validate foreign key consistency after migrations complete."""
+    violations = conn.execute("PRAGMA foreign_key_check").fetchall()
+    if violations:
+        if logger:
+            logger.critical(f"Foreign key validation failed with {len(violations)} violation(s): {violations}")
+        raise RuntimeError(f"Foreign key validation failed with {len(violations)} violation(s).")
+
     if logger:
-        logger.debug(">>> START: utils.db_migrations._run_foreign_key_check")
-
-    try:
-        violations = conn.execute("PRAGMA foreign_key_check").fetchall()
-        if violations:
-            if logger:
-                logger.critical(f"Foreign key validation failed with {len(violations)} violation(s): {violations}")
-            raise RuntimeError(f"Foreign key validation failed with {len(violations)} violation(s).")
-
-        if logger:
-            logger.debug("Foreign key validation passed.")
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_migrations._run_foreign_key_check")
+        logger.debug("Foreign key validation passed.")
 
 
 def _run_integrity_check(conn, logger=None):
     """Validate low-level SQLite database integrity after migrations complete."""
+    result = conn.execute("PRAGMA integrity_check").fetchone()
+    integrity_status = result[0] if result else None
+
+    if integrity_status != "ok":
+        if logger:
+            logger.critical(f"SQLite integrity check failed: {integrity_status}")
+        raise RuntimeError(f"SQLite integrity check failed: {integrity_status}")
+
     if logger:
-        logger.debug(">>> START: utils.db_migrations._run_integrity_check")
-
-    try:
-        result = conn.execute("PRAGMA integrity_check").fetchone()
-        integrity_status = result[0] if result else None
-
-        if integrity_status != "ok":
-            if logger:
-                logger.critical(f"SQLite integrity check failed: {integrity_status}")
-            raise RuntimeError(f"SQLite integrity check failed: {integrity_status}")
-
-        if logger:
-            logger.debug("SQLite integrity check passed.")
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_migrations._run_integrity_check")
+        logger.debug("SQLite integrity check passed.")
 
 
 def run_migrations(logger=None):
     """Apply pending SQL migrations from `migrations/` in strict version order."""
     from .database import get_connection
     from .database import DB_PATH
-    
-    if logger:
-        logger.debug(">>> START: utils.db_migrations.run_migrations")
 
     pre_migration_db_exists = DB_PATH.exists()
     pre_migration_db_size = DB_PATH.stat().st_size if pre_migration_db_exists else 0
@@ -264,6 +224,14 @@ def run_migrations(logger=None):
     pending = [m for m in migrations if m['version'] not in applied_versions]
 
     if logger:
+        logger.debug(
+            "Database: Migration run started "
+            f"(pending_count={len(pending)}, discovered_count={len(discovered_versions)}, "
+            f"applied_count={len(applied_versions)}, db_exists={pre_migration_db_exists}, "
+            f"db_size_bytes={pre_migration_db_size})"
+        )
+
+    if logger:
         logger.debug(f"Database: Using migrations from {MIGRATIONS_DIR}")
     
     if not pending:
@@ -277,6 +245,9 @@ def run_migrations(logger=None):
         _backup_database(logger)
     elif pending and logger and is_fresh_or_empty_db:
         logger.debug("Database: Skipping pre-migration backup for fresh/empty database.")
+
+    executed_count = 0
+    run_failed = False
 
     try:
         with get_connection(logger) as conn:
@@ -299,6 +270,7 @@ def run_migrations(logger=None):
                         (version, description, timestamp, __version__)
                     )
                     conn.commit()
+                    executed_count += 1
                     
                     if logger:
                         logger.info(f"Applied database patch: {version} - {description}")
@@ -319,11 +291,19 @@ def run_migrations(logger=None):
                     logger.debug("Database: Migration validation checks passed")
 
     except Exception as e:
+        run_failed = True
         if logger:
             logger.critical(f"Database migrations failed: {e}")
         raise
     finally:
         if logger:
-            logger.debug("Database: All migrations completed.")
-            logger.debug("<<< END: utils.db_migrations.run_migrations")
+            log_message = (
+                "Database: Migration run completed "
+                f"(status={'failed' if run_failed else 'ok'}, executed_count={executed_count}, "
+                f"pending_count={len(pending)})"
+            )
+            if run_failed or executed_count == 0:
+                logger.debug(log_message)
+            else:
+                logger.info(log_message)
 

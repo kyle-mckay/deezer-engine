@@ -24,7 +24,6 @@ def cleanup_old_backups(directory, prefix, extension, retention_hours, logger):
     """
     Deletes files matching 'prefix*' with 'extension' older than retention_hours.
     """
-    logger.debug(f">>> START: strategies.destinations.file.cleanup_old_backups")
     try:
         path_dir = Path(directory)
         # Ensure extension starts with a dot for globbing
@@ -34,9 +33,16 @@ def cleanup_old_backups(directory, prefix, extension, retention_hours, logger):
         # Calculate cutoff
         cutoff_dt = datetime.now() - timedelta(hours=retention_hours)
         deleted_count = 0
+        scanned_count = 0
+        skipped_format_count = 0
+        logger.debug(
+            f"Backup cleanup start: directory={path_dir}, pattern={search_pattern}, "
+            f"retention_hours={retention_hours}, cutoff={cutoff_dt.isoformat()}"
+        )
 
         for file_path in path_dir.glob(search_pattern):
             if file_path.is_file():
+                scanned_count += 1
                 try:
                     # Extract timestamp from filename (e.g., name_20231027_1430)
                     file_stem = file_path.stem
@@ -54,23 +60,27 @@ def cleanup_old_backups(directory, prefix, extension, retention_hours, logger):
                         
                 except (ValueError, IndexError):
                     # Skip files that don't match the expected timestamp suffix
+                    skipped_format_count += 1
                     logger.debug(f"Skipping file with incompatible name format: {file_path.name}")
                     continue
 
-        logger.debug(f"Cleanup complete. Deleted {deleted_count} files.")
+        logger.debug(
+            f"Backup cleanup end: scanned={scanned_count}, deleted={deleted_count}, "
+            f"skipped_bad_name={skipped_format_count}"
+        )
     except Exception as e:
         logger.error(f"Error during backup cleanup: {e}")
-    logger.debug("<<< END: strategies.destinations.file.cleanup_old_backups")
 
 def run(client, config, logger, dest_data, tracks):
     """
     Takes your current pipeline and saves it as a file.
     """
-    logger.debug(">>> START: strategies.destinations.file.run")
-    
     try:
         if isinstance(dest_data, dict):
             dest_data = [dest_data]
+        logger.debug(
+            f"File destination start: incoming_tracks={len(tracks)}, dest_keys={list(dest_data[0].keys())}"
+        )
             
         # Resolve Directory
         raw_dir = dest_data[0].get('dir')
@@ -121,7 +131,9 @@ def run(client, config, logger, dest_data, tracks):
             case _:
                 logger.error(f"Unsupported export format: {extension}")
 
-        logger.debug("<<< END: strategies.destinations.file.run")
+        logger.debug(
+            f"File destination end: path={final_target}, format={extension}, exported_tracks={len(tracks)}"
+        )
 
     except Exception as e:
         logger.error(f"File export failed: {e}")

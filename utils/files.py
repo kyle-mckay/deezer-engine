@@ -22,9 +22,9 @@ def write_to_json(data, final_target, logger):
     """
     Saves a list of song dictionaries to a JSON file.
     """
-    logger.debug(">>> START: utils.files.write_to_json")
     try:
         target_path = Path(final_target)
+        logger.debug(f"Writing JSON to '{target_path}' with {len(data)} items.")
         
         target_path.parent.mkdir(parents=True, exist_ok=True)
         
@@ -33,7 +33,7 @@ def write_to_json(data, final_target, logger):
             json.dump(data, f, indent=4, ensure_ascii=False)
             
         logger.info(f"Successfully saved tracks to: {target_path}")
-        logger.debug("<<< END: utils.files.write_to_json")
+        logger.debug(f"JSON write completed for '{target_path}'.")
         
     except Exception as e:
         logger.error(f"Failed to save JSON to {final_target}. Error: {e}")
@@ -43,9 +43,9 @@ def read_from_json(file_path, logger):
     """
     Reads a JSON file and returns the data.
     """
-    logger.debug(">>> START: utils.files.read_from_json")
     try:
         source_path = Path(file_path)
+        logger.debug(f"Reading JSON from '{source_path}'.")
         
         if not source_path.exists():
             logger.error(f"File not found: {file_path}")
@@ -55,7 +55,7 @@ def read_from_json(file_path, logger):
             data = json.load(f)
             
         logger.info(f"Successfully loaded {len(data)} items from JSON.")
-        logger.debug("<<< END: utils.files.read_from_json")
+        logger.debug(f"JSON read completed from '{source_path}' with {len(data)} items.")
         return data
         
     except Exception as e:
@@ -66,7 +66,6 @@ def write_to_csv(data, final_target, logger):
     """
     Saves a list of song dictionaries to a CSV file.
     """
-    logger.debug(">>> START: utils.files.write_to_csv")
     if not data:
         logger.warning("No data provided to save_tracklist_to_csv.")
         return
@@ -77,6 +76,7 @@ def write_to_csv(data, final_target, logger):
 
         # Identify all possible column headers
         headers = data[0].keys()
+        logger.debug(f"Writing CSV to '{target_path}' with {len(data)} rows and {len(headers)} columns.")
 
         with open(target_path, 'w', newline='', encoding='utf-8-sig') as f:
             writer = csv.DictWriter(f, fieldnames=headers)
@@ -95,7 +95,7 @@ def write_to_csv(data, final_target, logger):
                 writer.writerow(clean_row)
 
         logger.info(f"Successfully saved CSV to: {target_path}")
-        logger.debug("<<< END: utils.files.write_to_csv")
+        logger.debug(f"CSV write completed for '{target_path}'.")
 
     except Exception as e:
         logger.error(f"Failed to save CSV to {final_target}. Error: {e}")
@@ -106,10 +106,12 @@ def read_from_csv(file_path, logger):
     Reads a CSV file and returns a list of dictionaries.
     Attempts to restore basic Python types (dicts, lists, ints).
     """
-    logger.debug(">>> START: utils.files.read_from_csv")
     data = []
+    converted_values = 0
+    raw_string_values = 0
     try:
         source_path = Path(file_path)
+        logger.debug(f"Reading CSV from '{source_path}'.")
         
         if not source_path.exists():
             logger.error(f"File not found: {file_path}")
@@ -124,13 +126,18 @@ def read_from_csv(file_path, logger):
                     try:
                         # literal_eval is safer than eval()
                         processed_row[key] = ast.literal_eval(value)
+                        converted_values += 1
                     except (ValueError, SyntaxError):
                         # Normal string
                         processed_row[key] = value
+                        raw_string_values += 1
                 data.append(processed_row)
 
         logger.info(f"Successfully loaded {len(data)} rows from CSV.")
-        logger.debug("<<< END: utils.files.read_from_csv")
+        logger.debug(
+            f"CSV read completed from '{source_path}' with {len(data)} rows "
+            f"(converted_values={converted_values}, raw_string_values={raw_string_values})."
+        )
         return data
 
     except Exception as e:

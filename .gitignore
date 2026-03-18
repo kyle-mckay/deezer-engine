@@ -27,6 +27,7 @@ include
 lib
 lib64
 pyvenv.cfg
+change-planning/
 
 # --- LOG FILES ---
 *.log

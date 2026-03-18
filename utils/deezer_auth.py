@@ -95,7 +95,6 @@ def get_authenticated_client(config, logger):
     """
     Initializes the Deezer Client using an ARL cookie.
     """
-    logger.debug(">>> START: utils.deezer_auth.get_authenticated_client")
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("--- Initializing Deezer Authentication ---")
         logger.debug(f"Raw config keys available: {list(config.get('config', {}).keys())}")
@@ -164,15 +163,12 @@ def get_authenticated_client(config, logger):
             
         logger.debug("Check if your ARL token has expired or if your user_id is correct.")
         sys.exit(1)
-    finally:
-        logger.debug("<<< END: utils.deezer_auth.get_authenticated_client")
 
 def get_authenticated_session(arl, logger, warm_url=None):
     """
     Creates a session, establishes context via a pre-flight GET, 
     and performs the CSRF handshake to return (session, api_token).
     """
-    logger.debug(">>> START: utils.deezer_auth.get_authenticated_session")
     session = requests.Session()
     session.headers.update({
         'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:146.0) Gecko/20100101 Firefox/146.0',
@@ -210,15 +206,12 @@ def get_authenticated_session(arl, logger, warm_url=None):
     except Exception as e:
         logger.error(f"Authentication utility error: {e}")
         return None, None
-    finally:
-        logger.debug("<<< END: utils.deezer_auth.get_authenticated_session")
 
 def get_tracks(client, logger, source_type, identifier, cache_file=None, track_ids=None):
     """
     Transforms Deezer API objects into a list of dictionaries with rate-limiting protection.
     """
     from utils.db_manager import update_track_metadata, mark_track_metadata_fetch_failed
-    logger.debug(f">>> START: utils.deezer_auth.get_tracks ({source_type})")
     logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
 
     def fetch_track_with_retry(t_id, max_retries=get_global_value('max_retries', 5)):
@@ -467,7 +460,6 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
 
     logger.debug(f"Successfully transformed {len(tracks)} tracks.")
     
-    logger.debug("<<< END: utils.deezer_auth.get_tracks")
     return tracks
 
 def get_albums(client, logger, identifier, album_ids=None):
@@ -475,8 +467,6 @@ def get_albums(client, logger, identifier, album_ids=None):
     Fetches album metadata from Deezer API with rate-limiting protection.
     """
     from utils.db_manager import update_album_metadata, populate_album_genres, populate_track_genres_for_album, mark_album_metadata_fetch_failed
-    
-    logger.debug(f">>> START: utils.deezer_auth.get_albums ({identifier})")
 
     def fetch_album_with_retry(album_id, max_retries=get_global_value('max_retries', 5)):
         """
@@ -718,7 +708,5 @@ def get_albums(client, logger, identifier, album_ids=None):
     except Exception as e:
         logger.error(f"Critical error in get_albums: {e}")
         raise
-    finally:
-        logger.debug("<<< END: utils.deezer_auth.get_albums")
     
     return albums

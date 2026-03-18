@@ -32,8 +32,6 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """
     Slices the track list to return only the top or bottom N tracks.
     """
-    logger.debug(">>> START: strategies.modifiers.limit.run")
-    
     # Get configuration with defaults
     order = normalize_order(logger, str(mod_data.get('order', 'top')).lower())
     total_available = len(current_tracks)
@@ -69,5 +67,4 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
         return current_tracks
 
     logger.debug(f"Limit complete. Pipeline size: {len(limited_tracks)}")
-    logger.debug("<<< END: strategies.modifiers.limit.run")
     return limited_tracks
