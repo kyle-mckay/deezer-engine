@@ -283,7 +283,6 @@ def persist_album_batch(
     phase_label,
     update_album_metadata,
     populate_album_genres,
-    populate_track_genres_for_album,
 ):
     """Persist an album batch, populate genres, and reset the working list."""
     if not albums:
@@ -299,22 +298,12 @@ def persist_album_batch(
     try:
         update_album_metadata(albums, logger)
         populate_album_genres(albums, logger)
-        for album in albums:
-            if shutdown_event.is_set():
-                logger.debug(
-                    f"Shutdown acknowledged mid-{phase_label.lower()} track-genre population. Deferring remaining albums to next run."
-                )
-                break
-            try:
-                populate_track_genres_for_album(album.get('id'), logger)
-            except Exception as album_err:
-                logger.warning(f"Failed to populate track genres for album {album.get('id')}: {album_err}")
         logger.debug(
-            f"{phase_label}: update_album_metadata, populate_album_genres, and populate_track_genres_for_album completed successfully."
+            f"{phase_label}: update_album_metadata and populate_album_genres completed successfully."
         )
     except Exception as batch_err:
         logger.error(
-            f"{phase_label}: update_album_metadata, populate_album_genres, or populate_track_genres_for_album raised exception: {batch_err}"
+            f"{phase_label}: update_album_metadata or populate_album_genres raised exception: {batch_err}"
         )
         logger.exception("Stack trace for batch persistence error:")
         raise
@@ -845,7 +834,6 @@ def get_albums(client, logger, identifier, album_ids=None):
     from utils.db_manager import (
         update_album_metadata,
         populate_album_genres,
-        populate_track_genres_for_album,
         mark_album_metadata_fetch_failed,
         update_albums_partial_batch,
     )
@@ -883,7 +871,6 @@ def get_albums(client, logger, identifier, album_ids=None):
                 phase_label,
                 update_album_metadata,
                 populate_album_genres,
-                populate_track_genres_for_album,
             )
             return
 
@@ -1029,7 +1016,6 @@ def get_albums(client, logger, identifier, album_ids=None):
                         "Database Checkpoint",
                         update_album_metadata,
                         populate_album_genres,
-                        populate_track_genres_for_album,
                     )
                     if shutdown_event.is_set():
                         flush_pending_albums_on_shutdown()
@@ -1068,7 +1054,6 @@ def get_albums(client, logger, identifier, album_ids=None):
                 "Database Cleanup",
                 update_album_metadata,
                 populate_album_genres,
-                populate_track_genres_for_album,
             )
             albums = cached_albums
         elif identifier == "database":

@@ -767,7 +767,6 @@ def update_unprocessed(client,logger):
     sync_missing_albums_to_table(logger)
     sync_missing_artists_to_table(logger)
     unprocessed_album = get_unprocessed_album_ids(logger)
-    enriched_albums = []
     
     if len(unprocessed_album) > 0:
         logger.info(f"Fetching metadata for {len(unprocessed_album)} new albums...")
@@ -780,19 +779,9 @@ def update_unprocessed(client,logger):
             logger.debug("Shutdown acknowledged after album enrichment. Deferring genre mapping to next run.")
         return
     else:
-        enriched_albums = unprocessed_album
         unprocessed_album = get_unprocessed_album_ids(logger)
         if len(unprocessed_album) > 0:
             logger.warning(f"Metadata enrichment finished but albums are missing metadata. Expecting 0, got {len(unprocessed_album)}")
-    
-
-    # Populate album genres for newly enriched albums
-    if enriched_albums:
-        logger.debug(f"Populating genres for {len(enriched_albums)} enriched albums...")
-        try:
-            populate_album_genres(enriched_albums, logger)
-        except Exception as e:
-            logger.error(f"Failed to populate album genres: {e}")
 
     # Album->genre mapping committed — safe exit point before global track-genre pass.
     if shutdown_event.is_set():
