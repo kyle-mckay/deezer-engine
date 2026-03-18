@@ -19,7 +19,7 @@ import os
 import math
 import random
 from datetime import timedelta
-from utils.signals import shutdown_event
+from utils.infrastructure.signals import shutdown_event
 from utils.deezer_auth import get_authenticated_session
 from utils.cache_manager import get_collection_name
 from utils.db_manager import sync_to_collections, is_collection_cached, fetch_collection

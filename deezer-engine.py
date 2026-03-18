@@ -21,14 +21,14 @@ import logging
 import signal
 import os
 from pathlib import Path
-from utils.logger import setup_logger
-from utils.paths import get_data_dir
+from utils.infrastructure.logger import setup_logger
+from utils.infrastructure.paths import get_data_dir
 from utils.config_loader import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates, get_global_value, get_bootstrap_logging_settings
 from utils.deezer_auth import get_authenticated_client, get_tracks
 from strategies.base import StrategyController
 from utils.database import initialize_all
 from utils.cache_manager import get_collection_name
-from utils.signals import shutdown_event
+from utils.infrastructure.signals import shutdown_event
 from utils.db_manager import get_unprocessed_track_ids, update_track_metadata,fetch_collection, is_collection_cached, get_expired_track_ids, update_tracks_partial_batch, update_unprocessed, refresh_stats, release_expired_blocklisted_entities
 from __version__ import __version__, __banner__
 
@@ -67,6 +67,10 @@ def process_sources(s_data, controller, config, client, logger, strategy_name):
     logger.debug(f"Strategy '{strategy_name}' has {len(sources)} sources defined.")
     
     for src in sources:
+        if shutdown_event.is_set():
+            logger.debug("Shutdown acknowledged before next source. Skipping remaining sources.")
+            break
+
         logger.debug(f"Handling source type: {src.get('type')}")
         source_type = src.get('type')
         source_retention = src.get('retention',get_global_value('retention',0))
@@ -85,8 +89,8 @@ def process_sources(s_data, controller, config, client, logger, strategy_name):
             logger.debug(f"Using cached data for {source_name}.")
 
         if shutdown_event.is_set():
-                logger.debug("Shutdown passing through process_sources acknowledged. Skipping remaining strategies.")
-                break
+            logger.debug("Shutdown passing through process_sources acknowledged. Skipping remaining strategies.")
+            break
         # Identify new tracks to fetch metadata for.
         update_unprocessed(client, logger)
     
@@ -99,12 +103,20 @@ def process_modifiers(s_data, controller, source_metadata, logger, strategy_name
     all_processed_tracks = []
     
     for source_name, child_modifiers in source_metadata:
+        if shutdown_event.is_set():
+            logger.debug("Shutdown acknowledged before source-specific modifiers. Skipping remaining modifier work.")
+            break
+
         fetched = fetch_collection(source_name, logger)
         logger.debug(f"Fetched {len(fetched)} tracks from {source_name}")
         
         if child_modifiers:
             logger.debug(f"Applying {len(child_modifiers)} child modifiers to source '{source_name}'")
             for mod in child_modifiers:
+                if shutdown_event.is_set():
+                    logger.debug("Shutdown acknowledged during source-specific modifiers. Stopping child modifier execution.")
+                    break
+
                 logger.debug(f"Applying child modifier: {mod.get('type')}")
                 fetched = controller.handle_modifier(mod,fetched,source_name)
             
@@ -118,6 +130,10 @@ def process_modifiers(s_data, controller, source_metadata, logger, strategy_name
     if global_modifiers:
         logger.debug(f"Strategy '{strategy_name}' has {len(global_modifiers)} global modifiers defined.")
         for mod in global_modifiers:
+            if shutdown_event.is_set():
+                logger.debug("Shutdown acknowledged before global modifiers. Skipping remaining modifiers.")
+                break
+
             logger.debug(f"Applying global modifier: {mod.get('type')}")
             controller.handle_modifier(mod,None,source_name)
             

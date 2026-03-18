@@ -19,8 +19,8 @@ import logging
 import yaml
 from pathlib import Path
 import requests
-from utils.paths import get_data_dir
-from utils.logger import setup_logger
+from utils.infrastructure.paths import get_data_dir
+from utils.infrastructure.logger import setup_logger
 
 config_logger = logging.getLogger("DeezerEngine")
 

@@ -17,7 +17,7 @@ import os
 import json
 import time
 import logging
-from utils.paths import get_cache_dir
+from utils.infrastructure.paths import get_cache_dir
 from utils.db_manager import sync_to_collections, fetch_collection, validate_sync_integrity, is_collection_cached
 
 def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, context, collection_name=None, fallback_on_error=True):

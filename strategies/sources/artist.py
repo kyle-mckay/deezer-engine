@@ -17,7 +17,7 @@ import re
 import time
 from datetime import timedelta
 import logging
-from utils.paths import get_cache_dir 
+from utils.infrastructure.paths import get_cache_dir 
 from utils.deezer_auth import get_tracks
 from utils.cache_manager import handle_cached_data
 from utils.config_loader import get_global_value

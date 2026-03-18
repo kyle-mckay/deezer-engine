@@ -6,7 +6,7 @@ from datetime import datetime
 from utils.deezer_auth import get_authenticated_session
 from utils.config_loader import get_global_value
 from utils.cache_manager import get_collection_name
-from utils.paths import get_data_dir
+from utils.infrastructure.paths import get_data_dir
 from utils.files import read_from_csv, read_from_json
 
 def run(client, config, logger, source_data):

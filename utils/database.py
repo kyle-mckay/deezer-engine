@@ -15,7 +15,7 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 import sqlite3
 from pathlib import Path
-from .paths import get_data_dir
+from .infrastructure.paths import get_data_dir
 from .db_migrations import run_migrations
 
 def get_db_path():
@@ -77,6 +77,6 @@ def initialize_all(logger=None):
         logger.debug("Database initialization completed.")
 
 if __name__ == "__main__":
-    from .logger import setup_logger
+    from .infrastructure.logger import setup_logger
     test_logger = setup_logger(name="DB_Init_Test")
     initialize_all(test_logger)
