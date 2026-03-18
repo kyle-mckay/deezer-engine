@@ -19,10 +19,8 @@ import logging
 import requests
 import random
 import time
-import logging
 import json
 from datetime import datetime, timedelta
-from utils.logger import setup_logger
 from utils.config_loader import get_global_value
 from utils.signals import shutdown_event
 
@@ -90,6 +88,186 @@ def should_blocklist_failed_fetch(error_code, error_detail):
 
     detail = str(error_detail).lower() if error_detail is not None else ""
     return not any(pattern in detail for pattern in NON_BLOCKLIST_ERROR_PATTERNS)
+
+def log_enrichment_progress(logger, log_prefix, i, total_items, last_log_time, start_log_time, log_interval):
+    """
+    Log enrichment progress at configured intervals. Called for every loop iteration.
+    Returns updated last_log_time if logging occurred, otherwise returns original last_log_time.
+    """
+    #Noisy logging for debugging progress logging behavior
+    #logger.debug(f"log_enrichment_progress called: log_prefix='{log_prefix}', i={i}, total_items={total_items}, last_log_time={last_log_time}, start_log_time={start_log_time}, log_interval={log_interval}")
+    current_time = time.time()
+    if current_time - last_log_time >= log_interval:
+        elapsed_time = current_time - start_log_time
+        
+        if isinstance(total_items, int):
+            items_remaining = total_items - i
+            time_per_item = elapsed_time / i
+            eta_seconds = items_remaining * time_per_item
+            eta_str = str(timedelta(seconds=int(eta_seconds)))
+            percent = f"{i/total_items:.1%}"
+            suffix = f"{percent} ({i}/{total_items}) complete (ETA: {eta_str})..."
+        else:
+            suffix = f"{i} items processed..."
+        
+        logger.info(f"{log_prefix} enrichment: {suffix}")
+        return current_time
+    
+    return last_log_time
+
+def fetch_with_retry(fetch_func, entity_id, entity_label, logger, mark_failed_fetch=None, max_retries=None):
+    """Fetch an entity with retry, backoff, and optional failed-fetch persistence."""
+    max_retries_value = max_retries if max_retries is not None else get_global_value('max_retries', 4)
+    attempts = max_retries_value + 1  # Convert "number of retries" to "total attempts"
+    last_error_code = "unknown"
+    last_error_detail = None
+    entity_name = entity_label.capitalize()
+
+    for attempt in range(attempts):
+        if shutdown_event.is_set():
+            logger.debug(f"fetch_with_retry interrupted while fetching {entity_label} {entity_id}. Returning partial results.")
+            return None
+
+        try:
+            if attempt == 0:
+                time.sleep(random.uniform(0.1, 0.3))
+            return fetch_func(entity_id)
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as net_err:
+            last_error_code = extract_error_code(net_err)
+            last_error_detail = str(net_err)
+            wait_time = 5 * (attempt + 1)
+            if attempt < attempts - 1:
+                logger.debug(
+                    f"Network retry ({entity_name} {entity_id}): {net_err}. Retrying in {wait_time}s..."
+                )
+                time.sleep(wait_time)
+
+        except Exception as err:
+            err_str = str(err).lower()
+            if "429" in err_str or "quota" in err_str:
+                last_error_code = "429"
+                last_error_detail = str(err)
+                wait_time = (2 ** attempt) + random.uniform(1, 3)
+                if attempt < attempts - 1:
+                    logger.warning(
+                        f"Rate limited ({entity_name} {entity_id})! Retrying in {wait_time:.2f}s..."
+                    )
+                else:
+                    logger.warning(
+                        f"Rate limited ({entity_name} {entity_id}) on final attempt. Cooling down for {wait_time:.2f}s before cancellation."
+                    )
+                time.sleep(wait_time)
+            else:
+                last_error_code = extract_error_code(err)
+                last_error_detail = str(err)
+                logger.debug(
+                    f"Unexpected API error for {entity_label} {entity_id}: {err} (Attempt {attempt + 1}/{attempts})"
+                )
+                if attempt < attempts - 1:
+                    time.sleep(3)
+
+    logger.error(f"CANCELLED: Failed to retrieve {entity_label} {entity_id} after {attempts} total attempts ({max_retries_value} retries).")
+    if should_blocklist_failed_fetch(last_error_code, last_error_detail):
+        logger.warning(
+            f"Blocklisting {entity_label} {entity_id} after repeated fetch failures. "
+            f"code={last_error_code}, deezer_response={last_error_detail}"
+        )
+        if mark_failed_fetch is not None:
+            try:
+                mark_failed_fetch(entity_id, last_error_code, logger)
+            except Exception as db_err:
+                logger.debug(f"Failed to persist {entity_label} failure state for {entity_id}: {db_err}")
+    else:
+        logger.debug(
+            f"Skipped blocklisting {entity_label} {entity_id} due to transient/non-blocking error ({last_error_code})."
+        )
+
+    return None
+
+def apply_rate_limit_checkpoint(logger, batch_start_time, iteration_index, api_batch_size, rate_limit, request_label, log_no_cooldown=False):
+    """Throttle batched requests to stay within the configured request rate."""
+    if iteration_index % api_batch_size != 0:
+        return batch_start_time
+
+    target_time_per_batch = (api_batch_size / rate_limit) * 60
+    elapsed_time = time.time() - batch_start_time
+    items_per_second = api_batch_size / elapsed_time if elapsed_time > 0 else 0
+
+    logger.debug(
+        f"Time taken for {api_batch_size} {request_label}: {elapsed_time:.2f} seconds ({items_per_second:.2f} items/sec)"
+    )
+
+    if elapsed_time < target_time_per_batch:
+        sleep_time = target_time_per_batch - elapsed_time
+        logger.debug(
+            f"Rate limit cooldown: Sleeping for {sleep_time:.2f} seconds to maintain {rate_limit} req/min limit"
+        )
+        time.sleep(sleep_time)
+    elif log_no_cooldown:
+        logger.debug("No cooldown needed, proceeding to next batch immediately.")
+
+    return time.time()
+
+def persist_track_batch(tracks, cached_tracks, logger, phase_label, update_track_metadata):
+    """Persist a track batch and reset the working list."""
+    if not tracks:
+        return cached_tracks, tracks
+
+    if phase_label == "Database Checkpoint":
+        logger.debug(f"{phase_label}: Pushing chunk of {len(tracks)} tracks to database")
+    else:
+        logger.debug(f"{phase_label}: Saving remaining {len(tracks)} tracks...")
+
+    update_track_metadata(tracks, logger)
+    cached_tracks.extend(tracks)
+    return cached_tracks, []
+
+def persist_album_batch(
+    albums,
+    cached_albums,
+    logger,
+    phase_label,
+    update_album_metadata,
+    populate_album_genres,
+    populate_track_genres_for_album,
+):
+    """Persist an album batch, populate genres, and reset the working list."""
+    if not albums:
+        return cached_albums, albums
+
+    if phase_label == "Database Checkpoint":
+        logger.debug(f"{phase_label}: Pushing chunk of {len(albums)} albums to database")
+        logger.debug(f"Album IDs in checkpoint: {[album.get('id') for album in albums]}")
+    else:
+        logger.debug(f"{phase_label}: Saving remaining {len(albums)} albums...")
+        logger.debug(f"Album IDs to save: {[album.get('id') for album in albums]}")
+
+    try:
+        update_album_metadata(albums, logger)
+        populate_album_genres(albums, logger)
+        for album in albums:
+            if shutdown_event.is_set():
+                logger.debug(
+                    f"Shutdown acknowledged mid-{phase_label.lower()} track-genre population. Deferring remaining albums to next run."
+                )
+                break
+            try:
+                populate_track_genres_for_album(album.get('id'), logger)
+            except Exception as album_err:
+                logger.warning(f"Failed to populate track genres for album {album.get('id')}: {album_err}")
+        logger.debug(
+            f"{phase_label}: update_album_metadata, populate_album_genres, and populate_track_genres_for_album completed successfully."
+        )
+    except Exception as batch_err:
+        logger.error(
+            f"{phase_label}: update_album_metadata, populate_album_genres, or populate_track_genres_for_album raised exception: {batch_err}"
+        )
+        logger.exception("Stack trace for batch persistence error:")
+        raise
+
+    cached_albums.extend(albums)
+    return cached_albums, []
 
 def get_authenticated_client(config, logger):
     """
@@ -214,67 +392,6 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     from utils.db_manager import update_track_metadata, mark_track_metadata_fetch_failed
     logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
 
-    def fetch_track_with_retry(t_id, max_retries=get_global_value('max_retries', 5)):
-        """
-        Helper to fetch track data handling both Rate Limits and Network Drops.
-        """
-        last_error_code = "unknown"
-        last_error_detail = None
-        for attempt in range(max_retries):
-            if shutdown_event.is_set():
-                logger.debug("fetch_track_with_retry interrupted! Returning partial results.")
-                return None
-            try:
-                # Add small delay to avoid rate limiting
-                if attempt == 0:
-                    time.sleep(random.uniform(0.1, 0.3))
-                return client.get_track(t_id)
-            
-            except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as net_err:
-                last_error_code = extract_error_code(net_err)
-                last_error_detail = str(net_err)
-                wait_time = (5 * (attempt + 1))  # 5s, 10s, 15s...
-                if attempt < max_retries - 1:
-                    logger.debug(f"Network retry (Track {t_id}): {net_err}. Retrying in {wait_time}s...")
-                    time.sleep(wait_time)
-                
-            except Exception as e:
-                # Check for rate limiting in the error message
-                err_str = str(e).lower()
-                if "429" in err_str or "quota" in err_str:
-                    last_error_code = "429"
-                    last_error_detail = str(e)
-                    wait_time = (2 ** attempt) + random.uniform(1, 3)
-                    if attempt < max_retries - 1:
-                        # Rate limits remain WARNING to notify user of throttling.
-                        logger.warning(f"Rate limited (Track {t_id})! Retrying in {wait_time:.2f}s...")
-                    else:
-                        logger.warning(
-                            f"Rate limited (Track {t_id}) on final attempt. Cooling down for {wait_time:.2f}s before cancellation."
-                        )
-                    time.sleep(wait_time)
-                else:
-                    last_error_code = extract_error_code(e)
-                    last_error_detail = str(e)
-                    # Other API errors
-                    logger.debug(f"Unexpected API error for {t_id}: {e} (Attempt {attempt+1}/{max_retries})")
-                    if attempt < max_retries - 1:
-                        time.sleep(3)
-        
-        logger.error(f"CANCELLED: Failed to retrieve track {t_id} after {max_retries} attempts.")
-        if should_blocklist_failed_fetch(last_error_code, last_error_detail):
-            logger.warning(
-                f"Blocklisting track {t_id} after repeated fetch failures. "
-                f"code={last_error_code}, deezer_response={last_error_detail}"
-            )
-            try:
-                mark_track_metadata_fetch_failed(t_id, last_error_code, logger)
-            except Exception as db_err:
-                logger.debug(f"Failed to persist track failure state for {t_id}: {db_err}")
-        else:
-            logger.debug(f"Skipped blocklisting track {t_id} due to transient/non-blocking error ({last_error_code}).")
-        return None
-
     display_name = identifier
     item_id = identifier
 
@@ -313,7 +430,6 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
 
     rate_limit = get_global_value('rate_limit', 60)
     api_batch_size = get_global_value('api_batch_size', 50)
-    target_time_per_batch = (api_batch_size / rate_limit) * 60
 
     # Track the start time for the batch of requests
     start_time = time.time()
@@ -323,31 +439,36 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
             if shutdown_event.is_set():
                 logger.debug("Shutdown acknowledged mid-track collection. Returning partial results.")
                 return cached_tracks
+            
+            # Log progress at configured intervals
+            log_prefix = f"Database '{identifier}'" if source_type == "database" else f"'{source_type}'"
+            last_log_time = log_enrichment_progress(logger, log_prefix, i, total_len, last_log_time, start_log_time, log_interval)
 
             # Check rate limiting at configured intervals to prevent sustained high-load triggers
-            if i % api_batch_size == 0 and is_database_enrichment:
-                elapsed_time = time.time() - start_time
-                items_per_second = api_batch_size / elapsed_time if elapsed_time > 0 else 0
-                logger.debug(f"Time taken for {api_batch_size} requests: {elapsed_time:.2f} seconds ({items_per_second:.2f} items/sec)")
-                
-                # If we're under the target time, sleep to maintain rate limit
-                if elapsed_time < target_time_per_batch:
-                    sleep_time = target_time_per_batch - elapsed_time
-                    logger.debug(f"Rate limit cooldown: Sleeping for {sleep_time:.2f} seconds to maintain {rate_limit} req/min limit")
-                    time.sleep(sleep_time)
-                else:
-                    logger.debug("No cooldown needed, proceeding to next batch immediately.")
-                
-                # Reset the start time for the next batch
-                start_time = time.time()
+            if is_database_enrichment:
+                start_time = apply_rate_limit_checkpoint(
+                    logger,
+                    start_time,
+                    i,
+                    api_batch_size,
+                    rate_limit,
+                    "requests",
+                    log_no_cooldown=True,
+                )
 
             if source_type == "database" and (identifier == "tracks" or identifier == "stats"):
                 t_id = track.get('id') if isinstance(track, dict) else track
                 
                 # Use the retry helper for heavy metadata fetching
-                track_obj = fetch_track_with_retry(t_id)
+                track_obj = fetch_with_retry(
+                    client.get_track,
+                    t_id,
+                    "track",
+                    logger,
+                    mark_failed_fetch=mark_track_metadata_fetch_failed,
+                )
                 if not track_obj:
-                    # Error message provided in fetch_track_with_retry
+                    # Error details are already logged by fetch_with_retry.
                     continue
                 
                 # ~ 0.5 tracks/s faster due to single as_dict() call vs 20+ individual getattr() operations - ~ 2 t/s
@@ -404,45 +525,17 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                     'date_cached': date_time
                 })
 
-            logger.debug(f"Processed track {track}: {i}/{total_len}")
-            
-            current_time = time.time()
-            if current_time - last_log_time >= log_interval:
-                # 1. Calculate progress
-                elapsed_time = current_time - start_log_time
-                items_remaining = total_len - i
-                
-                # 2. Calculate average time and ETA
-                time_per_item = elapsed_time / i
-                eta_seconds = items_remaining * time_per_item
-                
-                # 3. Format seconds 
-                eta_str = str(timedelta(seconds=int(eta_seconds)))
-                percent = f"{i/total_len:.1%}"
-
-                # 4. Create suffix
-                suffix = f"{percent} ({i}/{total_len}) complete (ETA: {eta_str})..."
-
-                if source_type == "database":
-                    logger.info(f"Database '{identifier}' enrichment: {suffix}")
-                elif source_type == "favorites":
-                    logger.info(f"Fetching '{source_type}': {suffix}")
-                elif identifier.startswith("playlist__"):
-                    logger.info(f"Fetching playlist '{display_name}': {suffix}")
-                elif identifier.startswith("album__"):
-                    logger.info(f"Fetching album '{display_name}': {suffix}")
-                else:
-                    logger.info(f"Fetching '{source_type}': {suffix}")
-                last_log_time = current_time 
+            logger.debug(f"Processed track {track}: {i}/{total_len}") 
 
             # If performing database enrichment, perform periodic checkpoint at chunk_size interval
             if source_type == "database" and identifier == "tracks" and i % chunk_size == 0:
-                logger.debug(f"Database Checkpoint: Pushing chunk of {len(tracks)} tracks to database")
-                update_track_metadata(tracks,logger)
-
-                # Merge to total result and reset working batch
-                cached_tracks.extend(tracks)
-                tracks = []
+                cached_tracks, tracks = persist_track_batch(
+                    tracks,
+                    cached_tracks,
+                    logger,
+                    "Database Checkpoint",
+                    update_track_metadata,
+                )
 
         except Exception as e:
             logger.debug(f"Non-critical loop error at index {i} (Track {track}): {e}")
@@ -451,10 +544,13 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     
     # Database enrichment cleanup
     if source_type == "database" and identifier == "tracks":
-        if tracks:
-            logger.debug(f"Database Cleanup: Saving remaining {len(tracks)} tracks...")
-            update_track_metadata(tracks,logger)
-            cached_tracks.extend(tracks)
+        cached_tracks, tracks = persist_track_batch(
+            tracks,
+            cached_tracks,
+            logger,
+            "Database Cleanup",
+            update_track_metadata,
+        )
     
         tracks = cached_tracks
 
@@ -467,66 +563,6 @@ def get_albums(client, logger, identifier, album_ids=None):
     Fetches album metadata from Deezer API with rate-limiting protection.
     """
     from utils.db_manager import update_album_metadata, populate_album_genres, populate_track_genres_for_album, mark_album_metadata_fetch_failed
-
-    def fetch_album_with_retry(album_id, max_retries=get_global_value('max_retries', 5)):
-        """
-        Helper to fetch album data handling both Rate Limits and Network Drops.
-        """
-        last_error_code = "unknown"
-        last_error_detail = None
-        for attempt in range(max_retries):
-            if shutdown_event.is_set():
-                logger.debug("fetch_album_with_retry interrupted! Returning partial results.")
-                return None
-            try:
-                # Add small delay to avoid rate limiting
-                if attempt == 0:
-                    time.sleep(random.uniform(0.1, 0.3))
-                return client.get_album(album_id)
-            
-            except (requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as net_err:
-                last_error_code = extract_error_code(net_err)
-                last_error_detail = str(net_err)
-                wait_time = (5 * (attempt + 1))  # 5s, 10s, 15s...
-                if attempt < max_retries - 1:
-                    logger.debug(f"Network retry (Album {album_id}): {net_err}. Retrying in {wait_time}s...")
-                    time.sleep(wait_time)
-                
-            except Exception as e:
-                # Check for rate limiting in the error message
-                err_str = str(e).lower()
-                if "429" in err_str or "quota" in err_str:
-                    last_error_code = "429"
-                    last_error_detail = str(e)
-                    wait_time = (2 ** attempt) + random.uniform(1, 3)
-                    if attempt < max_retries - 1:
-                        logger.warning(f"Rate limited (Album {album_id})! Retrying in {wait_time:.2f}s...")
-                    else:
-                        logger.warning(
-                            f"Rate limited (Album {album_id}) on final attempt. Cooling down for {wait_time:.2f}s before cancellation."
-                        )
-                    time.sleep(wait_time)
-                else:
-                    last_error_code = extract_error_code(e)
-                    last_error_detail = str(e)
-                    # Other API errors
-                    logger.debug(f"Unexpected API error for album {album_id}: {e} (Attempt {attempt+1}/{max_retries})")
-                    if attempt < max_retries - 1:
-                        time.sleep(3)
-        
-        logger.error(f"CANCELLED: Failed to retrieve album {album_id} after {max_retries} attempts.")
-        if should_blocklist_failed_fetch(last_error_code, last_error_detail):
-            logger.warning(
-                f"Blocklisting album {album_id} after repeated fetch failures. "
-                f"code={last_error_code}, deezer_response={last_error_detail}"
-            )
-            try:
-                mark_album_metadata_fetch_failed(album_id, last_error_code, logger)
-            except Exception as db_err:
-                logger.debug(f"Failed to persist album failure state for {album_id}: {db_err}")
-        else:
-            logger.debug(f"Skipped blocklisting album {album_id} due to transient/non-blocking error ({last_error_code}).")
-        return None
     
     albums = []
     cached_albums = []
@@ -541,7 +577,6 @@ def get_albums(client, logger, identifier, album_ids=None):
     # Setup rate limiting
     rate_limit = get_global_value('rate_limit', 60)
     api_batch_size = get_global_value('api_batch_size', 50)
-    target_time_per_batch = (api_batch_size / rate_limit) * 60
     
     total_albums = len(album_ids) if hasattr(album_ids, '__len__') else "unknown"
     start_log_time = time.time()
@@ -558,25 +593,29 @@ def get_albums(client, logger, identifier, album_ids=None):
                     logger.debug("Shutdown acknowledged mid-album collection. Returning partial results.")
                     return cached_albums
                 
+                # Log progress at configured intervals
+                last_log_time = log_enrichment_progress(logger, f"Album '{identifier}'", i, total_albums, last_log_time, start_log_time, log_interval)
+                
                 # Check rate limiting at configured intervals
-                if i % api_batch_size == 0:
-                    elapsed_time = time.time() - start_time
-                    items_per_second = api_batch_size / elapsed_time if elapsed_time > 0 else 0
-                    logger.debug(f"Time taken for {api_batch_size} album requests: {elapsed_time:.2f} seconds ({items_per_second:.2f} items/sec)")
-                    
-                    # If we're under the target time, sleep to maintain rate limit
-                    if elapsed_time < target_time_per_batch:
-                        sleep_time = target_time_per_batch - elapsed_time
-                        logger.debug(f"Rate limit cooldown: Sleeping for {sleep_time:.2f} seconds to maintain {rate_limit} req/min limit")
-                        time.sleep(sleep_time)
-                    
-                    # Reset the start time for the next batch
-                    start_time = time.time()
+                start_time = apply_rate_limit_checkpoint(
+                    logger,
+                    start_time,
+                    i,
+                    api_batch_size,
+                    rate_limit,
+                    "album requests",
+                )
                 
                 # Fetch album data using retry helper
-                album_obj = fetch_album_with_retry(album_id)
+                album_obj = fetch_with_retry(
+                    client.get_album,
+                    album_id,
+                    "album",
+                    logger,
+                    mark_failed_fetch=mark_album_metadata_fetch_failed,
+                )
                 if not album_obj:
-                    # Error message provided in fetch_album_with_retry
+                    # Error details are already logged by fetch_with_retry.
                     continue
                 
                 # Convert to dictionary
@@ -630,48 +669,17 @@ def get_albums(client, logger, identifier, album_ids=None):
 
                 # If performing full album enrichment, perform periodic checkpoint at chunk_size interval
                 if identifier == "database" and i % chunk_size == 0:
-                    logger.debug(f"Database Checkpoint: Pushing chunk of {len(albums)} albums to database")
-                    logger.debug(f"Album IDs in checkpoint: {[a.get('id') for a in albums]}")
-                    try:
-                        update_album_metadata(albums, logger)
-                        populate_album_genres(albums, logger)
-                        for checkpoint_album in albums:
-                            if shutdown_event.is_set():
-                                logger.debug("Shutdown acknowledged mid-checkpoint track-genre population. Deferring remaining albums to next run.")
-                                break
-                            try:
-                                populate_track_genres_for_album(checkpoint_album.get('id'), logger)
-                            except Exception as album_err:
-                                logger.warning(f"Failed to populate track genres for album {checkpoint_album.get('id')}: {album_err}")
-                        logger.debug(f"Database Checkpoint: update_album_metadata, populate_album_genres, and populate_track_genres_for_album completed successfully.")
-                    except Exception as checkpoint_err:
-                        logger.error(f"Database Checkpoint: update_album_metadata, populate_album_genres, or populate_track_genres_for_album raised exception: {checkpoint_err}")
-                        logger.exception("Stack trace for checkpoint error:")
-                        raise
-
-                    # Merge to total result and reset working batch
-                    cached_albums.extend(albums)
-                    albums = []
+                    cached_albums, albums = persist_album_batch(
+                        albums,
+                        cached_albums,
+                        logger,
+                        "Database Checkpoint",
+                        update_album_metadata,
+                        populate_album_genres,
+                        populate_track_genres_for_album,
+                    )
                     if shutdown_event.is_set():
                         return cached_albums
-                
-                # Log progress at configured intervals
-                current_time = time.time()
-                if current_time - last_log_time >= log_interval:
-                    elapsed_time = current_time - start_log_time
-                    items_remaining = total_albums - i if isinstance(total_albums, int) else "unknown"
-                    
-                    if isinstance(total_albums, int):
-                        time_per_item = elapsed_time / i
-                        eta_seconds = items_remaining * time_per_item
-                        eta_str = str(timedelta(seconds=int(eta_seconds)))
-                        percent = f"{i/total_albums:.1%}"
-                        suffix = f"{percent} ({i}/{total_albums}) complete (ETA: {eta_str})..."
-                    else:
-                        suffix = f"{i} albums processed..."
-                    
-                    logger.info(f"Album '{identifier}' enrichment: {suffix}")
-                    last_log_time = current_time
                 
             except Exception as e:
                 logger.debug(f"Non-critical loop error at index {i} (Album {album_id}): {e}")
@@ -680,26 +688,15 @@ def get_albums(client, logger, identifier, album_ids=None):
         
         # Full album enrichment cleanup
         if identifier == "database":
-            if albums:
-                logger.debug(f"Database Cleanup: Saving remaining {len(albums)} albums...")
-                logger.debug(f"Album IDs to save: {[a.get('id') for a in albums]}")
-                try:
-                    update_album_metadata(albums, logger)
-                    populate_album_genres(albums, logger)
-                    for cleanup_album in albums:
-                        if shutdown_event.is_set():
-                            logger.debug("Shutdown acknowledged mid-cleanup track-genre population. Deferring remaining albums to next run.")
-                            break
-                        try:
-                            populate_track_genres_for_album(cleanup_album.get('id'), logger)
-                        except Exception as album_err:
-                            logger.warning(f"Failed to populate track genres for album {cleanup_album.get('id')}: {album_err}")
-                    logger.debug(f"Database Cleanup: update_album_metadata, populate_album_genres, and populate_track_genres_for_album call completed successfully.")
-                except Exception as cleanup_err:
-                    logger.error(f"Database Cleanup: update_album_metadata, populate_album_genres, or populate_track_genres_for_album raised exception: {cleanup_err}")
-                    logger.exception("Stack trace for cleanup error:")
-                    raise
-                cached_albums.extend(albums)
+            cached_albums, albums = persist_album_batch(
+                albums,
+                cached_albums,
+                logger,
+                "Database Cleanup",
+                update_album_metadata,
+                populate_album_genres,
+                populate_track_genres_for_album,
+            )
 
             albums = cached_albums
 
