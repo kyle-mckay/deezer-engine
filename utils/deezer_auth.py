@@ -185,10 +185,19 @@ def fetch_with_retry(fetch_func, entity_id, entity_label, logger, mark_failed_fe
 
     return None
 
-def apply_rate_limit_checkpoint(logger, batch_start_time, iteration_index, api_batch_size, rate_limit, request_label, log_no_cooldown=False):
+def apply_rate_limit_checkpoint(
+    logger,
+    batch_start_time,
+    iteration_index,
+    api_batch_size,
+    rate_limit,
+    request_label,
+    log_no_cooldown=False,
+    cooldown_task=None,
+):
     """Throttle batched requests to stay within the configured request rate."""
     if iteration_index % api_batch_size != 0:
-        return batch_start_time
+        return batch_start_time, False
 
     target_time_per_batch = (api_batch_size / rate_limit) * 60
     elapsed_time = time.time() - batch_start_time
@@ -201,13 +210,57 @@ def apply_rate_limit_checkpoint(logger, batch_start_time, iteration_index, api_b
     if elapsed_time < target_time_per_batch:
         sleep_time = target_time_per_batch - elapsed_time
         logger.debug(
-            f"Rate limit cooldown: Sleeping for {sleep_time:.2f} seconds to maintain {rate_limit} req/min limit"
+            f"Rate limit cooldown: target={target_time_per_batch:.2f}s, sleeping for {sleep_time:.2f}s to maintain {rate_limit} req/min limit"
         )
-        time.sleep(sleep_time)
+        interrupted = cooldown_wait_with_tasks(
+            logger,
+            sleep_time,
+            request_label,
+            cooldown_task=cooldown_task,
+        )
+        return time.time(), interrupted
     elif log_no_cooldown:
         logger.debug("No cooldown needed, proceeding to next batch immediately.")
 
-    return time.time()
+    return time.time(), False
+
+def cooldown_wait_with_tasks(logger, sleep_time, request_label, cooldown_task=None):
+    """Wait in interruptible chunks and optionally run one cooldown task during the wait window."""
+    max_chunk_seconds = 5.0
+    remaining = max(0.0, float(sleep_time))
+    task_ran = False
+
+    while remaining > 0:
+        if shutdown_event.is_set():
+            logger.debug(
+                f"Rate limit cooldown interrupted before waiting for {request_label}."
+            )
+            return True
+
+        if not task_ran and cooldown_task is not None:
+            task_start = time.time()
+            cooldown_task()
+            task_elapsed = max(0.0, time.time() - task_start)
+            remaining = max(0.0, remaining - task_elapsed)
+            task_ran = True
+            if remaining <= 0:
+                logger.debug("Cooldown task consumed the full cooldown window.")
+                break
+
+        wait_chunk = min(max_chunk_seconds, remaining)
+        logger.debug(
+            f"Rate limit cooldown progress for {request_label}: waiting {wait_chunk:.2f}s (remaining {remaining:.2f}s)."
+        )
+        interrupted = shutdown_event.wait(timeout=wait_chunk)
+        if interrupted:
+            logger.debug(
+                f"Rate limit cooldown interrupted while waiting for {request_label}."
+            )
+            return True
+        remaining = max(0.0, remaining - wait_chunk)
+
+    logger.debug(f"Rate limit cooldown complete for {request_label}.")
+    return False
 
 def persist_track_batch(tracks, cached_tracks, logger, phase_label, update_track_metadata):
     """Persist a track batch and reset the working list."""
@@ -268,6 +321,114 @@ def persist_album_batch(
 
     cached_albums.extend(albums)
     return cached_albums, []
+
+def _is_json_string(value):
+    if not isinstance(value, str):
+        return False
+    stripped = value.strip()
+    return (stripped.startswith("[") and stripped.endswith("]")) or (
+        stripped.startswith("{") and stripped.endswith("}")
+    )
+
+def _normalize_json_field(value):
+    if value is None:
+        return json.dumps([])
+    if _is_json_string(value):
+        return value
+    return json.dumps(value)
+
+def _extract_prefetched_payload(item, required_payload_keys):
+    """Returns (payload_dict_or_none, item_id)."""
+    if hasattr(item, 'as_dict'):
+        payload = item.as_dict()
+        return payload, payload.get('id')
+
+    if isinstance(item, dict):
+        item_id = item.get('id')
+        if item_id is None:
+            return None, None
+
+        has_payload = any(key in item for key in required_payload_keys)
+        if has_payload:
+            return item, item_id
+
+        return None, item_id
+
+    return None, item
+
+def _persist_stats_batch(
+    items,
+    cached_items,
+    logger,
+    phase_label,
+    update_partial_batch,
+    entity_label,
+):
+    if not items:
+        return cached_items, items
+
+    logger.debug(f"{phase_label}: Pushing chunk of {len(items)} {entity_label} stats to database")
+    update_partial_batch(items, logger)
+    cached_items.extend(items)
+    return cached_items, []
+
+def _flush_pending_database_batches_on_shutdown(
+    items,
+    logger,
+    entity_label,
+    should_flush_metadata,
+    should_flush_stats,
+    update_metadata_batch=None,
+    update_stats_batch=None,
+):
+    """Persist pending metadata or stats payloads when shutdown is acknowledged."""
+    if not items:
+        return items
+
+    if should_flush_metadata and update_metadata_batch is not None:
+        logger.debug(f"Shutdown Flush: Persisting {len(items)} pending {entity_label} metadata rows.")
+        update_metadata_batch(items, logger)
+        return []
+
+    if should_flush_stats and update_stats_batch is not None:
+        logger.debug(f"Shutdown Flush: Persisting {len(items)} pending {entity_label} stats rows.")
+        update_stats_batch(items, logger)
+        return []
+
+    return items
+
+def _apply_rate_limit_post_fetch(
+    logger,
+    did_api_fetch,
+    start_time,
+    api_request_count,
+    api_batch_size,
+    rate_limit,
+    request_label,
+    flush_on_interrupt,
+    interrupted_message,
+    log_no_cooldown=False,
+    cooldown_task=None,
+):
+    if not did_api_fetch:
+        return start_time, False
+
+    start_time, cooldown_interrupted = apply_rate_limit_checkpoint(
+        logger,
+        start_time,
+        api_request_count,
+        api_batch_size,
+        rate_limit,
+        request_label,
+        log_no_cooldown=log_no_cooldown,
+        cooldown_task=cooldown_task,
+    )
+    if cooldown_interrupted:
+        flush_on_interrupt()
+        logger.debug(interrupted_message)
+        return start_time, True
+
+    return start_time, False
 
 def get_authenticated_client(config, logger):
     """
@@ -389,7 +550,12 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     """
     Transforms Deezer API objects into a list of dictionaries with rate-limiting protection.
     """
-    from utils.db_manager import update_track_metadata, mark_track_metadata_fetch_failed
+    from utils.db_manager import (
+        update_track_metadata,
+        mark_track_metadata_fetch_failed,
+        update_tracks_partial_batch,
+        sync_to_collections,
+    )
     logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
 
     display_name = identifier
@@ -425,58 +591,133 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     last_log_time = start_log_time
     log_interval = get_global_value('log_interval',120)
     
-    # Only database enrichment needs delays (not normal source collection)
-    is_database_enrichment = source_type == "database"
-
     rate_limit = get_global_value('rate_limit', 60)
     api_batch_size = get_global_value('api_batch_size', 50)
 
+    def persist_tracks_for_cooldown(phase_label):
+        """Use cooldown windows for persistence work instead of idling."""
+        nonlocal tracks, cached_tracks
+        if not tracks:
+            return
+
+        if source_type == "database":
+            if identifier == "tracks":
+                cached_tracks, tracks = persist_track_batch(
+                    tracks,
+                    cached_tracks,
+                    logger,
+                    phase_label,
+                    update_track_metadata,
+                )
+            elif identifier == "stats":
+                cached_tracks, tracks = _persist_stats_batch(
+                    tracks,
+                    cached_tracks,
+                    logger,
+                    phase_label,
+                    update_tracks_partial_batch,
+                    "track",
+                )
+            return
+
+        pending_count = len(tracks)
+        cached_tracks.extend(tracks)
+        tracks = []
+        logger.debug(
+            f"{phase_label}: Syncing cumulative source snapshot of {len(cached_tracks)} tracks "
+            f"({pending_count} newly fetched) for collection '{collection}'."
+        )
+        sync_to_collections(cached_tracks, logger, collection_name=collection)
+
+    def flush_pending_tracks_on_shutdown():
+        """Persist pending track payloads with simple writes only when shutdown is acknowledged."""
+        nonlocal tracks
+        tracks = _flush_pending_database_batches_on_shutdown(
+            tracks,
+            logger,
+            "track",
+            should_flush_metadata=(source_type == "database" and identifier == "tracks"),
+            should_flush_stats=(source_type == "database" and identifier == "stats"),
+            update_metadata_batch=update_track_metadata,
+            update_stats_batch=update_tracks_partial_batch,
+        )
+
     # Track the start time for the batch of requests
     start_time = time.time()
+    api_request_count = 0
 
     for i, track in enumerate(iterable, 1):
         try:
             if shutdown_event.is_set():
+                flush_pending_tracks_on_shutdown()
                 logger.debug("Shutdown acknowledged mid-track collection. Returning partial results.")
-                return cached_tracks
+                if source_type == "database":
+                    return []
+                return cached_tracks + tracks
             
             # Log progress at configured intervals
             log_prefix = f"Database '{identifier}'" if source_type == "database" else f"'{source_type}'"
             last_log_time = log_enrichment_progress(logger, log_prefix, i, total_len, last_log_time, start_log_time, log_interval)
 
-            # Check rate limiting at configured intervals to prevent sustained high-load triggers
-            if is_database_enrichment:
-                start_time = apply_rate_limit_checkpoint(
-                    logger,
-                    start_time,
-                    i,
-                    api_batch_size,
-                    rate_limit,
-                    "requests",
-                    log_no_cooldown=True,
-                )
-
             if source_type == "database" and (identifier == "tracks" or identifier == "stats"):
-                t_id = track.get('id') if isinstance(track, dict) else track
-                
-                # Use the retry helper for heavy metadata fetching
-                track_obj = fetch_with_retry(
-                    client.get_track,
-                    t_id,
-                    "track",
-                    logger,
-                    mark_failed_fetch=mark_track_metadata_fetch_failed,
-                )
-                if not track_obj:
-                    # Error details are already logged by fetch_with_retry.
+                if identifier == "tracks":
+                    prefetched_required_keys = (
+                        "title",
+                        "isrc",
+                        "track_token",
+                        "artist",
+                        "album",
+                        "artist_id",
+                        "album_id",
+                    )
+                else:
+                    prefetched_required_keys = (
+                        "readable",
+                        "unseen",
+                        "rank",
+                        "bpm",
+                        "gain",
+                        "available_countries",
+                        "contributors",
+                    )
+
+                d, t_id = _extract_prefetched_payload(track, prefetched_required_keys)
+                used_prefetched_payload = d is not None
+
+                if not t_id:
+                    logger.debug(f"Track payload missing id at index {i}. Skipping.")
                     continue
-                
-                # ~ 0.5 tracks/s faster due to single as_dict() call vs 20+ individual getattr() operations - ~ 2 t/s
-                d = track_obj.as_dict()
+
+                did_api_fetch = False
+                if not used_prefetched_payload:
+                    did_api_fetch = True
+                    api_request_count += 1
+
+                    # Use the retry helper for heavy metadata fetching
+                    track_obj = fetch_with_retry(
+                        client.get_track,
+                        t_id,
+                        "track",
+                        logger,
+                        mark_failed_fetch=mark_track_metadata_fetch_failed,
+                    )
+                    if not track_obj:
+                        # Error details are already logged by fetch_with_retry.
+                        continue
+
+                    # ~ 0.5 tracks/s faster due to single as_dict() call vs 20+ individual getattr() operations - ~ 2 t/s
+                    d = track_obj.as_dict()
+                else:
+                    logger.debug(f"Using prefetched track payload for track {t_id}; skipping per-track API fetch.")
+
+                artist_blob = d.get('artist') if isinstance(d.get('artist'), dict) else {}
+                album_blob = d.get('album') if isinstance(d.get('album'), dict) else {}
+                artist_id = d.get('artist_id') if d.get('artist_id') is not None else artist_blob.get('id')
+                album_id = d.get('album_id') if d.get('album_id') is not None else album_blob.get('id')
                 
                 if identifier == "tracks":
                     tracks.append({
-                        'id': str(d.get('id')),
+                        'id': str(d.get('id') if d.get('id') is not None else t_id),
                         'readable': d.get('readable'),
                         'title': d.get('title'),
                         'title_short': d.get('title_short'),
@@ -496,29 +737,39 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                         'preview': d.get('preview'),
                         'bpm': d.get('bpm',0),
                         'gain': d.get('gain',0),
-                        'available_countries': json.dumps(d.get('available_countries', [])),
-                        'contributors': json.dumps(d.get('contributors', [])),
+                        'available_countries': _normalize_json_field(d.get('available_countries', [])),
+                        'contributors': _normalize_json_field(d.get('contributors', [])),
                         'md5_image': d.get('md5_image'),
                         'track_token': d.get('track_token'),
-                        'artist_id': d.get('artist', {}).get('id'),
-                        'album_id': d.get('album', {}).get('id'),
+                        'artist_id': artist_id,
+                        'album_id': album_id,
                         'date_cached': date_time
                     })
                 else: # stats enrichment
                     tracks.append({
-                        'id': str(d.get('id')),
+                        'id': str(d.get('id') if d.get('id') is not None else t_id),
                         'readable': d.get('readable'),
                         'unseen': d.get('unseen', False),
                         'rank': d.get('rank', 0),
                         'bpm': d.get('bpm',0),
                         'gain': d.get('gain',0),
-                        'available_countries': json.dumps(d.get('available_countries', [])),
-                        'contributors': json.dumps(d.get('contributors', [])),
+                        'available_countries': _normalize_json_field(d.get('available_countries', [])),
+                        'contributors': _normalize_json_field(d.get('contributors', [])),
                         'date_cached': date_time
                     })
             else:
                 # fetch for source ID collection - extract ID directly for performance
-                track_id = track.id if hasattr(track, 'id') else track.as_dict().get('id')
+                if isinstance(track, dict):
+                    track_id = track.get('id')
+                elif hasattr(track, 'id'):
+                    track_id = track.id
+                else:
+                    track_id = track.as_dict().get('id')
+
+                if track_id is None:
+                    logger.debug(f"Source track payload missing id at index {i}. Skipping.")
+                    continue
+
                 tracks.append({
                     'id': str(track_id),
                     'collection': collection,
@@ -527,7 +778,8 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
 
             logger.debug(f"Processed track {track}: {i}/{total_len}") 
 
-            # If performing database enrichment, perform periodic checkpoint at chunk_size interval
+            # If performing database enrichment, perform periodic checkpoint at chunk_size interval.
+            # This runs before cooldown checks so matching chunk/api batch sizes flush full chunks (50, not 49+1).
             if source_type == "database" and identifier == "tracks" and i % chunk_size == 0:
                 cached_tracks, tracks = persist_track_batch(
                     tracks,
@@ -537,13 +789,34 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                     update_track_metadata,
                 )
 
+            # Check rate limiting only for real API fetches, and only after processing this item.
+            if source_type == "database" and identifier in ("tracks", "stats"):
+                start_time, cooldown_interrupted = _apply_rate_limit_post_fetch(
+                    logger,
+                    did_api_fetch,
+                    start_time,
+                    api_request_count,
+                    api_batch_size,
+                    rate_limit,
+                    "requests",
+                    flush_on_interrupt=flush_pending_tracks_on_shutdown,
+                    interrupted_message="Shutdown acknowledged during track cooldown. Returning partial results.",
+                    log_no_cooldown=True,
+                    cooldown_task=lambda: persist_tracks_for_cooldown("Cooldown Checkpoint"),
+                )
+                if cooldown_interrupted:
+                    # cached_tracks items were already persisted by checkpoint, only return new unpersisted items
+                    if source_type == "database":
+                        return []
+                    return tracks
+
         except Exception as e:
             logger.debug(f"Non-critical loop error at index {i} (Track {track}): {e}")
             time.sleep(1)
             continue
     
     # Database enrichment cleanup
-    if source_type == "database" and identifier == "tracks":
+    if source_type == "database" and identifier == "tracks" and tracks:
         cached_tracks, tracks = persist_track_batch(
             tracks,
             cached_tracks,
@@ -551,8 +824,15 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
             "Database Cleanup",
             update_track_metadata,
         )
-    
         tracks = cached_tracks
+    elif source_type == "database" and identifier == "tracks":
+        tracks = cached_tracks
+
+    if source_type == "database" and identifier == "stats" and cached_tracks:
+        tracks = cached_tracks + tracks
+
+    if source_type != "database" and cached_tracks:
+        tracks = cached_tracks + tracks
 
     logger.debug(f"Successfully transformed {len(tracks)} tracks.")
     
@@ -562,7 +842,13 @@ def get_albums(client, logger, identifier, album_ids=None):
     """
     Fetches album metadata from Deezer API with rate-limiting protection.
     """
-    from utils.db_manager import update_album_metadata, populate_album_genres, populate_track_genres_for_album, mark_album_metadata_fetch_failed
+    from utils.db_manager import (
+        update_album_metadata,
+        populate_album_genres,
+        populate_track_genres_for_album,
+        mark_album_metadata_fetch_failed,
+        update_albums_partial_batch,
+    )
     
     albums = []
     cached_albums = []
@@ -582,53 +868,120 @@ def get_albums(client, logger, identifier, album_ids=None):
     start_log_time = time.time()
     last_log_time = start_log_time
     log_interval = get_global_value('log_interval', 120)
+
+    def persist_albums_for_cooldown(phase_label):
+        """Use cooldown windows for album persistence work instead of idling."""
+        nonlocal albums, cached_albums
+        if not albums:
+            return
+
+        if identifier == "database":
+            cached_albums, albums = persist_album_batch(
+                albums,
+                cached_albums,
+                logger,
+                phase_label,
+                update_album_metadata,
+                populate_album_genres,
+                populate_track_genres_for_album,
+            )
+            return
+
+        if identifier == "stats":
+            cached_albums, albums = _persist_stats_batch(
+                albums,
+                cached_albums,
+                logger,
+                phase_label,
+                update_albums_partial_batch,
+                "album",
+            )
+
+    def flush_pending_albums_on_shutdown():
+        """Persist pending album payloads with simple writes only when shutdown is acknowledged."""
+        nonlocal albums
+        albums = _flush_pending_database_batches_on_shutdown(
+            albums,
+            logger,
+            "album",
+            should_flush_metadata=(identifier == "database"),
+            should_flush_stats=(identifier == "stats"),
+            update_metadata_batch=update_album_metadata,
+            update_stats_batch=update_albums_partial_batch,
+        )
     
     # Track the start time for the batch of requests
     start_time = time.time()
+    api_request_count = 0
     
     try:
-        for i, album_id in enumerate(album_ids, 1):
+        for i, album_ref in enumerate(album_ids, 1):
             try:
                 if shutdown_event.is_set():
+                    flush_pending_albums_on_shutdown()
                     logger.debug("Shutdown acknowledged mid-album collection. Returning partial results.")
-                    return cached_albums
+                    if identifier in ("database", "stats"):
+                        return []
+                    return cached_albums + albums
                 
                 # Log progress at configured intervals
                 last_log_time = log_enrichment_progress(logger, f"Album '{identifier}'", i, total_albums, last_log_time, start_log_time, log_interval)
-                
-                # Check rate limiting at configured intervals
-                start_time = apply_rate_limit_checkpoint(
-                    logger,
-                    start_time,
-                    i,
-                    api_batch_size,
-                    rate_limit,
-                    "album requests",
-                )
-                
-                # Fetch album data using retry helper
-                album_obj = fetch_with_retry(
-                    client.get_album,
-                    album_id,
-                    "album",
-                    logger,
-                    mark_failed_fetch=mark_album_metadata_fetch_failed,
-                )
-                if not album_obj:
-                    # Error details are already logged by fetch_with_retry.
+
+                if identifier == "database":
+                    prefetched_required_keys = (
+                        "title",
+                        "upc",
+                        "cover",
+                        "genres",
+                        "artist",
+                        "artist_id",
+                    )
+                else:
+                    prefetched_required_keys = ("fans", "available")
+
+                d, requested_album_id = _extract_prefetched_payload(album_ref, prefetched_required_keys)
+                used_prefetched_payload = d is not None
+
+                if not requested_album_id:
+                    logger.debug(f"Album payload missing id at index {i}. Skipping.")
                     continue
-                
-                # Convert to dictionary
-                d = album_obj.as_dict()
+
+                did_api_fetch = False
+                if not used_prefetched_payload:
+                    did_api_fetch = True
+                    api_request_count += 1
+
+                    # Fetch album data using retry helper
+                    album_obj = fetch_with_retry(
+                        client.get_album,
+                        requested_album_id,
+                        "album",
+                        logger,
+                        mark_failed_fetch=mark_album_metadata_fetch_failed,
+                    )
+                    if not album_obj:
+                        # Error details are already logged by fetch_with_retry.
+                        continue
+
+                    # Convert to dictionary
+                    d = album_obj.as_dict()
+                else:
+                    logger.debug(
+                        f"Using prefetched album payload for album {requested_album_id}; skipping per-album API fetch."
+                    )
                 
                 # Warn if API returned a different album ID (redirect/canonical version)
-                if d.get('id') != album_id:
-                    logger.debug(f"API redirect: Requested album {album_id}, but API returned {d.get('id')}. Using requested ID to match database stub.")
+                if not used_prefetched_payload and d.get('id') != requested_album_id:
+                    logger.debug(f"API redirect: Requested album {requested_album_id}, but API returned {d.get('id')}. Using requested ID to match database stub.")
+
+                artist_blob = d.get('artist') if isinstance(d.get('artist'), dict) else {}
+                artist_id = d.get('artist_id') if d.get('artist_id') is not None else artist_blob.get('id')
+                artist_name = d.get('artist_name') if d.get('artist_name') is not None else artist_blob.get('name')
                 
                 if identifier == "database":
                     # Full metadata collection
                     albums.append({
-                        'id': album_id,  # Use requested ID to match database stub
+                        'id': requested_album_id,  # Use requested ID to match database stub
                         'title': d.get('title'),
                         'upc': d.get('upc'),
                         'link': d.get('link'),
@@ -639,7 +992,6 @@ def get_albums(client, logger, identifier, album_ids=None):
                         'cover_big': d.get('cover_big'),
                         'cover_xl': d.get('cover_xl'),
                         'md5_image': d.get('md5_image'),
-                        'genres': json.dumps(d.get('genres', [])),
                         'label': d.get('label'),
                         'nb_tracks': d.get('nb_tracks'),
                         'duration': d.get('duration', 0),
@@ -651,21 +1003,22 @@ def get_albums(client, logger, identifier, album_ids=None):
                         'explicit_lyrics': d.get('explicit_lyrics', False),
                         'explicit_content_lyrics': d.get('explicit_content_lyrics', 0),
                         'explicit_content_cover': d.get('explicit_content_cover', 0),
-                        'contributors': json.dumps(d.get('contributors', [])),
-                        'artist_id': d.get('artist', {}).get('id'),
-                        'artist_name': d.get('artist', {}).get('name'),
+                        'contributors': _normalize_json_field(d.get('contributors', [])),
+                        'genres': _normalize_json_field(d.get('genres', [])),
+                        'artist_id': artist_id,
+                        'artist_name': artist_name,
                         'date_cached': date_time
                     })
                 else:
                     # Partial enrichment (stats) - only refreshable fields
                     albums.append({
-                        'id': album_id,  # Use requested ID to match database stub
+                        'id': requested_album_id,  # Use requested ID to match database stub
                         'fans': d.get('fans', 0),
                         'available': d.get('available', True),
                         'date_cached': date_time
                     })
                 
-                logger.debug(f"Processed album {album_id}: {i}/{total_albums}")
+                logger.debug(f"Processed album {requested_album_id}: {i}/{total_albums}")
 
                 # If performing full album enrichment, perform periodic checkpoint at chunk_size interval
                 if identifier == "database" and i % chunk_size == 0:
@@ -679,15 +1032,35 @@ def get_albums(client, logger, identifier, album_ids=None):
                         populate_track_genres_for_album,
                     )
                     if shutdown_event.is_set():
-                        return cached_albums
+                        flush_pending_albums_on_shutdown()
+                        return []
+
+                # Check rate limiting only for real API fetches, and only after processing this item.
+                start_time, cooldown_interrupted = _apply_rate_limit_post_fetch(
+                        logger,
+                        did_api_fetch,
+                        start_time,
+                        api_request_count,
+                        api_batch_size,
+                        rate_limit,
+                        "album requests",
+                        flush_on_interrupt=flush_pending_albums_on_shutdown,
+                        interrupted_message="Shutdown acknowledged during album cooldown. Returning partial results.",
+                        cooldown_task=lambda: persist_albums_for_cooldown("Cooldown Checkpoint"),
+                    )
+                if cooldown_interrupted:
+                    # cached_albums items were already persisted by checkpoint, only return new unpersisted items
+                    if identifier in ("database", "stats"):
+                        return []
+                    return albums
                 
             except Exception as e:
-                logger.debug(f"Non-critical loop error at index {i} (Album {album_id}): {e}")
+                logger.debug(f"Non-critical loop error at index {i} (Album {album_ref}): {e}")
                 time.sleep(1)
                 continue
         
         # Full album enrichment cleanup
-        if identifier == "database":
+        if identifier == "database" and albums:
             cached_albums, albums = persist_album_batch(
                 albums,
                 cached_albums,
@@ -697,8 +1070,12 @@ def get_albums(client, logger, identifier, album_ids=None):
                 populate_album_genres,
                 populate_track_genres_for_album,
             )
-
             albums = cached_albums
+        elif identifier == "database":
+            albums = cached_albums
+
+        if identifier == "stats" and cached_albums:
+            albums = cached_albums + albums
 
         logger.debug(f"Successfully transformed {len(albums)} albums.")
         

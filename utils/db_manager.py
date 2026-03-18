@@ -372,6 +372,72 @@ def mark_album_metadata_fetch_failed(album_id, error_code, logger=None):
             logger.error(f"DB Error: Failed to mark album metadata fetch failure for {album_id}: {e}")
         raise
 
+def get_album_ids_for_unavailable_tracks(logger=None):
+    """
+    Returns album IDs for tracks with available_countries='[]' that are not already
+    track-blocklisted and do not already have an album blocklist row.
+    """
+    query = """
+    SELECT DISTINCT t.album_id
+    FROM tracks t
+    WHERE t.album_id IS NOT NULL
+      AND t.available_countries = '[]'
+      AND COALESCE(t.blocklisted, 0) = 0
+      AND NOT EXISTS (
+          SELECT 1
+          FROM blocklist b
+          WHERE b.entity_type = 'album'
+            AND b.entity_id = t.album_id
+      )
+    ORDER BY t.album_id
+    """
+
+    try:
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            album_ids = [row[0] for row in cursor.fetchall()]
+
+            if logger and album_ids:
+                logger.debug(
+                    f"Found {len(album_ids)} albums requiring safeguard blocklist from unavailable tracks."
+                )
+
+            return album_ids
+    except Exception as e:
+        if logger:
+            logger.error(f"DB Error: Failed retrieving albums for unavailable track safeguard: {e}")
+        raise
+
+def blocklist_albums_for_unavailable_tracks(logger=None):
+    """
+    DB-driven safeguard: find unavailable tracks and blocklist their albums by reusing
+    the existing album failure path.
+    """
+    marker_error_code = "available_countries_empty"
+
+    try:
+        album_ids = get_album_ids_for_unavailable_tracks(logger)
+        if not album_ids:
+            if logger:
+                logger.debug("No albums require safeguard blocklisting for empty available_countries.")
+            return
+
+        created_count = 0
+        for album_id in album_ids:
+            mark_album_metadata_fetch_failed(album_id, marker_error_code, logger)
+            created_count += 1
+
+        if logger:
+            logger.debug(
+                "Safeguard blocklist applied for unavailable tracks: "
+                f"albums_blocklisted={created_count}."
+            )
+    except Exception as e:
+        if logger:
+            logger.error(f"DB Error: Failed safeguard blocklist for unavailable tracks: {e}")
+        raise
+
 def fetch_collection(source_name, logger=None, include_blocklisted=False):
     """
     Retrieves all tracks and their full metadata associated with a specific source.
@@ -686,15 +752,16 @@ def update_unprocessed(client,logger):
         unprocessed = get_tracks(client,logger,"database","tracks","null",unprocessed)
         logger.debug(f"Metadata fetched, updating database with {len(unprocessed)} records.")
         update_track_metadata(unprocessed,logger)
-        unprocessed = get_unprocessed_track_ids(logger)
-        if len(unprocessed) > 0:
-            logger.warning(f"Metadata enrichment finished but tracks are missing metadata. Expecting 0, got {len(unprocessed)}")
-    
     # Track metadata committed — safe exit point before album enrichment begins.
     if shutdown_event.is_set():
         if logger:
             logger.debug("Shutdown acknowledged after track enrichment. Deferring album enrichment to next run.")
         return
+    else:
+        unprocessed = get_unprocessed_track_ids(logger)
+        if len(unprocessed) > 0:
+            logger.warning(f"Metadata enrichment finished but tracks are missing metadata. Expecting 0, got {len(unprocessed)}")
+    
 
     # Process unprocessed albums
     sync_missing_albums_to_table(logger)
@@ -707,17 +774,17 @@ def update_unprocessed(client,logger):
         unprocessed_album = get_albums(client, logger, identifier="database", album_ids=unprocessed_album)
         logger.debug(f"Metadata fetched, updating database with {len(unprocessed_album)} records.")
         update_album_metadata(unprocessed_album, logger)
-        enriched_albums = unprocessed_album
-        
-        unprocessed_album = get_unprocessed_album_ids(logger)
-        if len(unprocessed_album) > 0:
-            logger.warning(f"Metadata enrichment finished but albums are missing metadata. Expecting 0, got {len(unprocessed_album)}")
-    
     # Album metadata committed — safe exit point before genre mapping cascades.
     if shutdown_event.is_set():
         if logger:
             logger.debug("Shutdown acknowledged after album enrichment. Deferring genre mapping to next run.")
         return
+    else:
+        enriched_albums = unprocessed_album
+        unprocessed_album = get_unprocessed_album_ids(logger)
+        if len(unprocessed_album) > 0:
+            logger.warning(f"Metadata enrichment finished but albums are missing metadata. Expecting 0, got {len(unprocessed_album)}")
+    
 
     # Populate album genres for newly enriched albums
     if enriched_albums:
@@ -793,6 +860,15 @@ def update_tracks_partial_batch(track_list, logger=None):
             conn.commit()
             if logger:
                 logger.info(f"Refreshed stats (rank/unseen) for {len(track_list)} tracks.")
+
+        # Shared post-write safeguard: both partial/full paths rely on DB state only.
+        try:
+            blocklist_albums_for_unavailable_tracks(logger)
+        except Exception as safeguard_error:
+            if logger:
+                logger.warning(
+                    f"Safeguard blocklist pass failed after partial track update: {safeguard_error}"
+                )
     except Exception as e:
         if logger:
             logger.error(f"DB Error: Partial batch update failed: {e}")
@@ -871,6 +947,15 @@ def update_track_metadata(track_list, logger=None):
             conn.commit()
             if logger:
                 logger.debug(f"Metadata enrichment complete for {len(track_list)} tracks.")
+
+        # Shared post-write safeguard: both partial/full paths rely on DB state only.
+        try:
+            blocklist_albums_for_unavailable_tracks(logger)
+        except Exception as safeguard_error:
+            if logger:
+                logger.warning(
+                    f"Safeguard blocklist pass failed after full track metadata update: {safeguard_error}"
+                )
     except Exception as e:
         if logger:
             logger.error(f"DB Error: Metadata update failed: {e}")
