@@ -57,7 +57,8 @@ def get_global_value(key, default=None):
     Retrieves a configuration value. 
     Checks environment variables (DEEZER_<KEY>) first, then falls back to config.yml.
     """
-    config_logger.debug(f"Resolving global config key='{key}' (default_provided={default is not None}).")
+    # Noisy log, deferring until tracing is implemented to avoid cluttering logs during normal operation
+    #config_logger.debug(f"Resolving global config key='{key}' (default_provided={default is not None}).")
     if key.upper() == "CONTAINERIZED":
         env_key=key.upper()
     else:
@@ -76,10 +77,11 @@ def get_global_value(key, default=None):
             value = False
 
         display_value = "***" if is_sensitive_key else value
-        config_logger.debug(
-            f"Resolved key='{key}' from environment variable '{env_key}' "
-            f"(type={type(value).__name__}, value={display_value})."
-        )
+        # Noisy log, deferring until tracing is implemented to avoid cluttering logs during normal operation
+        #config_logger.debug(
+        #    f"Resolved key='{key}' from environment variable '{env_key}' "
+        #    f"(type={type(value).__name__}, value={display_value})."
+        #)
         return value
 
     # Check config.yml
@@ -91,10 +93,11 @@ def get_global_value(key, default=None):
             resolved_value = config.get('config', {}).get(key.lower(), default)
             source = "config.yml" if key.lower() in config.get('config', {}) else "default"
             display_value = "***" if is_sensitive_key else resolved_value
-            config_logger.debug(
-                f"Resolved key='{key}' from {source} "
-                f"(type={type(resolved_value).__name__}, value={display_value})."
-            )
+            # Noisy log, deferring until tracing is implemented to avoid cluttering logs during normal operation
+            #config_logger.debug(
+            #    f"Resolved key='{key}' from {source} "
+            #    f"(type={type(resolved_value).__name__}, value={display_value})."
+            #)
             return resolved_value
     except Exception as e:
         config_logger.debug(
@@ -133,6 +136,7 @@ def load_config_with_env_overrides():
         'DEEZER_CHUNK_SIZE': 'chunk_size',
         'DEEZER_API_BATCH_SIZE': 'api_batch_size',
         'DEEZER_RATE_LIMIT': 'rate_limit',
+        'DEEZER_MAX_RETRIES': 'max_retries',
         'DEEZER_LOG_LEVEL': 'log_level',
         'DEEZER_WRITE_LOGS': 'write_logs',
         'DEEZER_PRINT_BANNER': 'print_banner',
@@ -152,7 +156,7 @@ def load_config_with_env_overrides():
             # Type conversions
 
             # Integers
-            if config_key in ['chunk_size', 'api_batch_size', 'rate_limit', 'playlist_cap', 'favorites_cap', 'retention', 'file_retention', 'track_stats_refresh', 'album_stats_refresh', 'blocklist_expiry_days']:
+            if config_key in ['chunk_size', 'api_batch_size', 'rate_limit', 'max_retries', 'playlist_cap', 'favorites_cap', 'retention', 'file_retention', 'track_stats_refresh', 'album_stats_refresh', 'blocklist_expiry_days']:
                 try:
                     value = int(value)
                 except ValueError:

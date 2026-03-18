@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.12.1 - 2026-03-18
+## v0.13.0 - 2026-03-18
+
+### Enhancements
+
+- feat: add global variable for `max_tries` for `get_tracks` and `get_albums` (closes #84) (#99) (@kylemmkay)
 
 ### Maintenance
 

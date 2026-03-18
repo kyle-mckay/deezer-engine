@@ -39,6 +39,7 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | `chunk_size` | `DEEZER_CHUNK_SIZE` | No | `50` | Max tracks processed in batch operation's. (Adding/removing from playlist, db checkpoint caching) |
 | `api_batch_size` | `DEEZER_API_BATCH_SIZE` | No | `50` | API rate limit check interval (requests before pausing for rate limiting). |
 | `rate_limit` | `DEEZER_RATE_LIMIT` | No | `60` | Maximum API requests per minute (for rate limiting). |
+| `max_retries` | `DEEZER_MAX_RETRIES` | No | `4` | Number of retries for failed API requests (0 = try once, no retries; 4 = 1 attempt + 4 retries = 5 total attempts). |
 | `log_interval` | `DEEZER_LOG_INTERVAL` | No | `120` | How many seconds before you get an update on progress when pulling tack data. |
 | `print_banner` | `DEEZER_PRINT_BANNER` | No | `true` | Toggle the startup license/brand banner. |
 | `playlist_cap` | `DEEZER_PLAYLIST_CAP` | No | `5000` | Max tracks allowed in **any** destination playlist (Deezer limit is 5k). |
