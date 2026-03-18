@@ -99,8 +99,6 @@ def handle_cached_data(cache_file, retention_hrs, logger, fetch_callback, contex
 
 def get_collection_name(logger, type, name=None, id=None):
     """Using the provided variables, attempts to determine the expected 'source_name' in the collections table for cache matching"""
-    _log_tag = "utils.cache_manager.get_collection_name"
-    logger.debug(f">>> START: {_log_tag}")
     if not type:
         logger.warning(f"Unable to determine collection name, source type is empty.")
         return "unknown"
@@ -147,5 +145,4 @@ def get_collection_name(logger, type, name=None, id=None):
                 collection = "unknown"
     
     logger.debug(f"Collection name identified as: '{collection}'")
-    logger.debug(f"<<< END: {_log_tag}")
     return collection

@@ -52,7 +52,6 @@ def run(client, config, logger, source_data):
     """
     Fetches tracks from your listen history: https://www.deezer.com/en/profile/me/history
     """
-    logger.debug(">>> START: strategies.sources.history.run")
     try:
         if isinstance(source_data, dict):
             source_data = [source_data]
@@ -98,7 +97,6 @@ def run(client, config, logger, source_data):
         logger.info(f"Fetched {len(filtered_tracks)} tracks from history within the last {source_lookback} days.")
         logger.debug(f"Limit count: {len(history_tracks)}, Filtered count: {len(filtered_tracks)}, Difference: {filtered_count} removed.")
         
-        logger.debug("<<< END: strategies.sources.history.run")
         return filtered_tracks
 
     except Exception as e:

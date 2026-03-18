@@ -41,9 +41,6 @@ def release_expired_blocklisted_entities(logger=None):
     Startup reconciliation: unblocks tracks/albums once blocklist_expiry_days has elapsed
     since the blocklist event timestamp.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.release_expired_blocklisted_entities")
-
     configured_days = get_global_value("blocklist_expiry_days", default=7)
     try:
         expiry_days = int(configured_days)
@@ -165,9 +162,6 @@ def release_expired_blocklisted_entities(logger=None):
         if logger:
             logger.error(f"DB Error: Failed to release expired blocklisted entities: {e}")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.release_expired_blocklisted_entities")
 
 def _mark_entity_metadata_fetch_failed(entity_type, entity_table, entity_id, error_code, logger=None):
     """Shared helper to upsert blocklist failure metadata and attach blacklist_id to an entity row."""
@@ -318,9 +312,6 @@ def mark_track_metadata_fetch_failed(track_id, error_code, logger=None):
     """
     Increments track all-time and concurrent error counts in blocklist.
     """
-    if logger:
-        logger.debug(f">>> START: utils.db_manager.mark_track_metadata_fetch_failed ({track_id})")
-
     try:
         _mark_entity_metadata_fetch_failed(
             entity_type="track",
@@ -335,17 +326,11 @@ def mark_track_metadata_fetch_failed(track_id, error_code, logger=None):
         if logger:
             logger.error(f"DB Error: Failed to mark track metadata fetch failure for {track_id}: {e}")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.mark_track_metadata_fetch_failed")
 
 def mark_album_metadata_fetch_failed(album_id, error_code, logger=None):
     """
     Increments album all-time and concurrent error counts in blocklist.
     """
-    if logger:
-        logger.debug(f">>> START: utils.db_manager.mark_album_metadata_fetch_failed ({album_id})")
-
     try:
         blocklist_id = _mark_entity_metadata_fetch_failed(
             entity_type="album",
@@ -386,17 +371,11 @@ def mark_album_metadata_fetch_failed(album_id, error_code, logger=None):
         if logger:
             logger.error(f"DB Error: Failed to mark album metadata fetch failure for {album_id}: {e}")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.mark_album_metadata_fetch_failed")
 
 def fetch_collection(source_name, logger=None, include_blocklisted=False):
     """
     Retrieves all tracks and their full metadata associated with a specific source.
     """
-    if logger:
-        logger.debug(f">>> START: utils.db_manager.fetch_collection ({source_name})")
-
     # SQL JOIN: Get track metadata where the track exists in the specified collection
     track_filter = _blocklist_where_clause(include_blocklisted)
     query = f"""
@@ -434,17 +413,12 @@ def fetch_collection(source_name, logger=None, include_blocklisted=False):
         if logger:
             logger.error(f"DB Error: Failed to fetch '{source_name}': {e}")
         return []
-    finally:
-        if logger:
-            logger.debug(f"<<< END: utils.db_manager.fetch_collection")
 
 def validate_sync_integrity(original_tracks, synced_tracks, logger):
     """
     Compares original fetched tracks with synced tracks from the database.
     Ensures data integrity after sync_to_collections.
     """
-    logger.debug(">>> START: utils.db_manager.validate_sync_integrity")
-    
     if not original_tracks or not synced_tracks:
         logger.warning("Sync validation skipped: One or both track lists are empty.")
         return
@@ -471,7 +445,6 @@ def validate_sync_integrity(original_tracks, synced_tracks, logger):
     
     if original_ids == synced_ids:
         logger.debug(f"Sync validation passed: All {len(original_ids)} track IDs match between original and synced data.")
-        logger.debug("<<< END: utils.db_manager.validate_sync_integrity")
     else:
         error_msg = "Sync validation failed: Track ID mismatch detected."
         logger.error(error_msg)
@@ -482,7 +455,6 @@ def sync_to_collections(tracklist, logger, collection_name=None):
     Parses a tracklist where each track contains its own source info.
     Inserts IDs into 'tracks' and maps them in 'collections'.
     """
-    logger.debug(">>> START: utils.db_manager.sync_to_collections")
     if not tracklist:
         if collection_name:
             try:
@@ -496,8 +468,6 @@ def sync_to_collections(tracklist, logger, collection_name=None):
                     logger.debug(f"DB: Cleared {cursor.rowcount} cached tracks from '{collection_name}'.")
             except Exception as e:
                 logger.error(f"DB Sync failed: {e}")
-            finally:
-                logger.debug("<<< END: utils.db_manager.sync_to_collections")
             return
 
         logger.debug("Sync skipped: No tracks provided in payload.")
@@ -583,17 +553,12 @@ def sync_to_collections(tracklist, logger, collection_name=None):
 
     except Exception as e:
         logger.error(f"DB Sync failed: {e}")
-    finally:
-        logger.debug("<<< END: utils.db_manager.sync_to_collections")
 
 def get_unprocessed_track_ids(logger=None, include_blocklisted=False):
     """
     Retrieves all track IDs from the database that have not yet been 
     enriched with metadata.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.get_unprocessed_track_ids")
-
     track_filter = _blocklist_where_clause(include_blocklisted)
     query = f"""
     SELECT id
@@ -619,18 +584,12 @@ def get_unprocessed_track_ids(logger=None, include_blocklisted=False):
         if logger:
             logger.error(f"DB Error: Failed to check for unprocessed tracks: {e}")
         return []
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.get_unprocessed_track_ids")
 
 def get_unprocessed_album_ids(logger=None, include_blocklisted=False):
     """
     Retrieves all album IDs from the database that have not yet been 
     enriched with metadata OR have not completed genre mapping.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.get_unprocessed_album_ids")
-
     album_filter = _blocklist_where_clause(include_blocklisted)
     query = f"""
     SELECT id
@@ -659,17 +618,11 @@ def get_unprocessed_album_ids(logger=None, include_blocklisted=False):
         if logger:
             logger.error(f"DB Error: Failed to check for unprocessed albums: {e}")
         return []
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.get_unprocessed_album_ids")
 
 def reset_album_genres_by_track_ids(track_ids, logger=None):
     """
     Resets genre_mapped flag to 0 for albums associated with tracks missing genre mappings.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.reset_album_genres_by_track_ids")
-    
     if not track_ids:
         if logger:
             logger.debug("No track IDs provided. Skipping album genre reset.")
@@ -712,17 +665,11 @@ def reset_album_genres_by_track_ids(track_ids, logger=None):
         if logger:
             logger.error(f"DB Error: Failed to reset album genres by track IDs: {e}")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.reset_album_genres_by_track_ids")
 
 def update_unprocessed(client,logger):
     """
     Identify and process tracks/albums that need metadata and genre mapping.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.update_unprocessed")
-    
     # Process unprocessed tracks
     unprocessed = get_unprocessed_track_ids(logger)
     if len(unprocessed) > 0:
@@ -805,17 +752,11 @@ def update_unprocessed(client,logger):
         logger.warning(f"Found {len(tracks_missing_genres)} tracks missing genre mappings. Associated albums will be reset and reprocessed on the next cycle.")
         # Reset the albums associated with these tracks so they get re-processed
         reset_album_genres_by_track_ids(tracks_missing_genres, logger)
-    
-    if logger:
-        logger.debug("<<< END: utils.db_manager.update_unprocessed")
 
 def update_tracks_partial_batch(track_list, logger=None):
     """
     Updates multiple tracks using the keys present in the first dictionary.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.update_tracks_partial_batch")
-
     if not track_list:
         return
 
@@ -841,16 +782,12 @@ def update_tracks_partial_batch(track_list, logger=None):
         if logger:
             logger.error(f"DB Error: Partial batch update failed: {e}")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.update_tracks_partial_batch")
 
 def update_track_metadata(track_list, logger=None):
     """
     Updates the tracks table with full metadata fetched from the Deezer API.
     """
     if logger:
-        logger.debug(">>> START: utils.db_manager.update_track_metadata")
         logger.debug(f"Received {len(track_list) if track_list else 0} tracks for metadata update")
 
     if not track_list:
@@ -924,9 +861,6 @@ def update_track_metadata(track_list, logger=None):
             logger.error(f"DB Error: Metadata update failed: {e}")
             logger.exception("Stack trace for track metadata update error:")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.update_track_metadata")
 
 def update_album_metadata(album_list, logger=None):
     """
@@ -934,7 +868,6 @@ def update_album_metadata(album_list, logger=None):
     Captures complete album information including covers, genres, and metadata.
     """
     if logger:
-        logger.debug(">>> START: utils.db_manager.update_album_metadata")
         logger.debug(f"Received {len(album_list) if album_list else 0} albums for metadata update")
 
     if not album_list:
@@ -1000,9 +933,6 @@ def update_album_metadata(album_list, logger=None):
             logger.error(f"DB Error: Album metadata update failed: {e}")
             logger.exception("Stack trace for album metadata update error:")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.update_album_metadata")
 
 def populate_album_genres(album_list, logger=None):
     """
@@ -1010,7 +940,6 @@ def populate_album_genres(album_list, logger=None):
     and creates many-to-many relationships in the album_genres junction table.
     """
     if logger:
-        logger.debug(">>> START: utils.db_manager.populate_album_genres")
         logger.debug(f"Processing {len(album_list) if album_list else 0} albums for genre population")
 
     if not album_list:
@@ -1191,17 +1120,11 @@ def populate_album_genres(album_list, logger=None):
             logger.error(f"DB Error: Genre population failed: {e}")
             logger.exception("Stack trace for genre population error:")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.populate_album_genres")
 
 def populate_track_genres(logger=None):
     """
     Populates the track_genres table by inheriting genres from albums.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.populate_track_genres")
-
     try:
         with _get_connection() as conn:
             cursor = conn.cursor()
@@ -1271,17 +1194,11 @@ def populate_track_genres(logger=None):
             logger.error(f"DB Error: Track genre population failed: {e}")
             logger.exception("Stack trace for track genre population error:")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.populate_track_genres")
 
 def populate_track_genres_for_album(album_id, logger=None):
     """
     Populates track_genres for a specific album.   
     """
-    if logger:
-        logger.debug(f">>> START: utils.db_manager.populate_track_genres_for_album ({album_id})")
-    
     try:
         with _get_connection() as conn:
             cursor = conn.cursor()
@@ -1329,17 +1246,11 @@ def populate_track_genres_for_album(album_id, logger=None):
         if logger:
             logger.error(f"DB Error: Failed to populate track genres for album {album_id}: {e}")
         raise
-    finally:
-        if logger:
-            logger.debug(f"<<< END: utils.db_manager.populate_track_genres_for_album")
 
 def get_albums_missing_genres(logger=None, include_blocklisted=False):
     """
     Retrieves all album IDs that have not completed genre mapping.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.get_albums_missing_genres")
-    
     try:
         with _get_connection() as conn:
             cursor = conn.cursor()
@@ -1366,17 +1277,11 @@ def get_albums_missing_genres(logger=None, include_blocklisted=False):
         if logger:
             logger.error(f"DB Error: Failed to retrieve albums missing genres: {e}")
         return []
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.get_albums_missing_genres")
 
 def get_tracks_missing_genres(logger=None, include_blocklisted=False):
     """
     Retrieves all track IDs that have not completed genre mapping.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.get_tracks_missing_genres")
-    
     try:
         with _get_connection() as conn:
             cursor = conn.cursor()
@@ -1403,18 +1308,12 @@ def get_tracks_missing_genres(logger=None, include_blocklisted=False):
         if logger:
             logger.error(f"DB Error: Failed to retrieve tracks missing genres: {e}")
         return []
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.get_tracks_missing_genres")
 
 def update_albums_partial_batch(album_list, logger=None):
     """
     Updates multiple albums with refreshable fields only (fans, available, date_cached).
     Used for periodic stats refreshing without full metadata fetch.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.update_albums_partial_batch")
-
     if not album_list:
         return
 
@@ -1442,18 +1341,12 @@ def update_albums_partial_batch(album_list, logger=None):
         if logger:
             logger.error(f"DB Error: Partial album batch update failed: {e}")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.update_albums_partial_batch")
 
 def get_unique_album_ids_from_tracks(logger=None):
     """
     Retrieves all unique album IDs from the tracks table where album_id is not NULL.
     Returns a set of album IDs.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.get_unique_album_ids_from_tracks")
-    
     try:
         with _get_connection() as conn:
             cursor = conn.execute("""
@@ -1474,18 +1367,12 @@ def get_unique_album_ids_from_tracks(logger=None):
         if logger:
             logger.error(f"DB Error: Failed to get unique album IDs - {e}")
         return set()
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.get_unique_album_ids_from_tracks")
 
 def get_missing_album_ids(logger=None):
     """
     Identifies album IDs that exist in the tracks table but are missing from the albums table.
     Returns a set of missing album IDs.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.get_missing_album_ids")
-    
     try:
         with _get_connection() as conn:
             # Get all unique album IDs from tracks
@@ -1516,18 +1403,12 @@ def get_missing_album_ids(logger=None):
         if logger:
             logger.error(f"DB Error: Failed to get missing album IDs - {e}")
         return set()
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.get_missing_album_ids")
 
 def get_missing_artist_ids(logger=None):
     """
     Identifies artist IDs referenced by tracks/albums that are missing from the artists table.
     Returns a set of missing artist IDs.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.get_missing_artist_ids")
-
     try:
         with _get_connection() as conn:
             cursor = conn.execute("""
@@ -1559,18 +1440,12 @@ def get_missing_artist_ids(logger=None):
         if logger:
             logger.error(f"DB Error: Failed to get missing artist IDs - {e}")
         return set()
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.get_missing_artist_ids")
 
 def sync_missing_albums_to_table(logger=None):
     """
     Identifies missing album IDs from tracks table and inserts stub records into albums table.
     Stub records contain only the album ID; other fields will be populated during metadata enrichment.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.sync_missing_albums_to_table")
-    
     try:
         missing_ids = get_missing_album_ids(logger)
         
@@ -1594,18 +1469,12 @@ def sync_missing_albums_to_table(logger=None):
         if logger:
             logger.error(f"DB Error: Album sync to table failed - {e}")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.sync_missing_albums_to_table")
 
 def sync_missing_artists_to_table(logger=None):
     """
     Identifies missing artist IDs from tracks/albums and inserts stub records into artists table.
     Stub records contain only the artist ID; other fields will be populated during enrichment.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.sync_missing_artists_to_table")
-
     try:
         missing_ids = get_missing_artist_ids(logger)
 
@@ -1628,17 +1497,11 @@ def sync_missing_artists_to_table(logger=None):
         if logger:
             logger.error(f"DB Error: Artist sync to table failed - {e}")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.sync_missing_artists_to_table")
 
 def get_expired_track_ids(logger=None, include_blocklisted=False):
     """
     Returns a list of track IDs where date_cached is older than n days. Should ignore unprocessed (new) ids.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.get_expired_track_ids")
-
     track_stats_refresh=get_global_value("track_stats_refresh",default = 90)
     track_filter = _blocklist_where_clause(include_blocklisted)
     query = f"""
@@ -1662,9 +1525,6 @@ def get_expired_track_ids(logger=None, include_blocklisted=False):
         if logger:
             logger.error(f"DB Error: Expiry check failed: {e}")
         return []
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.get_expired_track_ids")
 
 def refresh_stats(client, logger):
     refresh_stats = get_expired_track_ids(logger)
@@ -1686,9 +1546,6 @@ def get_expired_album_ids(logger=None, include_blocklisted=False):
     """
     Returns a list of album IDs where date_cached is older than n days. Should ignore unprocessed (new) ids.
     """
-    if logger:
-        logger.debug(">>> START: utils.db_manager.get_expired_album_ids")
-
     album_stats_refresh = get_global_value("album_stats_refresh", default=90)
     album_filter = _blocklist_where_clause(include_blocklisted)
     query = f"""
@@ -1712,17 +1569,11 @@ def get_expired_album_ids(logger=None, include_blocklisted=False):
         if logger:
             logger.error(f"DB Error: Album expiry check failed: {e}")
         return []
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.get_expired_album_ids")
 
 def is_collection_cached(source_name, config, logger=None):
     """
     Checks if a collection exists and was cached within the retention window.
     """
-    if logger:
-        logger.debug(f">>> START: utils.db_manager.is_collection_cached ({source_name})")
-
     retention_hrs = config.get('retention', get_global_value('retention', default = 0))
     if logger:
         logger.debug(f"Retention hours for '{source_name}': {retention_hrs}")
@@ -1759,6 +1610,3 @@ def is_collection_cached(source_name, config, logger=None):
         if logger:
             logger.error(f"DB Error: Cache validation failed: {e}")
         return False
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.db_manager.is_collection_cached")

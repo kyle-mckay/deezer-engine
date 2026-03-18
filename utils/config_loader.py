@@ -197,8 +197,6 @@ def load_strategies_with_env_overrides(logger):
     """
     Load strategies.yml, verify the schema recursively, and apply overrides.
     """
-    logger.debug(">>> START: utils.config_loader.load_strategies_with_env_overrides")
-    
     data_dir = get_data_dir()
     strategies_path = data_dir / 'strategies.yml'
     
@@ -245,7 +243,6 @@ def load_strategies_with_env_overrides(logger):
         else:
             logger.error(f"Strategy '{name}' failed validation and will be skipped.")
 
-    logger.debug("<<< END: utils.config_loader.load_strategies_with_env_overrides")
     return {"playlists": valid_playlists}
 
 def version_to_int(version_str):

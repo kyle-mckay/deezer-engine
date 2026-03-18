@@ -24,7 +24,6 @@ def cleanup_old_backups(directory, prefix, extension, retention_hours, logger):
     """
     Deletes files matching 'prefix*' with 'extension' older than retention_hours.
     """
-    logger.debug(f">>> START: strategies.destinations.file.cleanup_old_backups")
     try:
         path_dir = Path(directory)
         # Ensure extension starts with a dot for globbing
@@ -60,14 +59,11 @@ def cleanup_old_backups(directory, prefix, extension, retention_hours, logger):
         logger.debug(f"Cleanup complete. Deleted {deleted_count} files.")
     except Exception as e:
         logger.error(f"Error during backup cleanup: {e}")
-    logger.debug("<<< END: strategies.destinations.file.cleanup_old_backups")
 
 def run(client, config, logger, dest_data, tracks):
     """
     Takes your current pipeline and saves it as a file.
     """
-    logger.debug(">>> START: strategies.destinations.file.run")
-    
     try:
         if isinstance(dest_data, dict):
             dest_data = [dest_data]
@@ -120,8 +116,6 @@ def run(client, config, logger, dest_data, tracks):
                 write_to_csv(tracks, str(final_target), logger)
             case _:
                 logger.error(f"Unsupported export format: {extension}")
-
-        logger.debug("<<< END: strategies.destinations.file.run")
 
     except Exception as e:
         logger.error(f"File export failed: {e}")

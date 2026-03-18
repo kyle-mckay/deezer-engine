@@ -22,7 +22,6 @@ def write_to_json(data, final_target, logger):
     """
     Saves a list of song dictionaries to a JSON file.
     """
-    logger.debug(">>> START: utils.files.write_to_json")
     try:
         target_path = Path(final_target)
         
@@ -33,7 +32,6 @@ def write_to_json(data, final_target, logger):
             json.dump(data, f, indent=4, ensure_ascii=False)
             
         logger.info(f"Successfully saved tracks to: {target_path}")
-        logger.debug("<<< END: utils.files.write_to_json")
         
     except Exception as e:
         logger.error(f"Failed to save JSON to {final_target}. Error: {e}")
@@ -43,7 +41,6 @@ def read_from_json(file_path, logger):
     """
     Reads a JSON file and returns the data.
     """
-    logger.debug(">>> START: utils.files.read_from_json")
     try:
         source_path = Path(file_path)
         
@@ -55,7 +52,6 @@ def read_from_json(file_path, logger):
             data = json.load(f)
             
         logger.info(f"Successfully loaded {len(data)} items from JSON.")
-        logger.debug("<<< END: utils.files.read_from_json")
         return data
         
     except Exception as e:
@@ -66,7 +62,6 @@ def write_to_csv(data, final_target, logger):
     """
     Saves a list of song dictionaries to a CSV file.
     """
-    logger.debug(">>> START: utils.files.write_to_csv")
     if not data:
         logger.warning("No data provided to save_tracklist_to_csv.")
         return
@@ -95,7 +90,6 @@ def write_to_csv(data, final_target, logger):
                 writer.writerow(clean_row)
 
         logger.info(f"Successfully saved CSV to: {target_path}")
-        logger.debug("<<< END: utils.files.write_to_csv")
 
     except Exception as e:
         logger.error(f"Failed to save CSV to {final_target}. Error: {e}")
@@ -106,7 +100,6 @@ def read_from_csv(file_path, logger):
     Reads a CSV file and returns a list of dictionaries.
     Attempts to restore basic Python types (dicts, lists, ints).
     """
-    logger.debug(">>> START: utils.files.read_from_csv")
     data = []
     try:
         source_path = Path(file_path)
@@ -130,7 +123,6 @@ def read_from_csv(file_path, logger):
                 data.append(processed_row)
 
         logger.info(f"Successfully loaded {len(data)} rows from CSV.")
-        logger.debug("<<< END: utils.files.read_from_csv")
         return data
 
     except Exception as e:

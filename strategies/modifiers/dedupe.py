@@ -19,8 +19,6 @@ def run(client, config, logger, mod_data, current_tracks,source_name=None):
     """
     Removes duplicate track IDs from the pipeline
     """
-    logger.debug(">>> START: strategies.modifiers.dedupe.run")
-
     if not current_tracks:
         logger.debug("Dedupe modifier received an empty track list. Skipping.")
         return []
@@ -47,7 +45,6 @@ def run(client, config, logger, mod_data, current_tracks,source_name=None):
         logger.info(f"Action: Deduplicated {duplicate_count} tracks")
 
         logger.debug(f"Final pipeline count: {len(deduplicated_list)}")
-        logger.debug("<<< END: strategies.modifiers.dedupe.run")
         return deduplicated_list
 
     except Exception as e:

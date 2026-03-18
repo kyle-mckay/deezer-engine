@@ -28,8 +28,6 @@ def run(client, config, logger, source_data):
     """
     Fetches tracks from a specific Deezer album with local caching.
     """
-    logger.debug(">>> START: strategies.sources.album.run")
-    
     try:
         if isinstance(source_data, dict):
             source_data = [source_data]
@@ -87,6 +85,3 @@ def run(client, config, logger, source_data):
         logger.error(f"Critical failure in album source: {e}")
         logger.debug("Stack trace:", exc_info=True)
         return []
-        
-    finally:
-        logger.debug("<<< END: strategies.sources.album.run")

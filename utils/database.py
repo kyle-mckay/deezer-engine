@@ -45,9 +45,6 @@ def get_connection(logger=None):
     Returns a connection to the SQLite database with foreign keys enabled.
     Accepts a logger instance for debugging.
     """
-    if logger:
-        logger.debug(">>> START: utils.database.get_connection")
-        
     try:
         if not DB_PATH.parent.exists():
             if logger:
@@ -66,20 +63,13 @@ def get_connection(logger=None):
         if logger:
             logger.error(f"Failed to connect to database: {e}")
         raise
-    finally:
-        if logger:
-            logger.debug("<<< END: utils.database.get_connection")
 
 def initialize_all(logger=None):
     """Initialize database by applying baseline + incremental SQL migrations only."""
-    if logger:
-        logger.debug(">>> START: utils.database.initialize_all")
-
     run_migrations(logger)
     
     if logger:
         logger.debug(f"Database: Initialized")
-        logger.debug("<<< END: utils.database.initialize_all")
 
 if __name__ == "__main__":
     from .logger import setup_logger

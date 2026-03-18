@@ -35,7 +35,6 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """
     Sorts the tracks by a defined field and order before returing them to the next stage in the pipeline
     """
-    logger.debug(">>> START: strategies.modifiers.sort.run")
     sort_order=normalize_sort(logger,mod_data.get('order').lower())
     sort_field=mod_data.get('field').lower()
 
@@ -71,5 +70,4 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
         sample_ids = [str(t.get('id')) for t in sorted_tracks[:5]]
         logger.debug(f"Sort complete. Top 5 track IDs: {', '.join(sample_ids)}...")
 
-    logger.debug("<<< END: strategies.modifiers.sort.run")
     return sorted_tracks

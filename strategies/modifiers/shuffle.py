@@ -77,8 +77,6 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """
     Shuffle tracks by trying to ensure an artist repeats as infrequently as possible. 
     """
-    logger.debug(">>> START: strategies.modifiers.shuffle.run")
-
     shuffle_type = mod_data.get('order', 'random').lower()
 
     try:
@@ -97,5 +95,4 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
         logger.debug("Error details:", exc_info=True)
         shuffled_tracks = current_tracks
 
-    logger.debug("<<< END: strategies.modifiers.shuffle.run")
     return shuffled_tracks

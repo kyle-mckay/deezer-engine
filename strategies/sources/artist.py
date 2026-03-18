@@ -31,8 +31,6 @@ def run(client, config, logger, source_data):
     """
     Fetches tracks from a specific Deezer artist by iterating through their albums.
     """
-    logger.debug(">>> START: strategies.sources.artist.run")
-    
     try:
         if isinstance(source_data, dict):
             source_data = [source_data]
@@ -122,6 +120,3 @@ def run(client, config, logger, source_data):
         logger.error(f"Artist aggregation failed: {e}")
         logger.debug("Stack trace:", exc_info=True)
         return []
-        
-    finally:
-        logger.debug("<<< END: strategies.sources.artist.run")

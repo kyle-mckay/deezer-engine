@@ -29,7 +29,6 @@ def run(client, config, logger, dest_data, tracks):
     """
     Synchronizes tracks to Deezer with high-fidelity browser emulation.
     """
-    logger.debug(">>> START: strategies.destinations.playlist.run")
     target_id = str(dest_data.get('id'))
     method = dest_data.get('order', 'smart')
     arl = config.get('config', {}).get('arl_token')
@@ -124,7 +123,6 @@ def run(client, config, logger, dest_data, tracks):
 
         
         sync_to_collections(tracks, logger, collection)
-        logger.debug("<<< END: strategies.destinations.playlist.run")
 
     except Exception as e:
         logger.error(f"Sync failed for '{target_id}': {e}")

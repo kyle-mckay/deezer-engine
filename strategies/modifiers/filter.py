@@ -46,8 +46,6 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """
     Filters tracks based on a field, operator, and value.
     """
-    logger.debug(">>> START: strategies.modifiers.filter.run")
-    
     field = mod_data.get('field')
     operator = normalize_compariter(logger, mod_data.get('operator', '=='))
     value = mod_data.get('value')
@@ -104,5 +102,4 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
             logger.debug(f"Skipping track {track.get('id')} - comparison error: {e}")
             continue
     logger.info(f"Action: Filtered '{field} {operator} {value}': Kept {len(filtered_tracks)}/{len(current_tracks)} tracks.")
-    logger.debug("<<< END: strategies.modifiers.filter.run")
     return filtered_tracks

@@ -24,8 +24,6 @@ def run(client, config, logger, source_data):
     """
     Fetches the user's favorite tracks with local caching.
     """
-    logger.debug(">>> START: strategies.sources.favorites.run")
-    
     try:
         if isinstance(source_data, dict):
             source_data = [source_data]
@@ -67,6 +65,3 @@ def run(client, config, logger, source_data):
         logger.error(f"Failed to fetch favorites: {e}")
         logger.debug("Stack trace:", exc_info=True)
         return []
-        
-    finally:
-        logger.debug("<<< END: strategies.sources.favorites.run")

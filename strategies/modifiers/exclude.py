@@ -27,8 +27,6 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
     2. Compares them against 'current_tracks' (the pipeline from ./tmp/).
     3. Returns the filtered list to the Controller to overwrite ./tmp/.
     """
-    logger.debug(">>> START: strategies.modifiers.exclude.run")
-
     # 1. Resolve the exclude source dynamically
     source_data = mod_data.get('source')
     if not source_data:
@@ -98,8 +96,6 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
             logger.info(f"Action: Excluded {removed_count}/{starting_count} tracks based on {source_type}.")
             
             logger.debug(f"Final pipeline count: {len(result)}")
-            logger.debug("<<< END: strategies.modifiers.exclude.run")
-                
             return result
 
         except Exception as e:
