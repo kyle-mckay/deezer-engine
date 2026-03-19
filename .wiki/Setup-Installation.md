@@ -117,6 +117,9 @@ docker run -d \
 
 If you are modifying the source code and want to test your changes within the Docker environment, follow these steps to build locally.
 
+> [!TIP]
+> Reusable validation templates for config and strategy parsing live in `templates/validation/` (see `templates/validation/README.md`). This is the preferred starting point for validation-focused test runs and can be expanded with additional scenarios over time.
+
 >![NOTE]
 >This assumes you have already cloned the repository and are within the working directory.
 

@@ -3,6 +3,14 @@
 
 import yaml
 from utils.infrastructure.paths import get_data_dir
+from .key_validation import (
+    STRATEGY_TOP_LEVEL_KEYS,
+    format_unknown_key_list,
+    get_allowed_destination_keys,
+    get_allowed_modifier_keys,
+    get_allowed_source_keys,
+    get_unknown_keys,
+)
 
 
 def _validate_modifiers(logger, strategy_name, modifiers, depth=1, path="root"):
@@ -17,10 +25,26 @@ def _validate_modifiers(logger, strategy_name, modifiers, depth=1, path="root"):
     vtype = "Modifier"
     logger.debug(f"[Depth: {depth}] Modifiers found for validation: {len(modifiers)}")
     for idx, mod in enumerate(modifiers):
-        mod_type = mod.get("type", "unknown")
+        if not isinstance(mod, dict):
+            logger.error(
+                f"[Depth: {depth}, {vtype} # {idx + 1}/{len(modifiers)}] "
+                f"Strategy '{strategy_name}' at {path}: Modifier must be an object."
+            )
+            return False
+
+        mod_type = str(mod.get("type", "unknown")).lower()
         current_path = f"{path} > modifier[{mod_type}]"
 
         logger.debug(f"[Depth: {depth}, {vtype} # {idx + 1}/{len(modifiers)}] Validating {current_path}")
+
+        allowed_keys = get_allowed_modifier_keys(mod_type)
+        unknown_keys = get_unknown_keys(mod, allowed_keys)
+        if unknown_keys:
+            formatted_keys = format_unknown_key_list(unknown_keys, allowed_keys)
+            logger.warning(
+                f"[Depth: {depth}, {vtype} # {idx + 1}/{len(modifiers)}] Strategy '{strategy_name}' "
+                f"at {current_path}: Unknown key(s): {formatted_keys}."
+            )
 
         if "type" not in mod:
             logger.error(f"[Depth: {depth}, {vtype} # {idx + 1}/{len(modifiers)}] Strategy '{strategy_name}' at {current_path}: Missing 'type'.")
@@ -51,10 +75,26 @@ def _validate_sources(logger, strategy_name, sources, depth=1, path="root"):
     vtype = "Source"
     logger.debug(f"[Depth: {depth}] Sources found for validation: {len(sources)}")
     for idx, source in enumerate(sources):
-        source_type = source.get("type", "unknown")
+        if not isinstance(source, dict):
+            logger.error(
+                f"[Depth: {depth}, {vtype} # {idx + 1}/{len(sources)}] "
+                f"Strategy '{strategy_name}' at {path}: Source must be an object."
+            )
+            return False
+
+        source_type = str(source.get("type", "unknown")).lower()
         current_path = f"{path} > source[{source_type}]"
 
         logger.debug(f"[Depth: {depth}, {vtype} # {idx + 1}/{len(sources)}] Validating {current_path}")
+
+        allowed_keys = get_allowed_source_keys(source_type)
+        unknown_keys = get_unknown_keys(source, allowed_keys)
+        if unknown_keys:
+            formatted_keys = format_unknown_key_list(unknown_keys, allowed_keys)
+            logger.warning(
+                f"[Depth: {depth}, {vtype} # {idx + 1}/{len(sources)}] Strategy '{strategy_name}' "
+                f"at {current_path}: Unknown key(s): {formatted_keys}."
+            )
 
         if "type" not in source:
             logger.error(f"[Depth: {depth}, {vtype} # {idx + 1}/{len(sources)}] Strategy '{strategy_name}' at {current_path}: Missing 'type'.")
@@ -80,6 +120,24 @@ def _validate_destination(logger, strategy_name, destination):
 
     if len(destination) != 1:
         logger.warning(f"[Depth: 1] Strategy '{strategy_name}' at {path}: Expected 1, found {len(destination)}.")
+
+    for idx, dest in enumerate(destination):
+        if not isinstance(dest, dict):
+            logger.error(
+                f"[Depth: 1] Strategy '{strategy_name}' at {path}: Destination #{idx + 1} must be an object."
+            )
+            return False
+
+        dest_type = str(dest.get("type", "unknown")).lower()
+        current_path = f"{path} > destination[{dest_type}]"
+        allowed_keys = get_allowed_destination_keys(dest_type)
+        unknown_keys = get_unknown_keys(dest, allowed_keys)
+        if unknown_keys:
+            formatted_keys = format_unknown_key_list(unknown_keys, allowed_keys)
+            logger.warning(
+                f"[Depth: 1] Strategy '{strategy_name}' at {current_path}: "
+                f"Unknown key(s): {formatted_keys}."
+            )
 
     if "type" not in destination[0]:
         logger.error(f"[Depth: 1] Strategy '{strategy_name}' at {path}: Missing 'type'.")
@@ -120,11 +178,38 @@ def load_strategies_with_env_overrides(logger):
     raw_playlists = strategies.get("playlists", [])
 
     for idx, strategy in enumerate(raw_playlists):
+        if not isinstance(strategy, dict):
+            logger.error(f"Strategy index {idx} is not an object and will be skipped.")
+            continue
+
         name = strategy.get("name", f"Unnamed_Strategy_{idx}")
         logger.debug(f"--- Processing Strategy {idx + 1}/{len(raw_playlists)}: '{name}' ---")
 
+        unknown_strategy_keys = get_unknown_keys(strategy, STRATEGY_TOP_LEVEL_KEYS)
+        if unknown_strategy_keys:
+            formatted_keys = format_unknown_key_list(unknown_strategy_keys, STRATEGY_TOP_LEVEL_KEYS)
+            logger.warning(
+                f"[Depth: 1] Strategy '{name}' at strategy: Unknown key(s): {formatted_keys}."
+            )
+
+        sources = strategy.get("source", [])
+        if isinstance(sources, list):
+            source_type_counts = {}
+            for source in sources:
+                if not isinstance(source, dict):
+                    continue
+                source_type = str(source.get("type", "unknown")).lower()
+                source_type_counts[source_type] = source_type_counts.get(source_type, 0) + 1
+
+            duplicate_types = sorted([stype for stype, count in source_type_counts.items() if count > 1])
+            if duplicate_types:
+                logger.warning(
+                    f"[Depth: 1] Strategy '{name}' at strategy > source: Duplicate source type(s) "
+                    f"found: {', '.join(duplicate_types)}."
+                )
+
         # Start recursion with explicit path tracking
-        sources_ok = _validate_sources(logger, name, strategy.get("source", []), depth=1, path="strategy")
+        sources_ok = _validate_sources(logger, name, sources, depth=1, path="strategy")
 
         # Top-level modifiers
         modifiers_ok = True

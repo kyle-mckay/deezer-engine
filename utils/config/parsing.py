@@ -5,6 +5,12 @@ import os
 import logging
 import yaml
 from utils.infrastructure.paths import get_data_dir
+from .key_validation import (
+    CONFIG_ROOT_KEYS,
+    CONFIG_SECTION_KEYS,
+    format_unknown_key_list,
+    get_unknown_keys,
+)
 
 config_logger = logging.getLogger("DeezerEngine")
 
@@ -84,9 +90,27 @@ def load_config_with_env_overrides():
         config_logger.debug(f"Config file not found at '{config_path}'. Starting from empty config.")
         config = {}
 
+    if not isinstance(config, dict):
+        config_logger.warning("Top-level config.yml content must be an object. Ignoring invalid root structure.")
+        config = {}
+
+    unknown_top_level = get_unknown_keys(config, CONFIG_ROOT_KEYS)
+    if unknown_top_level:
+        formatted_keys = format_unknown_key_list(unknown_top_level, CONFIG_ROOT_KEYS)
+        config_logger.warning(f"Unknown top-level config key(s): {formatted_keys}.")
+
     # Ensure the 'config' section exists
     if 'config' not in config:
         config['config'] = {}
+
+    if not isinstance(config['config'], dict):
+        config_logger.warning("The 'config' section must be an object. Ignoring invalid section structure.")
+        config['config'] = {}
+
+    unknown_config_keys = get_unknown_keys(config['config'], CONFIG_SECTION_KEYS)
+    if unknown_config_keys:
+        formatted_keys = format_unknown_key_list(unknown_config_keys, CONFIG_SECTION_KEYS)
+        config_logger.warning(f"Unknown config key(s): {formatted_keys}.")
 
     # Apply environment variable overrides
     env_mappings = {

@@ -1,0 +1,24 @@
+# Generic validation template for config unknown-key warning checks.
+# Copy to config.yml when running validator behavior tests.
+
+# Intentional top level key that is undefined in Config dataclass for unknown key warning check.
+warn_test_root_key: true
+
+config:
+  # Required authentication placeholders
+  arl_token: "PASTE_ARL_TOKEN_HERE"
+  user_id: "PASTE_NUMERIC_USER_ID_HERE"
+
+  # Valid baseline keys
+  log_level: "DEBUG"
+  chunk_size: 50
+  api_batch_size: 50
+  rate_limit: 120
+  max_retries: 0
+  log_interval: 30
+  history_lookback: 14
+  history_limit: 100
+
+  # Intentional typo keys for warning verification
+  log_levle: "DEBUG"
+  retaention: 24
