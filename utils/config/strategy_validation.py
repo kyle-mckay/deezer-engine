@@ -13,6 +13,47 @@ from .key_validation import (
 )
 
 
+def _normalize_for_duplicate_detection(value):
+    """Return a stable representation for duplicate comparisons."""
+    if isinstance(value, dict):
+        normalized = {}
+        for key, item in value.items():
+            if key == "type" and isinstance(item, str):
+                normalized[key] = item.lower()
+            else:
+                normalized[key] = _normalize_for_duplicate_detection(item)
+        return normalized
+    if isinstance(value, list):
+        return [_normalize_for_duplicate_detection(item) for item in value]
+    return value
+
+
+def _describe_duplicate_entry(entry):
+    entry_type = str(entry.get("type", "unknown")).lower()
+    details = [f"type='{entry_type}'"]
+
+    if "name" in entry:
+        details.append(f"name='{entry.get('name')}'")
+    if "id" in entry:
+        details.append(f"id='{entry.get('id')}'")
+
+    return ", ".join(details)
+
+
+def _find_exact_duplicate_entries(entries):
+    """Return duplicate groups keyed by a normalized exact-entry signature."""
+    duplicate_groups = {}
+    for idx, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            continue
+
+        normalized = _normalize_for_duplicate_detection(entry)
+        signature = yaml.safe_dump(normalized, default_flow_style=True, sort_keys=True).strip()
+        duplicate_groups.setdefault(signature, []).append((idx + 1, normalized))
+
+    return [group for group in duplicate_groups.values() if len(group) > 1]
+
+
 def _validate_modifiers(logger, strategy_name, modifiers, depth=1, path="root"):
     """
     Validates modifiers. If a modifier contains a source (like 'exclude'),
@@ -21,6 +62,19 @@ def _validate_modifiers(logger, strategy_name, modifiers, depth=1, path="root"):
     if not isinstance(modifiers, list):
         logger.error(f"[Depth: {depth}] Strategy '{strategy_name}' at {path}: Modifiers must be a list.")
         return False
+
+    duplicate_modifiers = _find_exact_duplicate_entries(modifiers)
+    if duplicate_modifiers:
+        rendered_groups = []
+        for group in duplicate_modifiers:
+            positions = ", ".join(str(pos) for pos, _ in group)
+            rendered_groups.append(
+                f"{_describe_duplicate_entry(group[0][1])} at positions [{positions}]"
+            )
+        logger.warning(
+            f"[Depth: {depth}] Strategy '{strategy_name}' at {path}: Exact duplicate modifier(s) "
+            f"found: {'; '.join(rendered_groups)}."
+        )
 
     vtype = "Modifier"
     logger.debug(f"[Depth: {depth}] Modifiers found for validation: {len(modifiers)}")
@@ -72,6 +126,20 @@ def _validate_sources(logger, strategy_name, sources, depth=1, path="root"):
     if not sources or not isinstance(sources, list):
         logger.error(f"[Depth: {depth}] Strategy '{strategy_name}' at {path}: Missing or invalid 'source' list.")
         return False
+
+    duplicate_sources = _find_exact_duplicate_entries(sources)
+    if duplicate_sources:
+        rendered_groups = []
+        for group in duplicate_sources:
+            positions = ", ".join(str(pos) for pos, _ in group)
+            rendered_groups.append(
+                f"{_describe_duplicate_entry(group[0][1])} at positions [{positions}]"
+            )
+        logger.warning(
+            f"[Depth: {depth}] Strategy '{strategy_name}' at {path} > source: Exact duplicate source(s) "
+            f"found: {'; '.join(rendered_groups)}."
+        )
+
     vtype = "Source"
     logger.debug(f"[Depth: {depth}] Sources found for validation: {len(sources)}")
     for idx, source in enumerate(sources):
@@ -83,7 +151,16 @@ def _validate_sources(logger, strategy_name, sources, depth=1, path="root"):
             return False
 
         source_type = str(source.get("type", "unknown")).lower()
-        current_path = f"{path} > source[{source_type}]"
+        source_identifier = None
+        if source.get("name") is not None:
+            source_identifier = f"name={source.get('name')}"
+        elif source.get("id") is not None:
+            source_identifier = f"id={source.get('id')}"
+
+        if source_identifier:
+            current_path = f"{path} > source[{source_type}, {source_identifier}]"
+        else:
+            current_path = f"{path} > source[{source_type}]"
 
         logger.debug(f"[Depth: {depth}, {vtype} # {idx + 1}/{len(sources)}] Validating {current_path}")
 
@@ -120,6 +197,19 @@ def _validate_destination(logger, strategy_name, destination):
 
     if len(destination) != 1:
         logger.warning(f"[Depth: 1] Strategy '{strategy_name}' at {path}: Expected 1, found {len(destination)}.")
+
+    duplicate_destinations = _find_exact_duplicate_entries(destination)
+    if duplicate_destinations:
+        rendered_groups = []
+        for group in duplicate_destinations:
+            positions = ", ".join(str(pos) for pos, _ in group)
+            rendered_groups.append(
+                f"{_describe_duplicate_entry(group[0][1])} at positions [{positions}]"
+            )
+        logger.warning(
+            f"[Depth: 1] Strategy '{strategy_name}' at {path}: Exact duplicate destination(s) "
+            f"found: {'; '.join(rendered_groups)}."
+        )
 
     for idx, dest in enumerate(destination):
         if not isinstance(dest, dict):
@@ -193,20 +283,6 @@ def load_strategies_with_env_overrides(logger):
             )
 
         sources = strategy.get("source", [])
-        if isinstance(sources, list):
-            source_type_counts = {}
-            for source in sources:
-                if not isinstance(source, dict):
-                    continue
-                source_type = str(source.get("type", "unknown")).lower()
-                source_type_counts[source_type] = source_type_counts.get(source_type, 0) + 1
-
-            duplicate_types = sorted([stype for stype, count in source_type_counts.items() if count > 1])
-            if duplicate_types:
-                logger.warning(
-                    f"[Depth: 1] Strategy '{name}' at strategy > source: Duplicate source type(s) "
-                    f"found: {', '.join(duplicate_types)}."
-                )
 
         # Start recursion with explicit path tracking
         sources_ok = _validate_sources(logger, name, sources, depth=1, path="strategy")
