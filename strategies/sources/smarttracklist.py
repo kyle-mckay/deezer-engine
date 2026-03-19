@@ -12,6 +12,12 @@ from utils.infrastructure.paths import get_cache_dir
 from utils.collections import handle_cached_data, get_collection_name
 from utils.config import get_global_value
 
+def requires_metadata(source_data=None):
+    """
+    No requirements to pull beyond user ID and arl for authentication
+    """
+    return False
+
 def run(client, config, logger, source_data):
     """
     Fetches tracks from a specific Deezer smarttracklists with local caching.

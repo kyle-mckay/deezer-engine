@@ -8,6 +8,12 @@ from utils.deezer_auth import get_tracks
 from utils.collections import handle_cached_data, get_collection_name
 from utils.config import get_global_value
 
+def requires_metadata(source_data=None):
+    """
+    No requirements to pull beyond user ID and arl for authentication
+    """
+    return False
+
 def run(client, config, logger, source_data):
     """
     Fetches the user's favorite tracks with local caching.

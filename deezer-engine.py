@@ -92,8 +92,6 @@ def process_sources(s_data, controller, config, client, logger, strategy_name):
         if shutdown_event.is_set():
             logger.debug("Shutdown passing through process_sources acknowledged. Skipping remaining strategies.")
             break
-        # Identify new tracks to fetch metadata for.
-        update_unprocessed(client, logger)
     
     return source_metadata
 
@@ -102,31 +100,24 @@ def process_modifiers(s_data, controller, source_metadata, logger, strategy_name
     
     # 1. Collect and apply source-specific modifiers individually
     all_processed_tracks = []
-    
     for source_name, child_modifiers in source_metadata:
         if shutdown_event.is_set():
             logger.debug("Shutdown acknowledged before source-specific modifiers. Skipping remaining modifier work.")
             break
-
         fetched = fetch_collection(source_name, logger)
         logger.debug(f"Fetched {len(fetched)} tracks from {source_name}")
-        
         if child_modifiers:
             logger.debug(f"Applying {len(child_modifiers)} child modifiers to source '{source_name}'")
             for mod in child_modifiers:
                 if shutdown_event.is_set():
                     logger.debug("Shutdown acknowledged during source-specific modifiers. Stopping child modifier execution.")
                     break
-
                 logger.debug(f"Applying child modifier: {mod.get('type')}")
-                fetched = controller.handle_modifier(mod,fetched,source_name)
-            
+                fetched = controller.handle_modifier(mod, fetched, source_name)
         all_processed_tracks.extend(fetched)
-    
-    # 2. Apply Global Strategy Modifiers
+    # 2. Set the in-memory pipeline for global modifiers
     logger.debug(f"Total tracks collected for global pipeline: {len(all_processed_tracks)}")
-    controller._write_tmp(all_processed_tracks)
-
+    controller.pipeline = all_processed_tracks
     global_modifiers = s_data.get('modifiers', [])
     if global_modifiers:
         logger.debug(f"Strategy '{strategy_name}' has {len(global_modifiers)} global modifiers defined.")
@@ -134,13 +125,10 @@ def process_modifiers(s_data, controller, source_metadata, logger, strategy_name
             if shutdown_event.is_set():
                 logger.debug("Shutdown acknowledged before global modifiers. Skipping remaining modifiers.")
                 break
-
             logger.debug(f"Applying global modifier: {mod.get('type')}")
-            controller.handle_modifier(mod,None,source_name)
-            
+            controller.handle_modifier(mod, None, source_name)
             if logger.isEnabledFor(logging.DEBUG):
-                modified_tracks = controller._read_tmp()
-                logger.debug(f"Pipeline size after '{mod.get('type')}': {len(modified_tracks)} tracks.")
+                logger.debug(f"Pipeline size after '{mod.get('type')}': {len(controller.pipeline)} tracks.")
 
 def process_destinations(s_data, controller, logger, strategy_name):
     """Handles the Destination Phase of the strategy."""
@@ -284,6 +272,18 @@ def main():
         except Exception as e:
             logger.error(f"Strategy '{strategy_name}' failed: {e}")
             logger.debug("Exception details:", exc_info=True)
+
+    # Final enrichment pass
+    if not shutdown_event.is_set():
+        logger.info("Performing final metadata enrichment pass...")
+        try:
+            update_unprocessed(client, logger)
+            logger.debug("Final enrichment pass completed.")
+        except Exception as e:
+            logger.error(f"Final enrichment pass failed: {e}")
+            logger.debug("Final enrichment error details:", exc_info=True)
+    else:
+        logger.info("Shutdown signal active; deferring final enrichment to next run.")
 
 if __name__ == "__main__":
     main()

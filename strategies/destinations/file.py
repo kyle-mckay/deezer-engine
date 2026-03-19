@@ -18,6 +18,12 @@ from datetime import timedelta, datetime
 from pathlib import Path
 from utils.config import get_global_value
 from utils.infrastructure.paths import get_data_dir
+
+def requires_metadata(dest_data=None):
+    """
+    Export benefits from having full metadata available for complete exports.
+    """
+    return True
 from utils.files import write_to_json, write_to_csv
 
 def cleanup_old_backups(directory, prefix, extension, retention_hours, logger):

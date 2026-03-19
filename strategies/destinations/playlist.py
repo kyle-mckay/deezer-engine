@@ -18,6 +18,12 @@ import json
 import os
 import math
 import random
+
+def requires_metadata(dest_data=None):
+    """
+    Only requires track ID to sync to playlist
+    """
+    return False
 from datetime import timedelta
 from utils.infrastructure.signals import shutdown_event
 from utils.deezer_auth import get_authenticated_session

@@ -11,6 +11,12 @@ from utils.config import get_global_value
 from utils.collections import get_collection_name
 from utils.infrastructure.paths import get_data_dir
 
+def requires_metadata(source_data=None):
+    """
+    No requirements to pull beyond user ID and arl for authentication
+    """
+    return False
+
 def get_deezer_history(limit, logger):
     """
     Fetches history using the exact parameters found in your network logs.

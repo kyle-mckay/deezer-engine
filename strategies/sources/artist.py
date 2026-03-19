@@ -11,6 +11,12 @@ from utils.collections import handle_cached_data
 from utils.config import get_global_value
 import strategies.sources.album as album_strategy 
 
+def requires_metadata(source_data=None):
+    """
+    Artist source only requires entity ID to fetch tracks through albums
+    """
+    return False
+
 def get_sanitized_name(title):
     # Internal logic tracing for string manipulation
     return re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')

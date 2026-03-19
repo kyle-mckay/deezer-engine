@@ -4,6 +4,12 @@
 import importlib
 import logging
 
+def requires_metadata(mod_data=None):
+    """
+    Requires metadata because it operates on arbitrary track fields.
+    """
+    return True
+
 def normalize_sort(logger, sort_order):
     "Normalizes the sort order to the expected format"
 

@@ -25,53 +25,38 @@ from utils.collections import sync_to_collections, is_collection_cached
 from utils.db_manager import update_unprocessed
 
 class StrategyController:
+    def refresh_pipeline_metadata(self):
+        """
+        Refresh the in-memory pipeline with the latest metadata from the database for all track IDs in the pipeline.
+        """
+        from utils.db_manager import fetch_entities_by
+        if not self.pipeline:
+            return
+        id_list = [t['id'] for t in self.pipeline if 'id' in t]
+        if not id_list:
+            return
+        # Fetch latest track data from DB
+        latest_tracks = fetch_entities_by('tracks', 'id', 'IN', id_list, return_ids_only=False, logger=self.logger)
+        self.logger.debug(f"Fetched {len(latest_tracks)} tracks from DB. Sample: {latest_tracks[0] if latest_tracks else None}")
+        # Map by ID
+        latest_by_id = {t['id']: t for t in latest_tracks}
+        # Update pipeline memory
+        updated = 0
+        for i, t in enumerate(self.pipeline):
+            tid = t.get('id')
+            if tid in latest_by_id:
+                self.pipeline[i] = latest_by_id[tid]
+                updated += 1
+        self.logger.debug(f"Refreshed pipeline metadata for {updated} tracks from DB.")
+
     def __init__(self, client, config, logger, strategy_name):
         self.client = client
         self.config = config
         self.logger = logger
         self.strategy_name = strategy_name
-        
-        # Get base data directory
-        data_dir = get_data_dir()
-        self.tmp_file = str(data_dir / 'tmp' / f"{strategy_name}.json")
-        
-        # Ensure working directories exist
-        os.makedirs(data_dir / 'tmp', exist_ok=True)
-        os.makedirs(data_dir / 'cache', exist_ok=True)
-
-        # Clear the tmp file at the start of a fresh strategy run.
-        if os.path.exists(self.tmp_file):
-            try:
-                os.remove(self.tmp_file)
-                self.logger.debug(f"Cleared existing tmp file for fresh run: {self.tmp_file}")
-            except Exception as e:
-                self.logger.debug(f"Non-critical: Could not clear tmp file {self.tmp_file}: {e}")
-        
+        self.pipeline = []  # In-memory pipeline for current strategy
         if self.logger.isEnabledFor(logging.DEBUG):
-            self.logger.debug(f"Initialized StrategyController for '{strategy_name}'")
-            self.logger.debug(f"Working directory: {os.getcwd()}")
-            self.logger.debug(f"Temporary state path: {self.tmp_file}")
-
-    def _write_tmp(self, tracks):
-        """Writes the current pipeline state to the local filesystem."""
-        if self.logger.isEnabledFor(logging.DEBUG):
-            self.logger.debug(f"Persisting {len(tracks)} tracks to temporary storage: {self.tmp_file}")
-            
-        with open(self.tmp_file, 'w') as f:
-            json.dump(tracks, f)
-
-    def _read_tmp(self):
-        """Reads the current pipeline state. Returns empty list if file doesn't exist."""
-        if not os.path.exists(self.tmp_file):
-            self.logger.debug(f"No temporary state file found at {self.tmp_file}. Initializing with empty list.")
-            return []
-            
-        with open(self.tmp_file, 'r') as f:
-            data = json.load(f)
-            
-        if self.logger.isEnabledFor(logging.DEBUG):
-            self.logger.debug(f"Loaded {len(data)} tracks from {self.tmp_file}")
-        return data
+            self.logger.debug(f"Initialized StrategyController for '{strategy_name}' (in-memory pipeline)")
         
     def chunk_list(self, data_list):
         """
@@ -93,32 +78,26 @@ class StrategyController:
         src_retention = source_data.get('retention',get_global_value('retention',0))
         module_path = f"strategies.sources.{src_type}"
         
+        # Check if this source requires metadata and enrich if needed
+        self._ensure_metadata_enriched_for_component(module_path, source_data)
         self.logger.debug(f"Targeting source module: {module_path}")
         try:
             module = importlib.import_module(module_path)
-            
-            # Retrieve what we have in the current strategy pipeline so far
-            current_tracks = self._read_tmp()
-            
             # Run the worker logic
             self.logger.debug(f"Executing {src_type}.run()")
-
             # Get new tracklist if cache expired
             if src_retention == 0 or not is_collection_cached(source_name, self.config, self.logger):
                 self.logger.debug(f"Cache expired or missing for {source_name}. Fetching from API.")
-                #controller.handle_source(src)
                 new_tracks = module.run(self.client, self.config, self.logger, source_data)
             else:
                 self.logger.debug(f"Using cached data for {source_name}.")
-
-
-            
+                new_tracks = []
             # Log tracks and their source
             if new_tracks:
                 self.logger.debug(f"Syncing {len(new_tracks)} tracks from '{src_label}' to local collection database.")
-                sync_to_collections(new_tracks,self.logger)
+                sync_to_collections(new_tracks, self.logger)
                 self.logger.debug(f"Source '{src_label}': Found {len(new_tracks)} tracks.")
-            
+            # Optionally, append new_tracks to self.pipeline if needed here
         except Exception as e:
             self.logger.error(f"Critical failure processing source '{src_label}': {e}")
             raise
@@ -131,34 +110,32 @@ class StrategyController:
         mod_type = mod_data.get('type')
         module_path = f"strategies.modifiers.{mod_type}"
         
+        # Check if this modifier requires metadata and enrich if needed
+        self._ensure_metadata_enriched_for_component(module_path, mod_data)
+        
         # Determine if we are working on the global pipeline or an override (local)
         if tracks_override is not None:
             self.logger.debug(f"Modifier '{mod_type}' operating on local track override.")
             current_tracks = tracks_override
         else:
             self.logger.debug(f"Modifier '{mod_type}' operating on global pipeline state.")
-            current_tracks = self._read_tmp()
-            
+            current_tracks = self.pipeline
         self.logger.debug(f"Applying '{mod_type}' to {len(current_tracks)} items.")
-        
         try:
             self.logger.debug(f"Importing modifier module: {module_path}")
             module = importlib.import_module(module_path)
             # Modifiers are 'pure': they take tracks, modify them, and return results
-            modified_tracks = module.run(self.client, self.config, self.logger, mod_data, current_tracks,source_name)
-            
-            # Only write to disk if we are in "Global" mode (no override)
+            modified_tracks = module.run(self.client, self.config, self.logger, mod_data, current_tracks, source_name)
+            # Only update pipeline if we are in "Global" mode (no override)
             if tracks_override is None:
-                self._write_tmp(modified_tracks)
-                current_length=len(current_tracks)
-                new_length=len(modified_tracks)
+                current_length = len(self.pipeline)
+                new_length = len(modified_tracks)
+                self.pipeline = modified_tracks
                 if current_length != new_length:
                     self.logger.debug(f"Applied '{mod_type}': Pipeline changed from {current_length} to {new_length} tracks.")
                 else:
                     self.logger.debug(f"Applied '{mod_type}': Processed {current_length} tracks.")
-            
             return modified_tracks
-
         except Exception as e:
             self.logger.error(f"Failed to apply modifier '{mod_type}': {e}")
             raise
@@ -205,24 +182,62 @@ class StrategyController:
         return tracks
 
     def handle_destination(self, dest_data):
-        """Dynamically loads the destination worker using the final tmp state."""
+        """Dynamically loads the destination worker using the final in-memory pipeline."""
         dest_type = dest_data.get('type')
-        # Dynamically load module based on type (e.g., strategies.destinations.playlist)
         module_path = f"strategies.destinations.{dest_type}"
-        
-        # Read the final state of the pipeline
-        current_tracks = self._read_tmp()
-        
+        # Check if this destination requires metadata and enrich if needed
+        self._ensure_metadata_enriched_for_component(module_path, dest_data)
+        # Use the in-memory pipeline
+        current_tracks = self.pipeline
         self.logger.debug(f"Syncing {len(current_tracks)} tracks to {dest_type} (ID: {dest_data.get('id')}).")
-        
         # Run the limit check
         current_tracks = self.check_playlist_limit(dest_data, current_tracks)
-
         try:
             self.logger.debug(f"Loading destination module: {module_path}")
             module = importlib.import_module(module_path)
-            # The destination module will now look at dest_data['order'] for 'replace'/'smart'
             module.run(self.client, self.config, self.logger, dest_data, current_tracks)
         except Exception as e:
             self.logger.error(f"Failed to push to destination '{dest_type}': {e}")
             raise
+
+    def check_requires_metadata(self, module_path, config_data):
+        """
+        Check if a dynamically loaded module has a requires_metadata function.
+        Returns the result if it exists and is callable, otherwise defaults to True.
+        """
+        try:
+            module = importlib.import_module(module_path)
+            if hasattr(module, 'requires_metadata') and callable(module.requires_metadata):
+                try:
+                    result = module.requires_metadata(config_data)
+                    if isinstance(result, bool):
+                        if self.logger.isEnabledFor(logging.DEBUG):
+                            self.logger.debug(f"Module '{module_path}' requires_metadata() returned {result}")
+                        return result
+                    else:
+                        self.logger.debug(f"Module '{module_path}' requires_metadata() returned non-bool {type(result)}, defaulting to True")
+                        return True
+                except Exception as hook_error:
+                    self.logger.warning(f"Module '{module_path}' requires_metadata() raised exception: {hook_error}. Defaulting to True for safety.")
+                    return True
+            else:
+                if self.logger.isEnabledFor(logging.DEBUG):
+                    self.logger.debug(f"Module '{module_path}' has no requires_metadata hook, defaulting to True")
+                return True
+        except Exception as e:
+            self.logger.warning(f"Failed to import module '{module_path}' for metadata check: {e}. Defaulting to True.")
+            return True
+
+    def _ensure_metadata_enriched_for_component(self, module_path, config_data):
+        """
+        Check if a component requires metadata and trigger enrichment when needed.
+        """
+        requires_it = self.check_requires_metadata(module_path, config_data)
+        if requires_it:
+            self.logger.info(f"Component '{module_path}' requires metadata. Fetching before processing...")
+            try:
+                update_unprocessed(self.client, self.logger)
+                self.refresh_pipeline_metadata()
+            except Exception as e:
+                self.logger.error(f"Failed to enrich metadata before processing '{module_path}': {e}")
+                raise

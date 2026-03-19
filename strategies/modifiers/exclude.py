@@ -5,6 +5,12 @@ import importlib
 import logging
 from utils.collections import get_collection_name, is_collection_cached, fetch_collection, sync_to_collections
 
+def requires_metadata(mod_data=None):
+    """
+    Only needs track IDs for comparison, no metadata enrichment required.
+    """
+    return False
+
 def run(client, config, logger, mod_data, current_tracks, source_name=None):
     """
     Subtracts tracks found in a specific source from the current pipeline.

@@ -5,14 +5,22 @@ import importlib
 import logging
 import random
 from collections import defaultdict
+from utils.db_manager import update_unprocessed
 
-def smart_shuffle(logger, current_tracks):
+def requires_metadata(mod_data=None):
+    """
+    Returns True if smart shuffle is requested, otherwise False.
+    """
+    if not mod_data:
+        return False
+    shuffle_type = mod_data.get('order', 'random').lower()
+    return shuffle_type == 'smart'
+
+def smart_shuffle(logger, current_tracks, client=None):
     logger.debug(f"Initiating smart shuffle for {len(current_tracks)} tracks.")
-    
     # Group tracks by artist
     by_artist = defaultdict(list)
     for track in current_tracks:
-        # Accessing the string 'artist' from data
         artist_name = track.get('artist', 'Unknown Artist')
         by_artist[artist_name].append(track)
     
@@ -71,7 +79,7 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
         logger.info(f"Action: Shuffling with '{shuffle_type}' shuffle.")
         match shuffle_type:
             case "smart":
-                shuffled_tracks = smart_shuffle(logger, current_tracks)
+                shuffled_tracks = smart_shuffle(logger, current_tracks, client)
             case "random":
                 shuffled_tracks = random_shuffle(logger,current_tracks)
             case _:

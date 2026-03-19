@@ -3,6 +3,12 @@
 
 import logging
 
+def requires_metadata(mod_data=None):
+    """
+    Only needs track IDs, no metadata enrichment required.
+    """
+    return False
+
 def run(client, config, logger, mod_data, current_tracks,source_name=None):
     """
     Removes duplicate track IDs from the pipeline
