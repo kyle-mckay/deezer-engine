@@ -377,6 +377,10 @@ def get_album_ids_for_unavailable_tracks(logger=None):
     Returns album IDs for tracks with available_countries='[]' that are not already
     track-blocklisted and do not already have an album blocklist row.
     """
+    if logger:
+        logger.debug("Disabling this module until resolution of git issue 108")
+    return []
+    
     query = """
     SELECT DISTINCT t.album_id
     FROM tracks t
