@@ -57,10 +57,11 @@ def get_global_value(key, default=None):
             # )
             return resolved_value
     except Exception as e:
-        config_logger.debug(
-            f"Config read failed while resolving key='{key}' from '{config_path}': {e}. "
-            "Using default value."
-        )
+        # Noisy log, deferring until tracing is implemented to avoid cluttering logs during normal operation
+        # config_logger.debug(
+        #     f"Config read failed while resolving key='{key}' from '{config_path}': {e}. "
+        #     "Using default value."
+        # )
         return default
 
 
