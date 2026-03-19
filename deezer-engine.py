@@ -23,7 +23,7 @@ import os
 from pathlib import Path
 from utils.infrastructure.logger import setup_logger
 from utils.infrastructure.paths import get_data_dir
-from utils.config import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates, get_global_value, get_bootstrap_logging_settings
+from utils.config import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates, get_config_snapshot_debug_summary, get_global_value, get_bootstrap_logging_settings, initialize_config_snapshot
 from utils.deezer_auth import get_authenticated_client, get_tracks
 from strategies.base import StrategyController
 from utils.database import initialize_all
@@ -163,6 +163,10 @@ def main():
     valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
     bootstrap_actual_level = bootstrap_log_level if bootstrap_log_level in valid_levels else 'INFO'
     logger = setup_logger("DeezerEngine", bootstrap_actual_level, log_to_file=bootstrap_write_logs)
+
+    # Build startup config/env snapshot once for this process.
+    initialize_config_snapshot()
+    logger.debug(f"Config snapshot initialized in memory. {get_config_snapshot_debug_summary()}")
 
     # 2. Load data
     config = load_configs("config")
