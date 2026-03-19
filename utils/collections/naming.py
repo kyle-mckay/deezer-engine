@@ -1,6 +1,15 @@
 # SPDX-FileCopyrightText: 2026 kylemmkay
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+
+def _normalize_smarttracklist_name(name):
+    """Normalize smarttracklist names to the canonical internal-id-like key."""
+    if name is None:
+        return None
+
+    normalized_name = str(name).strip().lower().replace("-", "_")
+    return normalized_name or None
+
 def get_collection_name(logger, type, name=None, id=None):
     """Resolve expected collections.source_name for cache matching."""
     logger.debug(f"Resolving collection name for type='{type}', name='{name}', id='{id}'")
@@ -36,7 +45,12 @@ def get_collection_name(logger, type, name=None, id=None):
         case "playlist" | "album" | "artist":
             if _has_id():
                 collection = f"{prefix}{id}"
-        case "smarttracklist" | "file":
+        case "smarttracklist":
+            if _has_name():
+                normalized_name = _normalize_smarttracklist_name(name)
+                if normalized_name:
+                    collection = f"{prefix}{normalized_name}"
+        case "file":
             if _has_name():
                 collection = f"{prefix}{name}"
 

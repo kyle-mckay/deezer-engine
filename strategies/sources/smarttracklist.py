@@ -99,7 +99,7 @@ def run(client, config, logger, source_data):
             for tid in track_ids:
                 tracks.append({
                     'id': str(tid),
-                    'collection': f"smarttracklist__{list_name}",
+                    'collection': collection_name,
                     'date_cached': date_time
                 })
             

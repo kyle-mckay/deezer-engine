@@ -148,8 +148,10 @@ def process_destinations(s_data, controller, logger, strategy_name):
     if destinations:
         for dest in destinations:
             dest_type = dest.get('type')
-            dest_id = dest.get('id', 'Unknown')
-            logger.debug(f"Routing to destination: {dest_type} (ID: {dest_id})")
+            destination_identifier = dest.get('id') or dest.get('name') or 'Unknown'
+            logger.debug(
+                f"Routing to destination: {dest_type} (ID: {destination_identifier})"
+            )
             controller.handle_destination(dest)
         logger.debug(f"Successfully completed: {strategy_name}")
     else:
