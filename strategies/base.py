@@ -20,7 +20,7 @@ import json
 import logging
 from pathlib import Path
 from utils.infrastructure.paths import get_data_dir
-from utils.config_loader import get_global_value
+from utils.config import get_global_value
 from utils.collections import sync_to_collections, is_collection_cached
 from utils.db_manager import update_unprocessed
 

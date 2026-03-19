@@ -21,7 +21,7 @@ import random
 import time
 import json
 from datetime import datetime, timedelta
-from utils.config_loader import get_global_value
+from utils.config import get_global_value
 from utils.infrastructure.signals import shutdown_event
 
 # Error codes/types that should NOT trigger blocklisting on fetch cancellation.

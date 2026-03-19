@@ -8,7 +8,7 @@ import logging
 from utils.infrastructure.paths import get_cache_dir 
 from utils.deezer_auth import get_tracks
 from utils.collections import handle_cached_data
-from utils.config_loader import get_global_value
+from utils.config import get_global_value
 import strategies.sources.album as album_strategy 
 
 def get_sanitized_name(title):

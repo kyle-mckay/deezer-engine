@@ -22,7 +22,7 @@ from datetime import timedelta
 from utils.infrastructure.signals import shutdown_event
 from utils.deezer_auth import get_authenticated_session
 from utils.collections import get_collection_name, sync_to_collections, is_collection_cached, fetch_collection
-from utils.config_loader import get_global_value
+from utils.config import get_global_value
 
 def run(client, config, logger, dest_data, tracks):
     """

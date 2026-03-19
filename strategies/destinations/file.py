@@ -16,7 +16,7 @@
 import time
 from datetime import timedelta, datetime
 from pathlib import Path
-from utils.config_loader import get_global_value
+from utils.config import get_global_value
 from utils.infrastructure.paths import get_data_dir
 from utils.files import write_to_json, write_to_csv
 

@@ -18,7 +18,7 @@ import logging
 import json
 from datetime import datetime, timedelta
 from utils.database import get_db_path
-from utils.config_loader import get_global_value
+from utils.config import get_global_value
 from utils.deezer_auth import get_tracks, get_albums
 from utils.infrastructure.signals import shutdown_event
 

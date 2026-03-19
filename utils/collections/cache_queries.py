@@ -4,7 +4,7 @@
 import json
 from datetime import datetime, timedelta
 
-from utils.config_loader import get_global_value
+from utils.config import get_global_value
 from utils.database import get_connection
 from utils.collections.sync import sync_to_collections, validate_sync_integrity
 
