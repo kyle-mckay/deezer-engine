@@ -3,6 +3,11 @@
 
 from difflib import get_close_matches
 
+IO_VALIDATION_KEYS = {
+    'i',
+    'o',
+    'validation_mode',
+}
 
 STRATEGY_TOP_LEVEL_KEYS = {
     'name',
@@ -15,6 +20,7 @@ SOURCE_BASE_KEYS = {
     'type',
     'retention',
     'modifiers',
+    *IO_VALIDATION_KEYS,
 }
 
 SOURCE_TYPE_KEYS = {
@@ -29,6 +35,7 @@ SOURCE_TYPE_KEYS = {
 
 MODIFIER_BASE_KEYS = {
     'type',
+    *IO_VALIDATION_KEYS,
 }
 
 MODIFIER_TYPE_KEYS = {
@@ -42,6 +49,7 @@ MODIFIER_TYPE_KEYS = {
 
 DESTINATION_BASE_KEYS = {
     'type',
+    *IO_VALIDATION_KEYS,
 }
 
 DESTINATION_TYPE_KEYS = {

@@ -53,6 +53,7 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | `blocklist_expiry_days` | `DEEZER_BLOCKLIST_EXPIRY_DAYS` | No | `7` | Days a failed track/album remains blocklisted before becoming eligible again. Set `0` to disable active blocklisting while still tracking failures. |
 | `history_lookback` | `DEEZER_HISTORY_LOOKBACK` | No | `14` | Default lookback window in days for `history` sources when not set in strategy config. |
 | `history_limit` | `DEEZER_HISTORY_LIMIT` | No | `100` | Default maximum number of history tracks to fetch when not set in strategy config. |
+| `validation_mode` | `DEEZER_VALIDATION_MODE` | No | `warn` | Default validation mode for when used in conjunction with `i` / `o` keys: `fail` (stop strategy on validation failure) or `warn` (log warning, continue strategy). Can be overridden per component. |
 
 ### Logic Hierarchy
 

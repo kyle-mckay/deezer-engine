@@ -25,6 +25,37 @@ from utils.collections import sync_to_collections, is_collection_cached
 from utils.db_manager import update_unprocessed
 
 class StrategyController:
+
+    def _validate_io(self, stage, expected, actual, mode, label):
+        """
+        Universal IO validation wrapper for input/output checks.
+        """
+        if expected is not None:
+            passed = (expected == actual)
+            match stage:
+                case 'i':
+                    stage_desc = "input"
+                case 'o':
+                    stage_desc = "output"
+                case _:
+                    logger.warning(f"Unknown stage '{stage}' for {label} validation. Defaulting to generic description.")
+                    stage_desc = stage
+            if passed:
+                self.logger.info(f"PASSED {label}: {stage_desc} count matches expected value of {expected}.")
+            else:
+                self.logger.debug(f"FAILED {label}: {stage_desc} count does not match expected value. Expected {expected}, got {actual}.")
+
+                msg = f"Validation for {label} FAILED: expected {stage_desc}={expected}, got {actual}"
+                match mode:
+                    case 'fail':
+                        self.logger.error(msg)
+                        raise ValueError(msg)
+                    case 'warn' | None:
+                        self.logger.warning(msg)
+                    case _:
+                        self.logger.warning(f"Unknown validation mode '{mode}' for {label} {stage_desc} check. Defaulting to 'info'.")
+                        self.logger.info(msg)
+            
     def refresh_pipeline_metadata(self):
         """
         Refresh the in-memory pipeline with the latest metadata from the database for all track IDs in the pipeline.
@@ -97,7 +128,12 @@ class StrategyController:
                 self.logger.debug(f"Syncing {len(new_tracks)} tracks from '{src_label}' to local collection database.")
                 sync_to_collections(new_tracks, self.logger)
                 self.logger.debug(f"Source '{src_label}': Found {len(new_tracks)} tracks.")
-            # Optionally, append new_tracks to self.pipeline if needed here
+            # IO Validation (output)
+            expected_o = source_data.get('o')
+            if expected_o is not None:
+                self.logger.debug(f"Source '{src_label}' expects output count: {expected_o}")
+                validation_mode = source_data.get('validation_mode') or get_global_value('validation_mode', None)
+                self._validate_io('o', expected_o, len(new_tracks), validation_mode, f"Source '{src_label}'")
         except Exception as e:
             self.logger.error(f"Critical failure processing source '{src_label}': {e}")
             raise
@@ -121,6 +157,14 @@ class StrategyController:
             self.logger.debug(f"Modifier '{mod_type}' operating on global pipeline state.")
             current_tracks = self.pipeline
         self.logger.debug(f"Applying '{mod_type}' to {len(current_tracks)} items.")
+        
+        #IO Validation (input)
+        expected_i = mod_data.get('i', None)
+        validation_mode = mod_data.get('validation_mode') or get_global_value('validation_mode', None)
+        if expected_i is not None:
+            self.logger.debug(f"Modifier '{mod_type}' expects input count: {expected_i}")
+            self._validate_io('i', expected_i, len(current_tracks), validation_mode, f"Modifier '{mod_type}'")
+        # ---
         try:
             self.logger.debug(f"Importing modifier module: {module_path}")
             module = importlib.import_module(module_path)
@@ -135,6 +179,13 @@ class StrategyController:
                     self.logger.debug(f"Applied '{mod_type}': Pipeline changed from {current_length} to {new_length} tracks.")
                 else:
                     self.logger.debug(f"Applied '{mod_type}': Processed {current_length} tracks.")
+            
+            # IO Validation (output)
+            expected_o = mod_data.get('o', None)
+            if expected_o is not None:
+                self.logger.debug(f"Modifier '{mod_type}' expects output count: {expected_o}")
+                self._validate_io('o', expected_o, len(modified_tracks), validation_mode, f"Modifier '{mod_type}'")
+            # ---
             return modified_tracks
         except Exception as e:
             self.logger.error(f"Failed to apply modifier '{mod_type}': {e}")
@@ -192,6 +243,12 @@ class StrategyController:
         self.logger.debug(f"Syncing {len(current_tracks)} tracks to {dest_type} (ID: {dest_data.get('id')}).")
         # Run the limit check
         current_tracks = self.check_playlist_limit(dest_data, current_tracks)
+        # IO Validation (input)
+        expected_i = dest_data.get('i')
+        if expected_i is not None:
+            self.logger.debug(f"Destination '{dest_type}' expects input count: {expected_i}")
+            validation_mode = dest_data.get('validation_mode') or get_global_value('validation_mode', None)
+            self._validate_io('i', expected_i, len(current_tracks), validation_mode, f"Destination '{dest_type}'")
         try:
             self.logger.debug(f"Loading destination module: {module_path}")
             module = importlib.import_module(module_path)

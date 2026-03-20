@@ -1,0 +1,15 @@
+
+# IO Validation config template
+# Use this file to configure IO validation runs, where actual outputs are compared against expected outputs.
+
+config:
+  # Required authentication placeholders
+  arl_token: "PASTE_ARL_TOKEN_HERE"
+  user_id: "PASTE_NUMERIC_USER_ID_HERE"
+  # Logging level for IO validation runs
+  log_level: "DEBUG"
+  
+  # IO validation mode: 'warn' to log and continue, 'fail' to treat mismatches as errors
+  validation_mode: "warn"  # Log a warning and continue on unexpected IO result
+  #validation_mode: "fail"  # Treat unexpected IO result as critical error and stop strategy
+

@@ -1,0 +1,284 @@
+playlists:
+    # --- VALIDATION OVERRIDE AND FAIL TEST ---
+  - name: "override_and_fail"
+    source:
+      - type: "album"
+        id: "91258" # Nimrod (18 tracks)
+        o: 18
+    destination:
+      - type: "file"
+        name: "./IO_Validation/override-and-fail.json"
+        i: 10
+        validation_mode: "fail"  # Intentional failure, actual expected input is 18
+  # --- LIMIT MODIFIER TESTS ---
+  - name: "limit_positive"
+    source:
+      - type: "album"
+        id: "91258" # Nimrod (18 tracks)
+        o: 18
+    modifiers:
+      - type: "limit"
+        order: "top"
+        count: 10
+        i: 18
+        o: 10
+    destination:
+      - type: "file"
+        name: "./IO_Validation/limit-positive.json"
+        i: 10
+
+  - name: "limit_large"
+    source:
+      - type: "album"
+        id: "91258"
+        o: 18
+    modifiers:
+      - type: "limit"
+        order: "top"
+        count: 100
+        i: 18
+        o: 18
+    destination:
+      - type: "file"
+        name: "./IO_Validation/limit-large.json"
+        i: 18
+
+  - name: "limit_zero"
+    source:
+      - type: "album"
+        id: "91258"
+        o: 18
+    modifiers:
+      - type: "limit"
+        order: "top"
+        count: 0
+        i: 18
+        o: 0
+    destination:
+      - type: "file"
+        name: "./IO_Validation/limit-zero.json"
+        i: 0
+
+  # --- FILTER MODIFIER TESTS ---
+  - name: "filter_id_positive"
+    # Filter all 68 tracks by id > 10,000,000. Verified count: 12.
+    source:
+      - type: "album"
+        id: "76585"
+        o: 2
+      - type: "album"
+        id: "384514987"
+        o: 12
+      - type: "album"
+        id: "536294"
+        o: 12
+      - type: "album"
+        id: "84698"
+        o: 11
+      - type: "album"
+        id: "91258"
+        o: 18
+      - type: "album"
+        id: "102809"
+        o: 13
+    modifiers:
+      - type: "filter"
+        field: "id"
+        operator: "gt"
+        value: 10000000
+        i: 68
+        o: 12
+    destination:
+      - type: "file"
+        name: "./IO_Validation/filter-id-positive.json"
+        i: 12
+
+  - name: "filter_title_contains"
+    # Filter Nimrod (18) for title contains 'The'. Verified count: 3.
+    source:
+      - type: "album"
+        id: "91258"
+        o: 18
+    modifiers:
+      - type: "filter"
+        field: "title"
+        operator: "contains"
+        value: "The"
+        i: 18
+        o: 3
+    destination:
+      - type: "file"
+        name: "./IO_Validation/filter-title-contains.json"
+        i: 3
+
+  - name: "filter_empty"
+    # Filter for id < 100,000 (Min ID in set is ~600k).
+    source:
+      - type: "album"
+        id: "91258"
+        o: 18
+    modifiers:
+      - type: "filter"
+        field: "id"
+        operator: "lt"
+        value: 100000
+        i: 18
+        o: 0
+    destination:
+      - type: "file"
+        name: "./IO_Validation/filter-empty.json"
+        i: 0
+
+  # --- EXCLUDE MODIFIER TESTS ---
+  - name: "exclude_positive"
+    # All (68) excluding Nimrod (18).
+    source:
+      - type: "album"
+        id: "76585"
+        o: 2
+      - type: "album"
+        id: "384514987"
+        o: 12
+      - type: "album"
+        id: "536294"
+        o: 12
+      - type: "album"
+        id: "84698"
+        o: 11
+      - type: "album"
+        id: "91258"
+        o: 18
+      - type: "album"
+        id: "102809"
+        o: 13
+    modifiers:
+      - type: "exclude"
+        source:
+          - type: "album"
+            id: "91258"
+        i: 68
+        o: 50
+    destination:
+      - type: "file"
+        name: "./IO_Validation/exclude-positive.json"
+        i: 50
+
+  # --- DEDUPE, SHUFFLE, SORT TESTS ---
+  - name: "dedupe_no_op"
+    source:
+      - type: "album"
+        id: "102809"
+        o: 13
+      - type: "album"
+        id: "536294"
+        o: 12
+    modifiers:
+      - type: "dedupe"
+        i: 25
+        o: 25
+    destination:
+      - type: "file"
+        name: "./IO_Validation/dedupe-no-op.json"
+        i: 25
+
+  - name: "sort_by_id"
+    source:
+      - type: "album"
+        id: "91258"
+        o: 18
+    modifiers:
+      - type: "sort"
+        field: "id"
+        order: "asc"
+        i: 18
+        o: 18
+    destination:
+      - type: "file"
+        name: "./IO_Validation/sort-by-id.json"
+        i: 18
+
+  # --- CHAINED AND NESTED MODIFIERS ---
+  - name: "chain_filter_limit"
+    # Filter id > 1,000,000 (24 tracks) then limit to 10.
+    source:
+      - type: "album"
+        id: "76585"
+        o: 2
+      - type: "album"
+        id: "384514987"
+        o: 12
+      - type: "album"
+        id: "536294"
+        o: 12
+      - type: "album"
+        id: "84698"
+        o: 11
+      - type: "album"
+        id: "91258"
+        o: 18
+      - type: "album"
+        id: "102809"
+        o: 13
+    modifiers:
+      - type: "filter"
+        field: "id"
+        operator: "gt"
+        value: 1000000
+        i: 68
+        o: 24
+      - type: "limit"
+        count: 10
+        i: 24
+        o: 10
+    destination:
+      - type: "file"
+        name: "./IO_Validation/chain-filter-limit.json"
+        i: 10
+
+  - name: "nested_local_modifier"
+    # Corrected: Album source outputs 18; local modifier reduces to 5.
+    # Total destination input: 5 (from Nimrod local) + 2 (from Grace) = 7.
+    source:
+      - type: "album"
+        id: "91258"
+        o: 18
+        modifiers:
+          - type: "limit"
+            count: 5
+            i: 18
+            o: 5
+      - type: "album"
+        id: "76585"
+        o: 2
+    destination:
+      - type: "file"
+        name: "./IO_Validation/nested-local-modifier.json"
+        i: 7
+
+  - name: "chain_sort_limit_filter_duration"
+    # Sort Nimrod (18) by ID, Limit (10), Filter duration > 150.
+    # Verified: 6 tracks in top 10 IDs of Nimrod meet criteria.
+    source:
+      - type: "album"
+        id: "91258"
+        o: 18
+    modifiers:
+      - type: "sort"
+        field: "id"
+        order: "asc"
+        i: 18
+        o: 18
+      - type: "limit"
+        count: 10
+        i: 18
+        o: 10
+      - type: "filter"
+        field: "duration"
+        operator: "gt"
+        value: 150
+        i: 10
+        o: 6
+    destination:
+      - type: "file"
+        name: "./IO_Validation/chain-sort-limit-filter-duration.json"
+        i: 6

@@ -40,6 +40,7 @@ ENV_MAPPINGS = {
     'DEEZER_LOG_INTERVAL': 'log_interval',
     'DEEZER_HISTORY_LOOKBACK': 'history_lookback',
     'DEEZER_HISTORY_LIMIT': 'history_limit',
+    'DEEZER_VALIDATION_MODE': 'validation_mode',
 }
 
 INT_CONFIG_KEYS = {

@@ -1,0 +1,62 @@
+### 🧪 IO Verification (Assertions)
+
+The pipeline supports explicit Input (`i`) and Output (`o`) assertions at every stage. This is a powerful debugging and validation tool to ensure your modifiers are transforming the tracklist exactly as expected. If an assertion fails at runtime, the strategy will stop to prevent saving an incorrect playlist.
+
+* **Sources**: Support `o` (The number of tracks fetched from Deezer).
+* **Modifiers**: Support both `i` (Tracks entering the modifier) and `o` (Tracks remaining after the modifier).
+* **Destinations**: Support `i` (The final count being sent to the playlist or file).
+
+> [!TIP]
+> **Stable Sources for I/O Validation**
+> Use static sources like **albums** or **file imports** to ensure consistent track counts for your assertions. Avoid **SmartTracklists** or dynamic playlists, as their naturally fluctuating content will cause I/O validation to fail during routine updates.
+
+#### Validation Example
+
+This example demonstrates a strict validation of a "Top 10" filter from a specific album.
+
+```yaml
+playlists:
+  - name: "Validated Top 10"
+    source:
+      - type: "album"
+        id: "91258" 
+        o: 18         # Assert: The album must contain exactly 18 tracks
+    modifiers:
+      - type: "sort"
+        field: "id"
+        order: "asc"
+        i: 18         # Assert: 18 tracks enter the sort
+        o: 18         # Assert: 18 tracks exit the sort
+      - type: "limit"
+        order: "top"
+        count: 10
+        i: 18         # Assert: 18 tracks enter the limit
+        o: 10         # Assert: Exactly 10 tracks remain
+    destination:
+      - type: "file"
+        name: "top-10-nimrod.json"
+        i: 10         # Assert: Exactly 10 tracks are written to disk
+```
+
+#### Local vs. Global Assertion Logic
+
+Because **Local Modifiers** apply after a source is collected but before it is merged into the global stream, the source `o` value refers to the raw collection count.
+
+```yaml
+    source:
+      - type: "album"
+        id: "91258"
+        o: 18             # Raw album count
+        modifiers:
+          - type: "limit"
+            order: "top"
+            count: 5
+            i: 18         # Input to local modifier
+            o: 5          # Output of local modifier
+      - type: "album"
+        id: "76585"
+        o: 2              # Raw album count
+    destination:
+      - type: "file"
+        i: 7              # 5 (from local limit) + 2 = 7 total
+```

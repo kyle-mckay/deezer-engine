@@ -1,7 +1,7 @@
 # --- CONFIG FILES ---
 # We maintain the templates
-config.yml
-strategies.yml
+/config.yml
+/strategies.yml
 *.tmp
 
 # --- TEMP FILES ---
