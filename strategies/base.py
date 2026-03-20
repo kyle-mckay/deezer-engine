@@ -291,7 +291,7 @@ class StrategyController:
         """
         requires_it = self.check_requires_metadata(module_path, config_data)
         if requires_it:
-            self.logger.info(f"Component '{module_path}' requires metadata. Fetching before processing...")
+            self.logger.debug(f"Component '{module_path}' requires metadata. Fetching before processing...")
             try:
                 update_unprocessed(self.client, self.logger)
                 self.refresh_pipeline_metadata()
