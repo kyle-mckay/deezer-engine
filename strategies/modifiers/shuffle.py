@@ -1,30 +1,26 @@
-# Copyright (C) 2026 kylemmkay
-# Source: https://codeberg.org/kylemmkay/deezer-engine
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program. If not, see <https://www.gnu.org/licenses/>.
+# SPDX-FileCopyrightText: 2026 kylemmkay
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import importlib
 import logging
 import random
 from collections import defaultdict
+from utils.db_manager import update_unprocessed
 
-def smart_shuffle(logger, current_tracks):
+def requires_metadata(mod_data=None):
+    """
+    Returns True if smart shuffle is requested, otherwise False.
+    """
+    if not mod_data:
+        return False
+    shuffle_type = mod_data.get('order', 'random').lower()
+    return shuffle_type == 'smart'
+
+def smart_shuffle(logger, current_tracks, client=None):
     logger.debug(f"Initiating smart shuffle for {len(current_tracks)} tracks.")
-    
     # Group tracks by artist
     by_artist = defaultdict(list)
     for track in current_tracks:
-        # Accessing the string 'artist' from data
         artist_name = track.get('artist', 'Unknown Artist')
         by_artist[artist_name].append(track)
     
@@ -83,7 +79,7 @@ def run(client, config, logger, mod_data, current_tracks, source_name=None):
         logger.info(f"Action: Shuffling with '{shuffle_type}' shuffle.")
         match shuffle_type:
             case "smart":
-                shuffled_tracks = smart_shuffle(logger, current_tracks)
+                shuffled_tracks = smart_shuffle(logger, current_tracks, client)
             case "random":
                 shuffled_tracks = random_shuffle(logger,current_tracks)
             case _:

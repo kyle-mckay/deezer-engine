@@ -29,6 +29,8 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 
 > [!TIP]
 > **Precedence:** Environment variables will always override values found in your `config.yml`.
+>
+> **Startup Snapshot:** Configuration is loaded and snapshotted at process startup. Changes to environment variables or `config.yml` require a restart to take effect.
 
 | Config Key (`config.yml`) | Environment Variable | Req. | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -49,6 +51,9 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | `track_stats_refresh` | `DEEZER_TRACK_STATS_REFRESH` | No | `90` | Days before refreshing dynamic metadata like track rank. |
 | `album_stats_refresh` | `DEEZER_ALBUM_STATS_REFRESH` | No | `90` | Days before refreshing dynamic metadata like album fans and availability. |
 | `blocklist_expiry_days` | `DEEZER_BLOCKLIST_EXPIRY_DAYS` | No | `7` | Days a failed track/album remains blocklisted before becoming eligible again. Set `0` to disable active blocklisting while still tracking failures. |
+| `history_lookback` | `DEEZER_HISTORY_LOOKBACK` | No | `14` | Default lookback window in days for `history` sources when not set in strategy config. |
+| `history_limit` | `DEEZER_HISTORY_LIMIT` | No | `100` | Default maximum number of history tracks to fetch when not set in strategy config. |
+| `validation_mode` | `DEEZER_VALIDATION_MODE` | No | `warn` | Default validation mode for when used in conjunction with `i` / `o` keys: `fail` (stop strategy on validation failure) or `warn` (log warning, continue strategy). Can be overridden per component. |
 
 ### Logic Hierarchy
 
@@ -57,6 +62,8 @@ The engine follows a specific priority when loading settings. This allows you to
 1. **Environment Variables:** Checked first (highest priority).
 2. **`config.yml`:** Checked if environment variables are not set.
 3. **Hardcoded Defaults:** Used if neither of the above provides a value.
+
+The resolved values are cached in memory for the lifetime of the process.
 
 ## 🐳 3. Installation: Docker (Recommended)
 
@@ -116,6 +123,9 @@ docker run -d \
 ### 🏗️ Build & Development
 
 If you are modifying the source code and want to test your changes within the Docker environment, follow these steps to build locally.
+
+> [!TIP]
+> Reusable validation templates for config and strategy parsing live in `templates/validation/` (see `templates/validation/README.md`). This is the preferred starting point for validation-focused test runs and can be expanded with additional scenarios over time.
 
 >![NOTE]
 >This assumes you have already cloned the repository and are within the working directory.

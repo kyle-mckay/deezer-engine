@@ -21,15 +21,16 @@ import logging
 import signal
 import os
 from pathlib import Path
-from utils.logger import setup_logger
-from utils.paths import get_data_dir
-from utils.config_loader import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates, get_global_value, get_bootstrap_logging_settings
+from utils.infrastructure.logger import setup_logger
+from utils.infrastructure.paths import get_data_dir
+from utils.config import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates, get_config_snapshot_debug_summary, get_global_value, get_bootstrap_logging_settings, initialize_config_snapshot
 from utils.deezer_auth import get_authenticated_client, get_tracks
 from strategies.base import StrategyController
 from utils.database import initialize_all
-from utils.cache_manager import get_collection_name
-from utils.signals import shutdown_event
-from utils.db_manager import get_unprocessed_track_ids, update_track_metadata,fetch_collection, is_collection_cached, get_expired_track_ids, update_tracks_partial_batch, update_unprocessed, refresh_stats, release_expired_blocklisted_entities
+from utils.collections import get_collection_name
+from utils.infrastructure.signals import shutdown_event
+from utils.collections import fetch_collection, is_collection_cached
+from utils.db_manager import get_unprocessed_track_ids, update_track_metadata, get_expired_track_ids, update_tracks_partial_batch, update_unprocessed, refresh_stats, release_expired_blocklisted_entities
 from __version__ import __version__, __banner__
 
 def load_configs(type,logger = None):
@@ -67,6 +68,10 @@ def process_sources(s_data, controller, config, client, logger, strategy_name):
     logger.debug(f"Strategy '{strategy_name}' has {len(sources)} sources defined.")
     
     for src in sources:
+        if shutdown_event.is_set():
+            logger.debug("Shutdown acknowledged before next source. Skipping remaining sources.")
+            break
+
         logger.debug(f"Handling source type: {src.get('type')}")
         source_type = src.get('type')
         source_retention = src.get('retention',get_global_value('retention',0))
@@ -85,10 +90,8 @@ def process_sources(s_data, controller, config, client, logger, strategy_name):
             logger.debug(f"Using cached data for {source_name}.")
 
         if shutdown_event.is_set():
-                logger.debug("Shutdown passing through process_sources acknowledged. Skipping remaining strategies.")
-                break
-        # Identify new tracks to fetch metadata for.
-        update_unprocessed(client, logger)
+            logger.debug("Shutdown passing through process_sources acknowledged. Skipping remaining strategies.")
+            break
     
     return source_metadata
 
@@ -97,33 +100,35 @@ def process_modifiers(s_data, controller, source_metadata, logger, strategy_name
     
     # 1. Collect and apply source-specific modifiers individually
     all_processed_tracks = []
-    
     for source_name, child_modifiers in source_metadata:
+        if shutdown_event.is_set():
+            logger.debug("Shutdown acknowledged before source-specific modifiers. Skipping remaining modifier work.")
+            break
         fetched = fetch_collection(source_name, logger)
         logger.debug(f"Fetched {len(fetched)} tracks from {source_name}")
-        
         if child_modifiers:
             logger.debug(f"Applying {len(child_modifiers)} child modifiers to source '{source_name}'")
             for mod in child_modifiers:
+                if shutdown_event.is_set():
+                    logger.debug("Shutdown acknowledged during source-specific modifiers. Stopping child modifier execution.")
+                    break
                 logger.debug(f"Applying child modifier: {mod.get('type')}")
-                fetched = controller.handle_modifier(mod,fetched,source_name)
-            
+                fetched = controller.handle_modifier(mod, fetched, source_name)
         all_processed_tracks.extend(fetched)
-    
-    # 2. Apply Global Strategy Modifiers
+    # 2. Set the in-memory pipeline for global modifiers
     logger.debug(f"Total tracks collected for global pipeline: {len(all_processed_tracks)}")
-    controller._write_tmp(all_processed_tracks)
-
+    controller.pipeline = all_processed_tracks
     global_modifiers = s_data.get('modifiers', [])
     if global_modifiers:
         logger.debug(f"Strategy '{strategy_name}' has {len(global_modifiers)} global modifiers defined.")
         for mod in global_modifiers:
+            if shutdown_event.is_set():
+                logger.debug("Shutdown acknowledged before global modifiers. Skipping remaining modifiers.")
+                break
             logger.debug(f"Applying global modifier: {mod.get('type')}")
-            controller.handle_modifier(mod,None,source_name)
-            
+            controller.handle_modifier(mod, None, source_name)
             if logger.isEnabledFor(logging.DEBUG):
-                modified_tracks = controller._read_tmp()
-                logger.debug(f"Pipeline size after '{mod.get('type')}': {len(modified_tracks)} tracks.")
+                logger.debug(f"Pipeline size after '{mod.get('type')}': {len(controller.pipeline)} tracks.")
 
 def process_destinations(s_data, controller, logger, strategy_name):
     """Handles the Destination Phase of the strategy."""
@@ -131,8 +136,10 @@ def process_destinations(s_data, controller, logger, strategy_name):
     if destinations:
         for dest in destinations:
             dest_type = dest.get('type')
-            dest_id = dest.get('id', 'Unknown')
-            logger.debug(f"Routing to destination: {dest_type} (ID: {dest_id})")
+            destination_identifier = dest.get('id') or dest.get('name') or 'Unknown'
+            logger.debug(
+                f"Routing to destination: {dest_type} (ID: {destination_identifier})"
+            )
             controller.handle_destination(dest)
         logger.debug(f"Successfully completed: {strategy_name}")
     else:
@@ -144,6 +151,10 @@ def main():
     valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
     bootstrap_actual_level = bootstrap_log_level if bootstrap_log_level in valid_levels else 'INFO'
     logger = setup_logger("DeezerEngine", bootstrap_actual_level, log_to_file=bootstrap_write_logs)
+
+    # Build startup config/env snapshot once for this process.
+    initialize_config_snapshot()
+    logger.debug(f"Config snapshot initialized in memory. {get_config_snapshot_debug_summary()}")
 
     # 2. Load data
     config = load_configs("config")
@@ -261,6 +272,18 @@ def main():
         except Exception as e:
             logger.error(f"Strategy '{strategy_name}' failed: {e}")
             logger.debug("Exception details:", exc_info=True)
+
+    # Final enrichment pass
+    if not shutdown_event.is_set():
+        logger.info("Performing final metadata enrichment pass...")
+        try:
+            update_unprocessed(client, logger)
+            logger.debug("Final enrichment pass completed.")
+        except Exception as e:
+            logger.error(f"Final enrichment pass failed: {e}")
+            logger.debug("Final enrichment error details:", exc_info=True)
+    else:
+        logger.info("Shutdown signal active; deferring final enrichment to next run.")
 
 if __name__ == "__main__":
     main()

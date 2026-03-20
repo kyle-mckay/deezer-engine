@@ -1,0 +1,130 @@
+# Generic validation template for strategy unknown-key warning checks.
+# Copy to strategies.yml when running validator behavior tests.
+
+playlists:
+  - name: "Validation - Unknown Top Key Warning"
+    # Expect warning: unknown top-level key 'modify'.
+    source:
+      - type: "favorites"
+        retention: 1
+    modify:
+      - type: "limit"
+        count: 10
+    destination:
+      - type: "playlist"
+        id: "REPLACE_PLAYLIST_ID"
+        order: "smart"
+
+  - name: "Validation - Duplicate Source Type Warning"
+    # Expect warning: duplicate source type 'smarttracklist'.
+    source:
+      - type: "smarttracklist"
+        name: "discovery"
+      - type: "smarttracklist"
+        name: "new-releases"
+    modifiers:
+      - type: "dedupe"
+      - type: "limit"
+        order: "top"
+        count: 50
+    destination:
+      - type: "playlist"
+        id: "REPLACE_PLAYLIST_ID"
+        order: "smart"
+
+  - name: "Validation - All Source Types"
+    source:
+      - type: "favorites"
+        retention: 4
+      - type: "history"
+        lookback: 7
+        limit: 80
+      - type: "playlist"
+        id: "REPLACE_SOURCE_PLAYLIST_ID"
+      - type: "album"
+        id: "REPLACE_ALBUM_ID"
+      - type: "artist"
+        id: "REPLACE_ARTIST_ID"
+      - type: "smarttracklist"
+        name: "inspired-by-1"
+      - type: "file"
+        dir: "./tmp"
+        filename: "file_test.json"
+    modifiers:
+      - type: "dedupe"
+      - type: "shuffle"
+        order: "smart"
+      - type: "sort"
+        field: "rank"
+        order: "desc"
+      - type: "filter"
+        field: "rank"
+        operator: "gt"
+        value: 100000
+      - type: "limit"
+        order: "top"
+        count: 120
+      - type: "exclude"
+        source:
+          - type: "history"
+            lookback: 2
+            limit: 50
+    destination:
+      - type: "playlist"
+        id: "REPLACE_PLAYLIST_ID"
+        order: "replace"
+
+  - name: "Validation - Local Source Modifiers"
+    source:
+      - type: "smarttracklist"
+        name: "discovery"
+        modifiers:
+          - type: "filter"
+            field: "duration"
+            operator: "lt"
+            value: 240
+          - type: "limit"
+            order: "top"
+            count: 30
+      - type: "playlist"
+        id: "REPLACE_SOURCE_PLAYLIST_ID"
+        modifiers:
+          - type: "exclude"
+            source:
+              type: "favorites"
+          - type: "shuffle"
+            order: "random"
+    modifiers:
+      - type: "dedupe"
+    destination:
+      - type: "playlist"
+        id: "REPLACE_PLAYLIST_ID"
+        order: "smart"
+
+  - name: "Validation - File Destination"
+    source:
+      - type: "favorites"
+    modifiers:
+      - type: "limit"
+        count: 25
+        order: "top"
+    destination:
+      - type: "file"
+        dir: "./backups"
+        name: "validation_all_components_{date}.json"
+        retention: 168
+
+  - name: "Validation - Nested Unknown Key Warnings"
+    # Expect typo warnings in source/modifier/destination objects.
+    source:
+      - type: "history"
+        lookback: 14
+        retaention: 2
+    modifiers:
+      - type: "limit"
+        counts: 10
+        order: "top"
+    destination:
+      - type: "playlist"
+        id: "REPLACE_PLAYLIST_ID"
+        ordr: "smart"

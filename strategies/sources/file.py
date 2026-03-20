@@ -1,13 +1,22 @@
+# SPDX-FileCopyrightText: 2026 kylemmkay
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 import json
 import random
 import time
 from pathlib import Path
 from datetime import datetime
 from utils.deezer_auth import get_authenticated_session
-from utils.config_loader import get_global_value
-from utils.cache_manager import get_collection_name
-from utils.paths import get_data_dir
+from utils.config import get_global_value
+from utils.collections import get_collection_name
+from utils.infrastructure.paths import get_data_dir
 from utils.files import read_from_csv, read_from_json
+
+def requires_metadata(source_data=None):
+    """
+    Only extracts track IDs from the file for later enrichment
+    """
+    return False
 
 def run(client, config, logger, source_data):
     """

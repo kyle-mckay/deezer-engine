@@ -6,6 +6,10 @@
 
 - enhance: streamline get_ functions to perform other tasks if on cooldown (closes #85) (#103) (@kylemmkay)
 - feat: add global variable for `max_tries` for `get_tracks` and `get_albums` (closes #84) (#99) (@kylemmkay)
+- enhance: persist configuration in memory instead of file reads (#105) (@kylemmkay)
+- enhance: add strategy and config deduplication (#105) (@kylemmkay)
+- enhance: add deeper verification to strategy key validation (closes #106) (#105) (@kylemmkay)
+- feat: IO verification checks for source, modifier, and destination stages (closes #92) (#85) (@kylemmkay)
 
 ### Fixes
 
@@ -14,6 +18,7 @@
 ### Maintenance
 
 - chore: cleanup and remove the manual `>>> START` / `<<< END` logs (closes #89) (#98) (@kylemmkay)
+- chore: switch to lazy metadata collection and in-memory pipeline (closes #96) (#105) (@kylemmkay)
 
 ## v0.12.0 - 2026-03-17
 
