@@ -81,6 +81,7 @@ CONFIG_SECTION_KEYS = {
     'log_interval',
     'history_lookback',
     'history_limit',
+    'validation_mode',
 }
 
 

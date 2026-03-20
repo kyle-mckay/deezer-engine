@@ -4,7 +4,7 @@ playlists:
     source:
       - type: "album"
         id: "91258" # Nimrod (18 tracks)
-        o: 18
+        o: 17 # Intentional mismatch to trigger warn validation failure
     destination:
       - type: "file"
         name: "./IO_Validation/override-and-fail.json"
