@@ -2,6 +2,9 @@
 
 ## v0.13.1 - 2026-03-20
 
+### Fixes
+- fix: validation mode in config and correct log module in parsing (#110) (@kylemmkay)
+
 ### Maintenance
 
 - chore: utility sprawl cleanup chunk 4 - database and migrations (progress towards #86) (#110) (@kylemmkay)
