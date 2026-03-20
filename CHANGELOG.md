@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.13.1 - 2026-03-20
+
+### Maintenance
+
+- chore: utility sprawl cleanup chunk 4 - database and migrations (progress towards #86) (#110) (@kylemmkay)
+
 ## v0.13.0 - 2026-03-20
 
 ### Enhancements
