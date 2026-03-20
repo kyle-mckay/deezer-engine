@@ -3,7 +3,7 @@
 
 from datetime import datetime
 
-from utils.database import get_connection
+from utils.db.connection import get_connection
 
 
 def validate_sync_integrity(original_tracks, synced_tracks, logger):

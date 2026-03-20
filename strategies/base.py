@@ -132,7 +132,7 @@ class StrategyController:
             expected_o = source_data.get('o')
             if expected_o is not None:
                 self.logger.debug(f"Source '{src_label}' expects output count: {expected_o}")
-                validation_mode = source_data.get('validation_mode') or get_global_value('validation_mode', None)
+                validation_mode = source_data.get('validation_mode',get_global_value('validation_mode', None))
                 self._validate_io('o', expected_o, len(new_tracks), validation_mode, f"Source '{src_label}'")
         except Exception as e:
             self.logger.error(f"Critical failure processing source '{src_label}': {e}")
@@ -160,7 +160,7 @@ class StrategyController:
         
         #IO Validation (input)
         expected_i = mod_data.get('i', None)
-        validation_mode = mod_data.get('validation_mode') or get_global_value('validation_mode', None)
+        validation_mode = mod_data.get('validation_mode',get_global_value('validation_mode', None))
         if expected_i is not None:
             self.logger.debug(f"Modifier '{mod_type}' expects input count: {expected_i}")
             self._validate_io('i', expected_i, len(current_tracks), validation_mode, f"Modifier '{mod_type}'")
@@ -247,7 +247,7 @@ class StrategyController:
         expected_i = dest_data.get('i')
         if expected_i is not None:
             self.logger.debug(f"Destination '{dest_type}' expects input count: {expected_i}")
-            validation_mode = dest_data.get('validation_mode') or get_global_value('validation_mode', None)
+            validation_mode = dest_data.get('validation_mode',get_global_value('validation_mode', None))
             self._validate_io('i', expected_i, len(current_tracks), validation_mode, f"Destination '{dest_type}'")
         try:
             self.logger.debug(f"Loading destination module: {module_path}")

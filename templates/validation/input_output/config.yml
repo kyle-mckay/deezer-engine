@@ -7,7 +7,7 @@ config:
   arl_token: "PASTE_ARL_TOKEN_HERE"
   user_id: "PASTE_NUMERIC_USER_ID_HERE"
   # Logging level for IO validation runs
-  log_level: "DEBUG"
+  log_level: "WARNING" # Hide INFO and DEBUG logs to focus on warnings/errors
   
   # IO validation mode: 'warn' to log and continue, 'fail' to treat mismatches as errors
   validation_mode: "warn"  # Log a warning and continue on unexpected IO result

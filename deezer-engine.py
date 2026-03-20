@@ -26,7 +26,7 @@ from utils.infrastructure.paths import get_data_dir
 from utils.config import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates, get_config_snapshot_debug_summary, get_global_value, get_bootstrap_logging_settings, initialize_config_snapshot
 from utils.deezer_auth import get_authenticated_client, get_tracks
 from strategies.base import StrategyController
-from utils.database import initialize_all
+from utils.db.connection import initialize_all
 from utils.collections import get_collection_name
 from utils.infrastructure.signals import shutdown_event
 from utils.collections import fetch_collection, is_collection_cached
