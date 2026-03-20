@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.13.0 - 2026-03-18
+## v0.13.0 - 2026-03-20
 
 ### Enhancements
 
@@ -17,6 +17,7 @@
 
 ### Maintenance
 
+- chore: refactor utils chunks 1–3 - infrastructure, cache, config split and validation (progress in #86) (#105) (@kylemmkay)
 - chore: cleanup and remove the manual `>>> START` / `<<< END` logs (closes #89) (#98) (@kylemmkay)
 - chore: switch to lazy metadata collection and in-memory pipeline (closes #96) (#105) (@kylemmkay)
 
