@@ -7,6 +7,7 @@
 
 ### Maintenance
 
+- chore: utility sprawl chunk 5 - migrate blocklist behaviour to use wrapper within db_manager (#86) (#112) (@kylemmkay)
 - chore: utility sprawl cleanup chunk 4 - database and migrations (progress towards #86) (#110) (@kylemmkay)
 
 ## v0.13.0 - 2026-03-20
