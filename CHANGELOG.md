@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.13.1 - 2026-03-20
+## v0.14.0 - 2026-03-24
+
+### Enhancements
+
+- enhance: add restore functionality if the database migration fails (#113) (@kylemmkay)
 
 ### Fixes
 - fix: validation mode in config and correct log module in parsing (#110) (@kylemmkay)
