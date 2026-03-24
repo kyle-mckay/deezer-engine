@@ -24,6 +24,34 @@ def _backup_database(logger=None):
 		if logger:
 			logger.warning(f"Database: Failed to create backup - {e}")
 
+def _restore_database(logger=None):
+	"""
+	Restore the database from the most recent backup file.
+	"""
+	import re
+	backup_dir = DB_PATH.parent
+	pattern = re.compile(r"^deezer_engine_backup_\d{8}_\d{6}\.db$")
+	backups = [f for f in backup_dir.iterdir() if f.is_file() and pattern.match(f.name)]
+	backups.sort(reverse=True)
+	if not backups:
+		if logger:
+			logger.critical("No backup file found to restore database.")
+		raise RuntimeError("No backup file found to restore database.")
+	latest_backup = backups[0]
+	today_str = datetime.now().strftime("%Y%m%d")
+	match = re.match(r"deezer_engine_backup_(\d{8})_\d{6}\.db$", latest_backup.name)
+	if match:
+		backup_date = match.group(1)
+		if backup_date != today_str and logger:
+			logger.warning(f"The last database backup was not made today, restoring an old version. {latest_backup.name}")
+	try:
+		shutil.copy2(latest_backup, DB_PATH)
+		if logger:
+			logger.critical(f"Database restored from backup: {latest_backup}")
+	except Exception as e:
+		if logger:
+			logger.critical(f"Failed to restore database from backup: {e}")
+		raise
 def _run_foreign_key_check(conn, logger=None):
 	"""Validate foreign key consistency after migrations complete."""
 	violations = conn.execute("PRAGMA foreign_key_check").fetchall()

@@ -141,7 +141,7 @@ def run_migrations(logger=None):
 	else:
 		if logger:
 			logger.info(f"Database: {len(pending)} pending migrations found")
-	from .integrity import _backup_database, _run_foreign_key_check, _run_integrity_check
+	from .integrity import _backup_database, _run_foreign_key_check, _run_integrity_check, _restore_database
 	if pending and pre_migration_db_exists and pre_migration_db_size > 0:
 		_backup_database(logger)
 	elif pending and logger and is_fresh_or_empty_db:
@@ -185,6 +185,11 @@ def run_migrations(logger=None):
 		run_failed = True
 		if logger:
 			logger.critical(f"Database migrations failed: {e}")
+		try:
+			_restore_database(logger)
+		except Exception as restore_exc:
+			if logger:
+				logger.critical(f"Automatic database restore failed: {restore_exc}")
 		raise
 	finally:
 		if logger:
