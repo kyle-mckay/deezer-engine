@@ -1,18 +1,6 @@
-name: Build, Test, and Push Docker Image
+name: (LEGACY) Build, Test, and Push Docker Image
 
 on:
-  release:
-    types: [published]
-  pull_request:
-    paths:
-      - '.forgejo/workflows/docker-publish.yml'
-      - '**'
-    paths-ignore:
-      - '__version__.py'
-      - 'CHANGELOG.md'
-      - '.forgejo/**'
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       tag_name:
@@ -23,13 +11,18 @@ on:
 jobs:
   test_and_push:
     name: Build, Test, and Push
-    runs-on: py-runner
+    runs-on: ubuntu-latest
 
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
         with:
           set-safe-directory: 'true'
+
+      - name: Install Docker CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y docker.io curl jq
 
       - name: Extract metadata
         id: meta
