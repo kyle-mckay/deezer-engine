@@ -21,7 +21,7 @@ import logging
 import signal
 import os
 from pathlib import Path
-from utils.infrastructure.logger import setup_logger
+from utils.infrastructure.logger import initialize_deezer_logger
 from utils.infrastructure.paths import get_data_dir
 from utils.config import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates, get_config_snapshot_debug_summary, get_global_value, get_bootstrap_logging_settings, initialize_config_snapshot
 from utils.deezer_auth import get_authenticated_client, get_tracks
@@ -32,6 +32,11 @@ from utils.infrastructure.signals import shutdown_event
 from utils.collections import fetch_collection, is_collection_cached
 from utils.db_manager import get_unprocessed_track_ids, update_track_metadata, get_expired_track_ids, update_tracks_partial_batch, update_unprocessed, refresh_stats, release_expired_blocklisted_entities
 from __version__ import __version__, __banner__
+
+
+def _is_pytest_mode():
+    """Return True when the process is running under pytest."""
+    return "PYTEST_CURRENT_TEST" in os.environ
 
 def load_configs(type,logger = None):
     """Load configuration and strategies with environment variable overrides."""
@@ -77,8 +82,8 @@ def process_sources(s_data, controller, config, client, logger, strategy_name):
         source_retention = src.get('retention',get_global_value('retention',0))
         source_modifiers = src.get('modifiers', []) # Capture child modifiers
 
-        source_name = get_collection_name(logger,source_type,src.get('name',None),src.get('id',None))
-        
+        source_name = get_collection_name(logger,source_type,src.get('name',src.get('filename',None)),src.get('id',None))
+
         # Track the name and its specific modifiers
         source_metadata.append((source_name, source_modifiers))
 
@@ -150,10 +155,10 @@ def main():
     bootstrap_log_level, bootstrap_write_logs = get_bootstrap_logging_settings()
     valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
     bootstrap_actual_level = bootstrap_log_level if bootstrap_log_level in valid_levels else 'INFO'
-    logger = setup_logger("DeezerEngine", bootstrap_actual_level, log_to_file=bootstrap_write_logs)
+    logger = initialize_deezer_logger(bootstrap_actual_level, log_to_file=bootstrap_write_logs)
 
     # Build startup config/env snapshot once for this process.
-    initialize_config_snapshot()
+    initialize_config_snapshot(force=True)
     logger.debug(f"Config snapshot initialized in memory. {get_config_snapshot_debug_summary()}")
 
     # 2. Load data
@@ -220,7 +225,8 @@ def main():
     
     # 3. Authenticate
     logger.debug("Requesting Deezer authentication...")
-    client = get_authenticated_client(config, logger)
+    auth_config = None if _is_pytest_mode() else config
+    client = get_authenticated_client(auth_config, logger)
     
     # 4. Strategy Execution Loop
     if not strategies_config or 'playlists' not in strategies_config:

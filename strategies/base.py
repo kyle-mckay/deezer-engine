@@ -30,6 +30,7 @@ class StrategyController:
         """
         Universal IO validation wrapper for input/output checks.
         """
+        LOG_TAG = "[I/O Validation]"
         if expected is not None:
             passed = (expected == actual)
             match stage:
@@ -38,14 +39,14 @@ class StrategyController:
                 case 'o':
                     stage_desc = "output"
                 case _:
-                    logger.warning(f"Unknown stage '{stage}' for {label} validation. Defaulting to generic description.")
+                    logger.warning(f"{LOG_TAG} Unknown stage '{stage}' for {label} validation. Defaulting to generic description.")
                     stage_desc = stage
             if passed:
-                self.logger.info(f"PASSED {label}: {stage_desc} count matches expected value of {expected}.")
+                self.logger.info(f"{LOG_TAG} PASSED {label}: {stage_desc} count matches expected value of {expected}.")
             else:
-                self.logger.debug(f"FAILED {label}: {stage_desc} count does not match expected value. Expected {expected}, got {actual}.")
+                self.logger.debug(f"{LOG_TAG} FAILED {label}: {stage_desc} count does not match expected value. Expected {expected}, got {actual}.")
 
-                msg = f"Validation for {label} FAILED: expected {stage_desc}={expected}, got {actual}"
+                msg = f"{LOG_TAG} FAILED for {label}: expected {stage_desc}={expected}, got {actual}"
                 match mode:
                     case 'fail':
                         self.logger.error(msg)
@@ -53,7 +54,7 @@ class StrategyController:
                     case 'warn' | None:
                         self.logger.warning(msg)
                     case _:
-                        self.logger.warning(f"Unknown validation mode '{mode}' for {label} {stage_desc} check. Defaulting to 'info'.")
+                        self.logger.warning(f"{LOG_TAG} Unknown validation mode '{mode}' for {label} {stage_desc} check. Defaulting to 'info'.")
                         self.logger.info(msg)
             
     def refresh_pipeline_metadata(self):

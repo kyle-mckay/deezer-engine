@@ -11,10 +11,7 @@ def get_db_path():
 	Ensures the 'db' directory exists.
 	"""
 	base_dir = get_data_dir().resolve()
-	db_folder = base_dir / 'db'
-	if not db_folder.exists():
-		db_folder.mkdir(parents=True, exist_ok=True)
-	db_path = db_folder / 'deezer_engine.db'
+	db_path = base_dir / 'db' / 'deezer_engine.db'
 	return db_path
 
 DB_PATH = get_db_path()
@@ -25,17 +22,18 @@ def get_connection(logger=None):
 	Accepts a logger instance for debugging.
 	"""
 	try:
+		db_path = get_db_path()
 		if logger:
-			logger.debug(f"Starting SQLite connection setup for database: {DB_PATH}")
-		if not DB_PATH.parent.exists():
+			logger.debug(f"Starting SQLite connection setup for database: {db_path}")
+		if not db_path.parent.exists():
 			if logger:
-				logger.debug(f"Creating missing database directory: {DB_PATH.parent}")
-			DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-		conn = sqlite3.connect(str(DB_PATH))
+				logger.debug(f"Creating missing database directory: {db_path.parent}")
+			db_path.parent.mkdir(parents=True, exist_ok=True)
+		conn = sqlite3.connect(str(db_path))
 		conn.execute("PRAGMA foreign_keys = ON;")
 		conn.row_factory = sqlite3.Row
 		if logger:
-			logger.debug(f"Connected to SQLite database at: {DB_PATH}")
+			logger.debug(f"Connected to SQLite database at: {db_path}")
 		return conn
 	except Exception as e:
 		if logger:

@@ -3,6 +3,8 @@
 /config.yml
 /strategies.yml
 *.tmp
+*pytest-backup
+*.prod.yml
 
 # --- TEMP FILES ---
 cache/

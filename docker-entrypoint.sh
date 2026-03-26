@@ -87,6 +87,15 @@ setup_run(){
     exec python deezer-engine.py
 }
 
+setup_pytest(){
+    # Allow direct pytest passthrough (for -s etc)
+    echo "Running pytest (passthrough mode) inside container..."
+    cd /app
+    shift
+    exec pytest "$@"
+    exit $?
+}
+
 # Strip quotes from environment variables if present
 [ -n "$DEEZER_USER_ID" ] && DEEZER_USER_ID=$(strip_quotes "$DEEZER_USER_ID") && export DEEZER_USER_ID
 [ -n "$DEEZER_ARL_TOKEN" ] && DEEZER_ARL_TOKEN=$(strip_quotes "$DEEZER_ARL_TOKEN") && export DEEZER_ARL_TOKEN
@@ -114,8 +123,8 @@ if [ "$DEEZER_PRINT_BANNER" = "true" ]; then
     echo "----------------------------"
 fi
 
-# Check if strategies.yml exists, if not generate from template
-if [ ! -f /app/data/strategies.yml ] && [ "$1" != "shell" ]; then
+# Check if strategies.yml exists, if not generate from template (skip for 'pytest' entrypoint)
+if [ ! -f /app/data/strategies.yml ] && [ "$1" != "shell" ] && [ "$1" != "pytest" ]; then
     echo "No strategy file detected on startup!"
     echo "------ /app/data -----"
     ls -Rl /app/data
@@ -148,6 +157,9 @@ case "$1" in
         ;;
     run)
         setup_run
+        ;;
+    pytest)
+        setup_pytest "$@"
         ;;
     shell)
         # Start an interactive shell for debugging with docker run

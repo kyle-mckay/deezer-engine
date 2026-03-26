@@ -33,9 +33,16 @@ docker run --rm \
 
 ## 🧩 Developer Templates
 
-Reusable templates for configuration and strategy validation are located in the `templates/validation/` directory. These include:
+Template scope, ownership boundaries, and maintenance rules are documented in [`templates/README.md`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/templates/README.md).
 
-- **Schema validation templates:** For checking config/strategy file structure and keys. Located in [`templates/validation/schema`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/templates/validation/schema).
-- **IO validation templates:** For testing input/output behavior of strategies against expected results. Located in [`templates/validation/input_output`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/templates/validation/input_output).
+From there, drill down.
 
-See each folders `templates/*/README.md` for more details and usage instructions.
+## 🧪 Testing
+
+Run tests from the repository root:
+
+```bash
+pytest
+```
+
+For test scope, per-module intent, and Forgejo pytest pipeline references, see [`tests/README.md`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/tests/README.md).

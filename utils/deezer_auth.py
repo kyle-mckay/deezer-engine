@@ -423,6 +423,12 @@ def get_authenticated_client(config, logger):
     """
     Initializes the Deezer Client using an ARL cookie.
     """
+
+    if config is None:
+        if logger:
+            logger.debug("Config is None, returning unauthenticated Deezer client for testing.")
+        return deezer.Client()
+
     if logger.isEnabledFor(logging.DEBUG):
         logger.debug("--- Initializing Deezer Authentication ---")
         logger.debug(f"Raw config keys available: {list(config.get('config', {}).keys())}")

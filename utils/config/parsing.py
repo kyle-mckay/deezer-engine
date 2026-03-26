@@ -1,12 +1,12 @@
 # SPDX-FileCopyrightText: 2026 kylemmkay
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+import logging
 import os
 import copy
 from threading import RLock
 import yaml
 from utils.infrastructure.paths import get_data_dir
-from utils.infrastructure.logger import setup_logger
 from .key_validation import (
     CONFIG_ROOT_KEYS,
     CONFIG_SECTION_KEYS,
@@ -14,7 +14,7 @@ from .key_validation import (
     get_unknown_keys,
 )
 
-config_logger = setup_logger("DeezerEngine")
+config_logger = logging.getLogger("DeezerEngine")
 
 _CONFIG_LOCK = RLock()
 _CONFIG_SNAPSHOT = None
@@ -240,12 +240,12 @@ def get_global_value(key, default=None):
     return snapshot.get('config', {}).get(key.lower(), default)
 
 
-def load_config_with_env_overrides():
+def load_config_with_env_overrides(force_reload=False):
     """
     Load config.yml and apply environment variable overrides.
     Environment variables take precedence over file values.
 
     See wiki for all environment overrides
     """
-    snapshot = initialize_config_snapshot()
+    snapshot = initialize_config_snapshot(force=force_reload)
     return copy.deepcopy(snapshot)

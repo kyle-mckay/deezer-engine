@@ -4,13 +4,11 @@ import sqlite3
 import logging
 import json
 from datetime import datetime, timedelta
-from .connection import get_db_path
 from utils.config import get_global_value
 from utils.deezer_auth import get_tracks, get_albums
 from utils.infrastructure.signals import shutdown_event
 
-from .connection import get_db_path, get_connection
-DB_PATH = get_db_path()
+from .connection import get_connection
 
 def _blocklist_where_clause(include_blocklisted):
     """Returns SQL predicate for including or excluding blocklisted entities."""

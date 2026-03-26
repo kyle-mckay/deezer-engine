@@ -1,5 +1,14 @@
 ### 🧪 IO Verification (Assertions)
 
+> [!IMPORTANT]
+> `strategies.offline.yml` is a test-coupled template used by `pytest` in `tests/test_input_output_offline.py`.
+> It intentionally points to `tests/fixtures/album` as source data and writes outputs to `./tmp/pytest/input_output/`.
+> Treat it as a reproducible integration validation asset, not a production strategy file.
+>
+> Modifier coverage must stay in sync: when adding validation for a new modifier, update both
+> `templates/validation/input_output/strategies.yml` and
+> `templates/validation/input_output/strategies.offline.yml`.
+
 The pipeline supports explicit Input (`i`) and Output (`o`) assertions at every stage. This is a powerful debugging and validation tool to ensure your modifiers are transforming the tracklist exactly as expected. If an assertion fails at runtime, the strategy will stop to prevent saving an incorrect playlist.
 
 * **Sources**: Support `o` (The number of tracks fetched from Deezer).

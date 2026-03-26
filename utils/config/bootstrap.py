@@ -9,7 +9,7 @@ def get_bootstrap_logging_settings():
     Resolve logging settings early, before full config loading.
     """
     try:
-        config = load_config_with_env_overrides()
+        config = load_config_with_env_overrides(force_reload=True)
         cfg = config.get('config', {})
         resolved_level = str(cfg.get('log_level', 'INFO')).upper()
         resolved_write_logs = cfg.get('write_logs', True)

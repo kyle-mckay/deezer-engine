@@ -8,7 +8,7 @@ from datetime import datetime
 import shutil
 
 from __version__ import __version__
-from .connection import get_connection, DB_PATH
+from .connection import get_connection, get_db_path
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "migrations"
 
 """
@@ -112,8 +112,9 @@ def _validate_known_applied_versions(applied_versions, discovered_versions, logg
 		logger.debug("Applied migration versions are compatible with current migration set.")
 
 def run_migrations(logger=None):
-	pre_migration_db_exists = DB_PATH.exists()
-	pre_migration_db_size = DB_PATH.stat().st_size if pre_migration_db_exists else 0
+	db_path = get_db_path()
+	pre_migration_db_exists = db_path.exists()
+	pre_migration_db_size = db_path.stat().st_size if pre_migration_db_exists else 0
 	is_fresh_or_empty_db = (not pre_migration_db_exists) or pre_migration_db_size == 0
 	if logger and is_fresh_or_empty_db:
 		logger.debug(

@@ -6,6 +6,9 @@ from datetime import datetime
 from .paths import get_logs_dir
 
 
+DEEZER_LOGGER_NAME = "DeezerEngine"
+
+
 class ColorFormatter(logging.Formatter):
     """
     Custom log formatter that applies ANSI color codes based on the log level.
@@ -56,39 +59,83 @@ class ColorFormatter(logging.Formatter):
         return formatter.format(record)
 
 
+def _normalize_level(level):
+    if isinstance(level, str):
+        return getattr(logging, level.upper(), logging.INFO)
+    return level
+
+
+def _build_console_handler():
+    handler = logging.StreamHandler()
+    handler.setFormatter(ColorFormatter())
+    return handler
+
+
+def _build_file_handler():
+    log_dir = get_logs_dir()
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    log_filename = os.path.join(log_dir, f"{today}.log")
+    handler = logging.FileHandler(log_filename, encoding="utf-8")
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s - [%(name)s] [%(levelname)s] "
+            "[%(module)s.%(funcName)s:%(lineno)d] - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
+    return handler
+
+
+def _close_handlers(logger):
+    for handler in list(logger.handlers):
+        logger.removeHandler(handler)
+        try:
+            handler.close()
+        except Exception:
+            pass
+
+
+def initialize_deezer_logger(level=logging.INFO, log_to_file=True):
+    """
+    Configure the DeezerEngine logger for the current runtime invocation.
+
+    This always rebuilds handlers so repeated startup in the same process uses
+    the current capture streams and file logging settings.
+    """
+    logger = logging.getLogger(DEEZER_LOGGER_NAME)
+    logger.setLevel(_normalize_level(level))
+    logger.propagate = False
+
+    _close_handlers(logger)
+    logger.addHandler(_build_console_handler())
+
+    if log_to_file:
+        logger.addHandler(_build_file_handler())
+
+    return logger
+
+
 def setup_logger(name="DeezerEngine", level=logging.INFO, log_to_file=True):
     """
     Returns a configured logger with:
     - Colored Console Output
     - Date-based, Clean (Plain Text) File Output
     """
+    if name == DEEZER_LOGGER_NAME:
+        return initialize_deezer_logger(level, log_to_file)
+
     logger = logging.getLogger(name)
+    logger.setLevel(_normalize_level(level))
 
     if not logger.handlers:
-        logger.setLevel(level)
-
         # 1. Console Handler (Colored)
-        ch = logging.StreamHandler()
-        ch.setFormatter(ColorFormatter())
-        logger.addHandler(ch)
+        logger.addHandler(_build_console_handler())
 
         # 2. File Handler (Date-based, No Colors)
         if log_to_file:
-            log_dir = get_logs_dir()
-            if not os.path.exists(log_dir):
-                os.makedirs(log_dir)
-
-            today = datetime.now().strftime("%Y-%m-%d")
-            log_filename = os.path.join(log_dir, f"{today}.log")
-
-            fh = logging.FileHandler(log_filename, encoding='utf-8')
-            # Consistent format for file logs (without ANSI codes)
-            clean_format = logging.Formatter(
-                "%(asctime)s - [%(name)s] [%(levelname)s] "
-                "[%(module)s.%(funcName)s:%(lineno)d] - %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S"
-            )
-            fh.setFormatter(clean_format)
-            logger.addHandler(fh)
+            logger.addHandler(_build_file_handler())
 
     return logger

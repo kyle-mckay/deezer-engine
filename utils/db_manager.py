@@ -22,12 +22,10 @@ from utils.config import get_global_value
 from utils.deezer_auth import get_tracks, get_albums
 from utils.infrastructure.signals import shutdown_event
 
-# Centralized static path
-DB_PATH = get_db_path() 
-
 def _get_connection():
     """Internal helper to provide a connection with row factory enabled."""
-    conn = sqlite3.connect(DB_PATH)
+    db_path = get_db_path()
+    conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA foreign_keys = ON;")
     conn.row_factory = sqlite3.Row
     return conn

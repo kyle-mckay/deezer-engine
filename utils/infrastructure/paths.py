@@ -4,12 +4,15 @@ import os
 from pathlib import Path
 
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
 def get_data_dir():
-    """Get the data directory path, using app/data in containers, current dir otherwise."""
+    """Get the data directory path, using app/data in containers and project root otherwise."""
     if os.getenv('CONTAINERIZED', 'false').lower() == 'true':
         return Path('/app/data')
     else:
-        return Path('.')
+        return PROJECT_ROOT
 
 
 def get_cache_dir():
