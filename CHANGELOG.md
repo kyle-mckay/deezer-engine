@@ -1,9 +1,10 @@
 # Changelog
 
-## v0.14.0 - 2026-03-24
+## v0.14.0 - 2026-03-26
 
 ### Enhancements
 
+- enhance: implement unit tests (#114) (@kylemmkay)
 - enhance: add restore functionality if the database migration fails (#113) (@kylemmkay)
 
 ### Fixes
