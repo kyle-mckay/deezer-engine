@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.14.0 - 2026-03-26
+## v1.0.0 - 2026-03-27
+
+### Breaking
+
+- breaking: standardize paths in project (closes #87) (#120) (@kylemmkay)
 
 ### Enhancements
 
