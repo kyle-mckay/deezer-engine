@@ -1,17 +1,5 @@
-# --- CONFIG FILES ---
-# We maintain the templates
-/config.yml
-/strategies.yml
-*.tmp
-*pytest-backup
-*.prod.yml
-
 # --- TEMP FILES ---
-cache/
-tmp/
-/db/
-backups/
-deezer_engine.db
+/data
 
 # --- PYTHON SETTINGS ---
 # Byte-compiled / optimized / DLL files

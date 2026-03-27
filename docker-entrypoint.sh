@@ -68,9 +68,9 @@ EOF
         echo "Triggering scheduled run: $(date '+%Y-%m-%d %H:%M:%S %:z')"
         
         # Script
-        cd /app
+        cd /deezer_engine/app
         # Run in the background
-        python3 -u deezer-engine.py &
+        python3 -u -m deezer_engine run &
         child_pid=$!
 
         # Wait for engine to finish or for signal
@@ -83,14 +83,14 @@ EOF
 setup_run(){
     # Run the script once
     echo "Running deezer-engine (single execution)..."
-    cd /app
-    exec python deezer-engine.py
+    cd /deezer_engine/app
+    exec python -m deezer_engine run
 }
 
 setup_pytest(){
     # Allow direct pytest passthrough (for -s etc)
     echo "Running pytest (passthrough mode) inside container..."
-    cd /app
+    cd /deezer_engine
     shift
     exec pytest "$@"
     exit $?
@@ -119,19 +119,19 @@ setup_pytest(){
 # Print banner unless disabled
 : "${DEEZER_PRINT_BANNER:=true}"
 if [ "$DEEZER_PRINT_BANNER" = "true" ]; then
-    python3 -c "from __version__ import __banner__, __version__; print(__banner__); print(f'Running Deezer-Engine {__version__}\n'); print('This is free software under the GNU GPL v3.0.'); print('For more details, see https://codeberg.org/kylemmkay/deezer-engine')"
+    PYTHONPATH=/deezer_engine/app python3 -c "from deezer_engine.__version__ import __banner__, __version__; print(__banner__); print(f'Running Deezer-Engine {__version__}\n'); print('This is free software under the GNU GPL v3.0.'); print('For more details, see https://codeberg.org/kylemmkay/deezer-engine')"
     echo "----------------------------"
 fi
 
 # Check if strategies.yml exists, if not generate from template (skip for 'pytest' entrypoint)
-if [ ! -f /app/data/strategies.yml ] && [ "$1" != "shell" ] && [ "$1" != "pytest" ]; then
+if [ ! -f /deezer_engine/data/strategies.yml ] && [ "$1" != "shell" ] && [ "$1" != "pytest" ]; then
     echo "No strategy file detected on startup!"
-    echo "------ /app/data -----"
-    ls -Rl /app/data
+    echo "------ /deezer_engine/data -----"
+    ls -Rl /deezer_engine/data
     echo "---------------------------"
-    cp /app/strategies.yml.template /app/data/strategies.yml
+    cp /deezer_engine/app/strategies.yml.template /deezer_engine/data/strategies.yml
     echo ""
-    echo "If you're bind mounting the '/app/data' folder, a default strategy file has been generated at /app/data/strategies.yml"
+    echo "If you're bind mounting the '/deezer_engine/data' folder, a default strategy file has been generated at /deezer_engine/data/strategies.yml"
     echo "Please edit the file to configure your strategies before re-running the container."
     echo ""
     echo "Container will exit in 60 seconds"

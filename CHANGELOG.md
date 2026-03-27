@@ -9,6 +9,7 @@
 
 ### Fixes
 - fix: validation mode in config and correct log module in parsing (#110) (@kylemmkay)
+- fix: re-enable container pytest (closes #118) (#121) (@kylemmkay)
 
 ### Maintenance
 

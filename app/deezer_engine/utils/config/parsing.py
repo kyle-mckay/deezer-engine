@@ -41,6 +41,7 @@ ENV_MAPPINGS = {
     'DEEZER_HISTORY_LOOKBACK': 'history_lookback',
     'DEEZER_HISTORY_LIMIT': 'history_limit',
     'DEEZER_VALIDATION_MODE': 'validation_mode',
+    'CONTAINERIZED': 'containerized',
 }
 
 INT_CONFIG_KEYS = {
@@ -60,7 +61,7 @@ INT_CONFIG_KEYS = {
     'history_limit',
 }
 
-BOOL_CONFIG_KEYS = {'write_logs', 'print_banner'}
+BOOL_CONFIG_KEYS = {'write_logs', 'print_banner', 'containerized'}
 
 SENSITIVE_KEY_TOKENS = ("arl", "token", "secret", "password", "key")
 
@@ -220,7 +221,15 @@ def _get_env_snapshot_value(key):
     env_key = key.upper() if key.upper() == 'CONTAINERIZED' else f"DEEZER_{key.upper()}"
     if env_key not in _ENV_SNAPSHOT:
         return None, False
-    return _coerce_general_env_value(_ENV_SNAPSHOT[env_key]), True
+
+    raw_value = _ENV_SNAPSHOT[env_key]
+    key_lower = key.lower()
+
+    # Keep env-derived values consistent with config/env override coercion rules.
+    if key_lower in INT_CONFIG_KEYS or key_lower in BOOL_CONFIG_KEYS:
+        return _coerce_config_value(key_lower, raw_value), True
+
+    return _coerce_general_env_value(raw_value), True
 
 
 def get_global_value(key, default=None):

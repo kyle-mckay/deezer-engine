@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - '__version__.py'
+      - 'app/deezer_engine/__version__.py'
       - 'CHANGELOG.md'
       - '.forgejo/**'
   workflow_dispatch:
@@ -74,14 +74,14 @@ jobs:
           # run release drafter script
           bash .forgejo/release-drafter.sh -m "$COMMIT_MSG" -t "$CURRENT_TAG" -a "$AUTHOR" -l "$RAW_LABELS" -p "$PR_NUM"
           
-          NEW_TAG=$(grep "__version__ =" __version__.py | cut -d '"' -f 2)
+          NEW_TAG=$(grep "__version__ =" app/deezer_engine/__version__.py | cut -d '"' -f 2)
           echo "final_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
       - name: Update and Commit Version
         run: |
           git config user.name "forgejo-actions"
           git config user.email "actions-user@noreply.codeberg.org"
-          git add __version__.py CHANGELOG.md
+          git add app/deezer_engine/__version__.py CHANGELOG.md
   
           if ! git diff --cached --quiet; then
             git commit -m "chore: release ${{ steps.validator.outputs.final_tag }} [release-draft]"

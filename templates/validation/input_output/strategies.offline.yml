@@ -8,7 +8,7 @@ playlists:
         o: 17 # # Intentional mismatch to trigger warn validation failure
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/override-and-fail.json"
+        name: "./pytest/input_output/override-and-fail.json"
         i: 10
         validation_mode: "fail" # Intentional failure, actual expected input is 18
 
@@ -27,7 +27,7 @@ playlists:
         o: 10
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/limit-positive.json"
+        name: "./pytest/input_output/limit-positive.json"
         i: 10
   - name: "limit_large"
     source:
@@ -43,7 +43,7 @@ playlists:
         o: 18
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/limit-large.json"
+        name: "./pytest/input_output/limit-large.json"
         i: 18
   - name: "limit_zero"
     source:
@@ -59,7 +59,7 @@ playlists:
         o: 0
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/limit-zero.json"
+        name: "./pytest/input_output/limit-zero.json"
         i: 0
 
   # --- FILTER MODIFIER TESTS --- 
@@ -98,7 +98,7 @@ playlists:
         o: 12
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/filter-id-positive.json"
+        name: "./pytest/input_output/filter-id-positive.json"
         i: 12
   - name: "filter_title_contains"
     source:
@@ -115,7 +115,7 @@ playlists:
         o: 3
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/filter-title-contains.json"
+        name: "./pytest/input_output/filter-title-contains.json"
         i: 3
   - name: "filter_empty"
     source:
@@ -132,7 +132,7 @@ playlists:
         o: 0
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/filter-empty.json"
+        name: "./pytest/input_output/filter-empty.json"
         i: 0
 
   # --- EXCLUDE MODIFIER TESTS --- 
@@ -172,7 +172,7 @@ playlists:
         o: 50
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/exclude-positive.json"
+        name: "./pytest/input_output/exclude-positive.json"
         i: 50
 
   # --- DEDUPE, SHUFFLE, SORT TESTS --- 
@@ -192,7 +192,7 @@ playlists:
         o: 25
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/dedupe-no-op.json"
+        name: "./pytest/input_output/dedupe-no-op.json"
         i: 25
   - name: "sort_by_id"
     source:
@@ -208,7 +208,7 @@ playlists:
         o: 18
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/sort-by-id.json"
+        name: "./pytest/input_output/sort-by-id.json"
         i: 18
 
   # --- CHAINED AND NESTED MODIFIERS --- 
@@ -251,7 +251,7 @@ playlists:
         o: 10
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/chain-filter-limit.json"
+        name: "./pytest/input_output/chain-filter-limit.json"
         i: 10
   - name: "nested_local_modifier"
     source:
@@ -270,7 +270,7 @@ playlists:
         o: 2
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/nested-local-modifier.json"
+        name: "./pytest/input_output/nested-local-modifier.json"
         i: 7
   - name: "chain_sort_limit_filter_duration"
     source:
@@ -296,5 +296,5 @@ playlists:
         o: 6
     destination:
       - type: "file"
-        name: "./tmp/pytest/input_output/chain-sort-limit-filter-duration.json"
+        name: "./pytest/input_output/chain-sort-limit-filter-duration.json"
         i: 6

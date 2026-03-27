@@ -2,7 +2,7 @@
 FROM python:3.11-slim
 
 # Set working directory
-WORKDIR /app
+WORKDIR /deezer_engine
 
 # Install system dependencies including cron
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -21,13 +21,13 @@ COPY . .
 RUN mkdir -p data/logs data/cache data/tmp
 
 # Create entrypoint script to manage cron and the application
-COPY --chown=root:root docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+COPY --chown=root:root docker-entrypoint.sh /deezer_engine/docker-entrypoint.sh
+RUN chmod +x /deezer_engine/docker-entrypoint.sh
 
 # Set environment variable to indicate running in container
 ENV CONTAINERIZED=true
 ENV PYTHONUNBUFFERED=1
 
 # Use entrypoint script to handle cron and application
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/deezer_engine/docker-entrypoint.sh"]
 CMD ["default"]

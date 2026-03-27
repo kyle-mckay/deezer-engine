@@ -5,7 +5,7 @@ LABELS=""
 CURRENT_TAG=""
 PR_NUMBER=""
 AUTHOR=""
-VERSION_FILE="__version__.py"
+VERSION_FILE="app/deezer_engine/__version__.py"
 
 
 

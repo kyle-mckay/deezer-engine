@@ -8,7 +8,7 @@ on:
       - '.forgejo/workflows/docker-publish.yml'
       - '**'
     paths-ignore:
-      - '__version__.py'
+      - 'app/deezer_engine/__version__.py'
       - 'CHANGELOG.md'
       - '.forgejo/**'
     branches:
@@ -60,12 +60,14 @@ jobs:
         shell: bash
 
       - name: Run Pytest in Source
+        env:
+          PYTHONPATH: app
         run: |
           echo "Running pytest in source..."
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            pytest -v -s --tb=short | tee pytest-source.log
+            pytest -v -s --tb=short app/tests | tee pytest-source.log
           else
-            pytest -v --tb=short | tee pytest-source.log
+            pytest -v --tb=short app/tests | tee pytest-source.log
           fi
         shell: bash
 
@@ -83,38 +85,37 @@ jobs:
           fi
         shell: bash
 
-      # Disabled containerized testing for now due to complexity and time constraints. Will revisit in issue #118.
-      ## Build the image locally
-      #- name: Build local image for testing
-      #  uses: docker/build-push-action@v5
-      #  with:
-      #    context: .
-      #    load: true
-      #    tags: deezer-engine:test
-#
-      #- name: Run Pytest in Container
-      #  run: |
-      #    echo "Running pytest inside the built Docker image..."
-      #    if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-      #      docker run --rm deezer-engine:test pytest -v -s --tb=short | tee pytest-container.log
-      #    else
-      #      docker run --rm deezer-engine:test pytest -v --tb=short | tee pytest-container.log
-      #    fi
-      #  shell: bash
-#
-      #- name: Check Pytest Container Output
-      #  run: |
-      #    echo "Checking pytest container output for failure and pass indicators..."
-      #    if grep -qE "=+ [0-9]+ failed" pytest-container.log; then
-      #      echo "❌ Pytest container run failed!"
-      #      exit 1
-      #    elif ! grep -qE "=+ [0-9]+ passed" pytest-container.log; then
-      #      echo "❌ Pytest container run did not report any passed tests!"
-      #      exit 1
-      #    else
-      #      echo "✅ Pytest container run passed."
-      #    fi
-      #  shell: bash
+      # Build the image locally
+      - name: Build local image for testing
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: deezer-engine:test
+
+      - name: Run Pytest in Container
+        run: |
+          echo "Running pytest inside the built Docker image..."
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            docker run --rm deezer-engine:test pytest -v -s --tb=short app/tests | tee pytest-container.log
+          else
+            docker run --rm deezer-engine:test pytest -v --tb=short app/tests | tee pytest-container.log
+          fi
+        shell: bash
+
+      - name: Check Pytest Container Output
+        run: |
+          echo "Checking pytest container output for failure and pass indicators..."
+          if grep -qE "=+ [0-9]+ failed" pytest-container.log; then
+            echo "❌ Pytest container run failed!"
+            exit 1
+          elif ! grep -qE "=+ [0-9]+ passed" pytest-container.log; then
+            echo "❌ Pytest container run did not report any passed tests!"
+            exit 1
+          else
+            echo "✅ Pytest container run passed."
+          fi
+        shell: bash
 
       # 3. Log in (proceed if not PR)
       - name: Log in to Registries

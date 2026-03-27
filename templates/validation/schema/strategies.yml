@@ -110,7 +110,7 @@ playlists:
         order: "top"
     destination:
       - type: "file"
-        dir: "./backups"
+        dir: "./exports"
         name: "validation_all_components_{date}.json"
         retention: 168
 

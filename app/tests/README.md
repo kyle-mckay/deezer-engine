@@ -7,14 +7,16 @@ This folder contains developer-facing pytest modules for smoke, integration, and
 From the repository root:
 
 ```bash
+# Works in both root and app/ directories
 pytest -v
 ```
 
 Run a focused module:
 
 ```bash
-pytest tests/test_main_entrypoint.py
-pytest tests/test_input_output_offline.py
+cd app
+pytest -v tests/test_main_entrypoint.py
+pytest -v tests/test_input_output_offline.py
 ...
 ```
 
@@ -27,11 +29,11 @@ pytest tests/test_input_output_offline.py
 
 - `test_main_entrypoint.py`
   - Purpose: basic bootstrap validation to ensure expected "fresh install" behavior.
-  - Notes: executes `deezer-engine.py run` with minimal temp config/strategies and verifies startup banner plus expected missing-auth/config signals.
+  - Notes: executes `python -m deezer_engine run` (with `PYTHONPATH=app`) using minimal temp config/strategies and verifies startup banner plus expected missing-auth/config signals.
 
 - `test_input_output_offline.py`
   - Purpose: deterministic integration/contract validation of I/O assertions.
-  - Notes: consumes `templates/validation/input_output/strategies.offline.yml` and fixtures in `tests/fixtures/album`.
+  - Notes: consumes `templates/validation/input_output/strategies.offline.yml` and fixtures in `app/tests/fixtures/album`.
   - Behavior: validates expected pass/warn/error counts from runtime logs.
 
 - `test_logger_configuration.py`
@@ -40,7 +42,7 @@ pytest tests/test_input_output_offline.py
 
 ## Fixtures
 
-- `tests/fixtures/album/`
+- `app/tests/fixtures/album/`
   - Static album payloads used by offline validation tests.
 
 ## Forgejo Actions That Run Pytest

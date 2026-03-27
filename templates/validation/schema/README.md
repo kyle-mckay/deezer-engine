@@ -40,4 +40,4 @@ Expected behavior for these templates:
 
 - These templates intentionally include typo keys to trigger warning and suggestion paths.
 - Do not use these templates in production—remove all intentional typo fields from your live `config.yml` and `strategies.yml`.
-- For deterministic offline I/O validation scenarios, use `templates/validation/input_output/strategies.offline.yml` with `tests/fixtures/album` instead of these schema templates.
+- For deterministic offline I/O validation scenarios, use `templates/validation/input_output/strategies.offline.yml` with `app/tests/fixtures/album` instead of these schema templates.

@@ -118,14 +118,14 @@ Imports your tracklist from a local file in either JSON or CSV format. This is u
 ```yaml
     source:
       - type: "file"
-        dir: "./backups" # optional, relative to script directory
+        dir: "./exports" # optional, relative to script directory
         name: "my_favorites.csv"
 ```
 
 **Optional keys**:
 
 * `format` - The file extension and data structure to use. Defaults to `json`.
-* `dir` - The directory where the file will be saved. Defaults to a `backups` folder in your data directory.
+* `dir` - The directory where the file will be saved. Defaults to an `exports` folder in your data directory.
 * `filename` - The name of the file. You can use the `{date}` placeholder to include a timestamp (formatted as `_YYYYMMDD_HHMM`). If `filename` is omitted, the filename defaults to the current timestamp (`file_YYYYMMDD_HHMM`).
 * `retention` - How many **hours** to keep old files. The system will delete files with the same name prefix that are older than this value. Set to `0` to disable automatic deletion. Defaults to `168` (7 days). (Config `file_retention` or ENV `DEEZER_FILE_RETENTION`)
 
@@ -292,7 +292,7 @@ Exports your tracklist to a local file. This is the primary method for creating 
 ```yaml
     destination:
       - type: "file"
-        dir: "./backups"                 # optional, defaults to './backups'
+        dir: "./exports"                 # optional, defaults to './exports'
         name: "my_favorites_{date}.json" # optional, defaults to 'file_{date}.json'
         retention: 72                    # optional, duration in hours
 
@@ -455,7 +455,7 @@ playlists:
       - type: "favorites"
     destination:
       - type: "file"
-        dir: "./backups" # Store in app directory
+        dir: "./exports" # Store in app directory
         name: "favorites-backup_{date}.json"
         retention: 168
 ```

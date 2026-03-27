@@ -205,14 +205,14 @@ def main():
     print_banner = get_global_value('print_banner', default=True)
     
     # Print banner within script if not containerized, enabled and verbosity is info or higher
-    if containerized == False and print_banner == True and logger.isEnabledFor(logging.INFO):
+    if (not containerized) and print_banner and logger.isEnabledFor(logging.INFO):
         print_startup()
 
     check_for_updates(__version__, containerized, logger)
 
-    if containerized == 'true':
+    if containerized:
         logger.debug("Environment: Docker")
-        logger.debug("Defaulting paths to '/app/data/'")
+        logger.debug("Defaulting paths to '/deezer_engine/data/'")
     else:
         logger.debug("Environment: Local")
         logger.debug("Deezer Engine is running in LOCAL mode.")

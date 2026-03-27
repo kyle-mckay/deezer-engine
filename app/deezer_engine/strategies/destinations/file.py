@@ -26,7 +26,7 @@ def requires_metadata(dest_data=None):
     return True
 from utils.files import write_to_json, write_to_csv
 
-def cleanup_old_backups(directory, prefix, extension, retention_hours, logger):
+def cleanup_old_exports(directory, prefix, extension, retention_hours, logger):
     """
     Deletes files matching 'prefix*' with 'extension' older than retention_hours.
     """
@@ -42,7 +42,7 @@ def cleanup_old_backups(directory, prefix, extension, retention_hours, logger):
         scanned_count = 0
         skipped_format_count = 0
         logger.debug(
-            f"Backup cleanup start: directory={path_dir}, pattern={search_pattern}, "
+            f"Export cleanup start: directory={path_dir}, pattern={search_pattern}, "
             f"retention_hours={retention_hours}, cutoff={cutoff_dt.isoformat()}"
         )
 
@@ -61,7 +61,7 @@ def cleanup_old_backups(directory, prefix, extension, retention_hours, logger):
                     # Compare extracted file time to our cutoff
                     if file_dt < cutoff_dt:
                         file_path.unlink()
-                        logger.info(f"Deleted expired backup: {file_path.name}")
+                        logger.info(f"Deleted expired export: {file_path.name}")
                         deleted_count += 1
                         
                 except (ValueError, IndexError):
@@ -71,11 +71,11 @@ def cleanup_old_backups(directory, prefix, extension, retention_hours, logger):
                     continue
 
         logger.debug(
-            f"Backup cleanup end: scanned={scanned_count}, deleted={deleted_count}, "
+            f"Export cleanup end: scanned={scanned_count}, deleted={deleted_count}, "
             f"skipped_bad_name={skipped_format_count}"
         )
     except Exception as e:
-        logger.error(f"Error during backup cleanup: {e}")
+        logger.error(f"Error during export cleanup: {e}")
 
 def run(client, config, logger, dest_data, tracks):
     """
@@ -91,7 +91,7 @@ def run(client, config, logger, dest_data, tracks):
         # Resolve Directory
         raw_dir = dest_data[0].get('dir')
         if not raw_dir:
-            final_dir = Path(get_data_dir()).resolve() / "backups"
+            final_dir = Path(get_data_dir()).resolve() / "exports"
             logger.debug(f"No directory passed. Defaulting to '{final_dir}'")
         else:
             final_dir = Path(raw_dir).resolve()
@@ -125,7 +125,7 @@ def run(client, config, logger, dest_data, tracks):
         # Cleanup Logic
         dest_retention = dest_data[0].get('retention', get_global_value('file_retention', 168))
         if dest_retention >= 0:
-            cleanup_old_backups(final_dir, cleanup_prefix, extension, dest_retention, logger)
+            cleanup_old_exports(final_dir, cleanup_prefix, extension, dest_retention, logger)
 
         # Export
         logger.debug(f"Saving export to: {final_target}")

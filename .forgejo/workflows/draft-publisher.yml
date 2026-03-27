@@ -35,7 +35,7 @@ jobs:
         run: |
           # extract drafted version
           
-          NEW_TAG=$(grep "__version__ =" __version__.py | cut -d '"' -f 2)
+          NEW_TAG=$(grep "__version__ =" app/deezer_engine/__version__.py | cut -d '"' -f 2)
           echo "final_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
       - name: Prepare Release Body

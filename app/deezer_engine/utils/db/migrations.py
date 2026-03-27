@@ -9,7 +9,14 @@ import shutil
 
 from __version__ import __version__
 from .connection import get_connection, get_db_path
-MIGRATIONS_DIR = Path(__file__).resolve().parent.parent.parent / "migrations"
+
+
+def _resolve_migrations_dir():
+	base = Path(__file__).resolve()
+	return base.parents[3] / "migrations"
+
+
+MIGRATIONS_DIR = _resolve_migrations_dir()
 
 """
 Database migration runner.

@@ -37,7 +37,7 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | `arl_token` | `DEEZER_ARL_TOKEN` | **Yes** | N/A | Your Deezer ARL authentication token. See [Obtaining ARL token](https://www.google.com/search?q=%23obtaining-arl-token). |
 | `user_id` | `DEEZER_USER_ID` | **Yes** | N/A | Your numeric Deezer user ID (found in profile URL). |
 | `log_level` | `DEEZER_LOG_LEVEL` | No | `INFO` | Verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
-| `write_logs` | `DEEZER_WRITE_LOGS` | No | `true` | Whether to write logs to `/app/data/logs/`. |
+| `write_logs` | `DEEZER_WRITE_LOGS` | No | `true` | Whether to write logs to `/deezer_engine/data/logs/`. |
 | `chunk_size` | `DEEZER_CHUNK_SIZE` | No | `50` | Max tracks processed in batch operation's. (Adding/removing from playlist, db checkpoint caching) |
 | `api_batch_size` | `DEEZER_API_BATCH_SIZE` | No | `50` | API rate limit check interval (requests before pausing for rate limiting). |
 | `rate_limit` | `DEEZER_RATE_LIMIT` | No | `60` | Maximum API requests per minute (for rate limiting). |
@@ -79,7 +79,7 @@ services:
         image: kylemmkay/deezer-engine:latest
         container_name: deezer-engine
         volumes:
-            - './data:/app/data' # Stores ./db, ./logs, and ./strategies.yml
+            - './data:/deezer_engine/data' # Stores ./db, ./logs, and ./strategies.yml
         environment:
             - DEEZER_USER_ID="123456789"
             - DEEZER_ARL_TOKEN="YOUR_ARL_HERE"
@@ -89,7 +89,7 @@ services:
 ```
 
 > [!TIP]
-> If you do not want to mount the `/app/data` directory, you can create and bind mount `./strategies.yml:/app/data/strategies.yml` instead.
+> If you do not want to mount the `/deezer_engine/data` directory, you can create and bind mount `./strategies.yml:/deezer_engine/data/strategies.yml` instead.
 
 ### Execution Modes
 
@@ -107,7 +107,7 @@ For quick testing or one-off syncs without a Compose file:
 ```bash
 # Standard One-time Run
 docker run --rm \
-  -v $(pwd)/data:/app/data \
+  -v $(pwd)/data:/deezer_engine/data \
   -e DEEZER_USER_ID="123456789" \
   -e DEEZER_ARL_TOKEN="YOUR_TOKEN" \
   kylemmkay/deezer-engine:latest run
@@ -116,7 +116,7 @@ docker run --rm \
 docker run -d \
   --name deezer-cron \
   -e DEEZER_SCHEDULE="0 3 * * *" \
-  -v $(pwd)/data:/app/data \
+  -v $(pwd)/data:/deezer_engine/data \
   kylemmkay/deezer-engine:latest cron
 ```
 
@@ -142,7 +142,7 @@ Use your local image tag to verify changes:
 
 ```bash
 docker run --rm \
-  -v $(pwd)/data:/app/data \
+  -v $(pwd)/data:/deezer_engine/data \
   -e DEEZER_USER_ID="123456789" \
   -e DEEZER_ARL_TOKEN="YOUR_TOKEN" \
   deezer-engine:dev run
@@ -178,7 +178,8 @@ cp strategies.yml.template strategies.yml
 3. **Run:**
 
 ```bash
-python3 deezer-engine.py
+cd app
+python3 -m deezer_engine run
 ```
 
 **Next Step:** Once installed, head over to the [Strategy Configuration](https://www.google.com/search?q=Strategy-Configuration) page to define your first smart playlist.

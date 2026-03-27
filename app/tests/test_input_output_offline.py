@@ -1,4 +1,3 @@
-import importlib.util
 import logging
 import re
 import shutil
@@ -13,9 +12,9 @@ from utils.infrastructure.paths import get_data_dir
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 OFFLINE_FIXTURE_DIR = PROJECT_ROOT / "tests" / "fixtures" / "album"
-BACKUP_ALBUM_DIR = PROJECT_ROOT / "backups" / "album"
-OFFLINE_STRATEGY_PATH = PROJECT_ROOT / "templates" / "validation" / "input_output" / "strategies.offline.yml"
+OFFLINE_STRATEGY_PATH = REPO_ROOT / "templates" / "validation" / "input_output" / "strategies.offline.yml"
 
 
 EXPECTED_COUNTS = {
@@ -31,16 +30,23 @@ EXPECTED_COUNTS = {
     "IOPASS_ME": 2, # Modifier Exclude
     "IOPASS_MD": 2, # Modifier Dedupe
     "IOPASS_DF": 12, # Destination File
+    "SAVE_DF": 12, # Destination File Save
 }
 
+TOTAL_COUNT_KEYS = ("IOPASS", "IOWARN", "WARN", "IOERR", "ERR")
 
-def _load_engine_module():
-    module_path = PROJECT_ROOT / "deezer-engine.py"
-    spec = importlib.util.spec_from_file_location("deezer_engine_entry", module_path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    spec.loader.exec_module(module)
-    return module
+COMPONENT_COUNT_CASES = [
+    ("IOPASS_SF", "source-file", EXPECTED_COUNTS["IOPASS_SF"]),
+    ("IOPASS_MF", "modifier-filter", EXPECTED_COUNTS["IOPASS_MF"]),
+    ("IOPASS_ML", "modifier-limit", EXPECTED_COUNTS["IOPASS_ML"]),
+    ("IOPASS_MS", "modifier-sort", EXPECTED_COUNTS["IOPASS_MS"]),
+    ("IOPASS_ME", "modifier-exclude", EXPECTED_COUNTS["IOPASS_ME"]),
+    ("IOPASS_MD", "modifier-dedupe", EXPECTED_COUNTS["IOPASS_MD"]),
+    ("IOPASS_DF", "destination-file", EXPECTED_COUNTS["IOPASS_DF"]),
+    ("SAVE_DF", "destination-file-save", EXPECTED_COUNTS["SAVE_DF"]),
+]
+
+OFFLINE_RUN_RESULT = None
 
 
 def _strip_ansi(text):
@@ -66,6 +72,7 @@ def _parse_counts(log_text):
         "IOPASS_ME": count(lambda line: "[I/O Validation] PASSED Modifier 'exclude'" in line),
         "IOPASS_MD": count(lambda line: "[I/O Validation] PASSED Modifier 'dedupe'" in line),
         "IOPASS_DF": count(lambda line: "[I/O Validation] PASSED Destination 'file'" in line),
+        "SAVE_DF": count(lambda line: "Successfully saved tracks to:" in line),
     }
 
 
@@ -125,7 +132,38 @@ def preserve_runtime_state(monkeypatch, backup_restore_runtime_files):
         _clear_deezer_logger_handlers()
 
 
-def test_input_output_offline(monkeypatch, preserve_runtime_state):
+def _print_log_once(result):
+    if result["log_printed"]:
+        return
+    print(result["log_text"])
+    result["log_printed"] = True
+
+
+def _assert_log_file(result):
+    _print_log_once(result)
+    assert result["log_file_exists"], f"Expected run to write log file: {result['log_file']}"
+    assert result["db_exists"], f"Expected test run to create a fresh {result['db_path']}"
+
+
+def _assert_total_counts(result):
+    counts = result["counts"]
+    for key in TOTAL_COUNT_KEYS:
+        expected = EXPECTED_COUNTS[key]
+        actual = counts[key]
+        assert actual == expected, f"{key} expected {expected}, got {actual}"
+
+
+def _assert_component_count(result, key, expected):
+    actual = result["counts"][key]
+    assert actual == expected, f"{key} expected {expected}, got {actual}"
+
+
+def _run_input_output_once(monkeypatch, preserve_runtime_state, run_engine_main):
+    global OFFLINE_RUN_RESULT
+
+    if OFFLINE_RUN_RESULT is not None:
+        return OFFLINE_RUN_RESULT
+
     runtime_paths = preserve_runtime_state
     log_file = runtime_paths["log_file"]
     db_path = runtime_paths["db_path"]
@@ -133,20 +171,45 @@ def test_input_output_offline(monkeypatch, preserve_runtime_state):
     monkeypatch.chdir(PROJECT_ROOT)
     monkeypatch.setenv("DEEZER_LOG_LEVEL", "INFO")
     monkeypatch.setenv("DEEZER_WRITE_LOGS", "true")
-    monkeypatch.setenv("DEEZER_PRINT_BANNER", "false")
 
     if log_file.exists():
         log_file.unlink()
 
-    engine = _load_engine_module()
-    engine.main()
+    run_engine_main()
 
-    assert log_file.exists(), f"Expected run to write log file: {log_file}"
-    log_text = log_file.read_text(encoding="utf-8")
-    counts = _parse_counts(log_text)
+    log_text = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
 
-    for key, expected in EXPECTED_COUNTS.items():
-        actual = counts[key]
-        assert actual == expected, f"{key} expected {expected}, got {actual}"
+    OFFLINE_RUN_RESULT = {
+        "log_file": log_file,
+        "log_file_exists": log_file.exists(),
+        "log_text": log_text,
+        "counts": _parse_counts(log_text),
+        "db_path": db_path,
+        "db_exists": db_path.exists(),
+        "log_printed": False,
+    }
+    return OFFLINE_RUN_RESULT
 
-    assert db_path.exists(), f"Expected test run to create a fresh {db_path}"
+
+OFFLINE_ASSERTIONS = [
+    pytest.param(("log-file", _assert_log_file), id="log-file"),
+    pytest.param((
+        f"total-counts-IOPASS-{EXPECTED_COUNTS['IOPASS']}-IOWARN-{EXPECTED_COUNTS['IOWARN']}-WARN-{EXPECTED_COUNTS['WARN']}-IOERR-{EXPECTED_COUNTS['IOERR']}-ERR-{EXPECTED_COUNTS['ERR']}",
+        _assert_total_counts,
+    ), id=f"total-counts-IOPASS-{EXPECTED_COUNTS['IOPASS']}-IOWARN-{EXPECTED_COUNTS['IOWARN']}-WARN-{EXPECTED_COUNTS['WARN']}-IOERR-{EXPECTED_COUNTS['IOERR']}-ERR-{EXPECTED_COUNTS['ERR']}"),
+]
+
+OFFLINE_ASSERTIONS.extend(
+    pytest.param(
+        (label, lambda result, count_key=count_key, expected=expected: _assert_component_count(result, count_key, expected)),
+        id=f"{label}-{expected}",
+    )
+    for count_key, label, expected in COMPONENT_COUNT_CASES
+)
+
+
+@pytest.mark.parametrize("assertion_case", OFFLINE_ASSERTIONS)
+def test_input_output_offline(monkeypatch, preserve_runtime_state, run_engine_main, assertion_case):
+    result = _run_input_output_once(monkeypatch, preserve_runtime_state, run_engine_main)
+    _, assertion = assertion_case
+    assertion(result)

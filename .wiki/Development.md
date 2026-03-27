@@ -21,7 +21,7 @@ Use your local image tag to verify changes:
 
 ```bash
 docker run --rm \
-  -v $(pwd)/data:/app/data \
+  -v $(pwd)/data:/deezer_engine/data \
   -e DEEZER_USER_ID="123456789" \
   -e DEEZER_ARL_TOKEN="YOUR_TOKEN" \
   deezer-engine:dev run
@@ -45,4 +45,4 @@ Run tests from the repository root:
 pytest
 ```
 
-For test scope, per-module intent, and Forgejo pytest pipeline references, see [`tests/README.md`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/tests/README.md).
+For test scope, per-module intent, and Forgejo pytest pipeline references, see [`app/tests/README.md`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/app/tests/README.md).
