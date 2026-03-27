@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.14.1 - 2026-03-27
+
+### Maintenance
+
+- maint: add environment variable to run before starting schedule (#124) (@kylemmkay)
+
 ## v0.14.0 - 2026-03-27
 
 ### Breaking
