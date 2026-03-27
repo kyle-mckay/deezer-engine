@@ -2,6 +2,16 @@
 
 This guide details how to build and maintain smart playlists using the pipeline-based YAML configuration.
 
+## Quick Start
+
+Start with the minimal runtime strategy template in [`app/strategies.yml.template`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/app/strategies.yml.template).
+
+It includes two practical defaults:
+- A simple artist timeline playlist
+- A discovery mix with dedupe + smart shuffle
+
+If you want broader examples (file backups, history exclusion, extra source combinations), use [`templates/startup/strategies.comprehensive.yml`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/templates/startup/strategies.comprehensive.yml).
+
 ## 📂 Sources
 
 Sources fetch tracks from Deezer. You can combine multiple sources into a single pipeline.
@@ -9,10 +19,8 @@ Sources fetch tracks from Deezer. You can combine multiple sources into a single
 ```yaml
     source:
       - type: "smarttracklist"
-        name: "new-releases"
-        retention: 23
+        name: "discovery"
       - type: "favorites"
-        retention: 12
 ```
 
 ### General Source Parameters
@@ -312,9 +320,11 @@ Exports your tracklist to a local file. This is the primary method for creating 
 
 # Examples
 
-This page provides examples of different configurations that are possible.
+This page provides expanded examples beyond the minimal startup template.
 
-> Builds are tested off these examples.
+> For first-run onboarding, start with [`app/strategies.yml.template`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/app/strategies.yml.template).
+>
+> For a larger starter set you can copy directly, use [`templates/startup/strategies.comprehensive.yml`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/templates/startup/strategies.comprehensive.yml).
 
 ## The "Artist Super-Fan"
 
