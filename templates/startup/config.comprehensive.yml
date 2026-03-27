@@ -1,0 +1,37 @@
+config:
+  # Required authentication.
+  arl_token: "PASTE_ARL_HERE"
+  user_id: "YOUR_NUMERIC_USER_ID"
+
+  # Logging behavior.
+  log_level: "INFO"        # DEBUG, INFO, WARNING, ERROR
+  write_logs: true          # Write logs to ./data/logs
+  print_banner: true        # Show startup banner
+  log_interval: 120         # Progress update cadence in seconds
+
+  # API throughput and retry behavior.
+  chunk_size: 50            # Tracks per batch operation
+  api_batch_size: 50        # Requests between rate-limit checks
+  rate_limit: 60            # Requests per minute
+  max_retries: 4            # Retry attempts after initial request fails
+
+  # Playlist and collection limits.
+  playlist_cap: 5000        # Deezer playlist limit
+  favorites_cap: 10000      # Deezer favorites limit
+
+  # Cache and export retention defaults.
+  retention: 0              # Source cache lifetime in hours (0 = always live)
+  file_retention: 168       # Export file cleanup horizon in hours
+
+  # Metadata refresh policy.
+  track_stats_refresh: 90   # Days before refreshing dynamic track metadata
+  album_stats_refresh: 90   # Days before refreshing dynamic album metadata
+
+  # Failure handling and strategy defaults.
+  blocklist_expiry_days: 7  # Days before blocked entities become eligible again
+  history_lookback: 14      # Default history source lookback in days
+  history_limit: 100        # Default max tracks fetched by history source
+  validation_mode: "warn"  # fail or warn for i/o validation checks
+
+  # Cron mode behavior.
+  run_before_cron: true     # Run once immediately on cron startup

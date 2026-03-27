@@ -1,91 +1,32 @@
-# See for more examples: https://codeberg.org/kylemmkay/deezer-engine/wiki/Configuration#examples
+# Minimal startup template. See wiki for full reference examples.
+# Advanced startup templates: templates/startup/strategies.comprehensive.yml
 playlists:
-  - name: "Taylor Swift: The Timeline"
+  - name: "Artist Timeline"
     source:
       - type: "artist"
-        id: "12246" # Taylor Swift
+        id: "12246" # Example: Taylor Swift
     modifiers:
       - type: "sort"
         field: "release_date"
         order: "asc"
     destination:
       - type: "playlist"
-        id: "REPLACE_WITH_YOUR_ID"
+        id: "REPLACE_WITH_YOUR_PLAYLIST_ID"
         order: "replace"
-  - name: "High-Rank Discovery"
+
+  - name: "Discovery Mix"
     source:
       - type: "smarttracklist"
         name: "discovery"
-        modifiers:
-          - type: "filter"
-            field: "rank"
-            operator: "gt"
-            value: 500000 # Only keep very popular tracks
-      - type: "smarttracklist"
-        name: "inspired-by-1"
-      - type: "smarttracklist"
-        name: "inspired-by-2"
-      - type: "smarttracklist"
-        name: "inspired-by-3"
+      - type: "favorites"
     modifiers:
-      - type: "exclude"
-        source:
-          - type: "history"
-            retention: 0
-            lookback: 7
       - type: "dedupe"
       - type: "shuffle"
-        order: "smart" # Spread out artists for a better mix
-    destination:
-      - type: "playlist"
-        id: "REPLACE_WITH_YOUR_ID"
-        order: "replace"
-  - name: "Unseen Global Hits"
-    source:
-      - type: "playlist"
-        id: "10064140302" # Top 50 Global 2026
-    modifiers:
-      - type: "exclude"
-        source:
-          - type: "favorites"
-      - type: "sort"
-        field: "rank"
-        order: "desc"
+        order: "smart"
       - type: "limit"
-        count: 20
+        count: 100
         order: "top"
     destination:
       - type: "playlist"
-        id: "REPLACE_WITH_YOUR_ID"
-        order: "replace"
-  - name: "Fresh Favorites"
-    source:
-      - type: "album"
-        id: "897621962" # Britpop by Robbie Williams
-      - type: "favorites"
-    modifiers:
-      - type: "exclude"
-        source:
-          type: "favorites"
-      - type: "shuffle"
-        order: "random"
-    destination:
-      - type: "playlist"
-        id: "REPLACE_WITH_YOUR_ID"
-        order: "replace"
-  - name: "Fast-Paced House"
-    source:
-      - type: "playlist"
-        id: "10064138682" # Using Top 50 USA as a base
-    modifiers:
-      - type: "filter"
-        field: "duration"
-        operator: "lt"
-        value: 180 # Tracks shorter than 3 mins
-      - type: "limit"
-        count: 30
-        order: "first"
-    destination:
-      - type: "playlist"
-        id: "REPLACE_WITH_YOUR_ID"
+        id: "REPLACE_WITH_YOUR_PLAYLIST_ID"
         order: "replace"

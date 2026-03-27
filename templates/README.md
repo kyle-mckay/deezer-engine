@@ -1,14 +1,19 @@
 # Templates Scope
 
-This folder contains developer-facing template files used to validate configuration and strategy behavior.
+This folder contains both runtime onboarding templates and developer-facing validation templates.
 
 ## What Belongs Here
 
-- Reusable validation templates that can be copied into runtime files for local checks.
-- Deterministic scenario definitions used to validate parser behavior and I/O assertions.
+- Startup templates that users can copy for real runtime configuration.
+- Reusable validation templates for parser and I/O behavior checks.
 - Documentation for how each template set is intended to be used.
 
 ## Current Structure
+
+- `startup/`
+  - Comprehensive runtime starter templates for users who want more than the minimal defaults.
+  - Minimal runtime defaults remain in `app/config.yml.template` and `app/strategies.yml.template`.
+  - See: `templates/startup/README.md`.
 
 - `validation/schema/`
   - Schema and unknown-key validation templates.
@@ -22,13 +27,15 @@ This folder contains developer-facing template files used to validate configurat
 
 ## Boundaries
 
-- `templates/` defines scenarios and expected behavior shapes.
+- `app/*.template` is optimized for first-run user onboarding.
+- `templates/startup/` is expanded runtime guidance.
+- `templates/validation/` defines deterministic validation scenarios.
 - `tests/` contains test harnesses and assertions.
-- Some templates are intentionally test-coupled (for example, the offline I/O template consumed by pytest).
 
 ## Maintenance Rules
 
-- Keep templates deterministic where possible for reproducible validation runs.
+- Keep runtime templates copy-paste friendly and valid YAML.
+- Keep validation templates deterministic where possible for reproducible runs.
 - If a new modifier is added to I/O validation coverage, update both:
   - `templates/validation/input_output/strategies.yml`
   - `templates/validation/input_output/strategies.offline.yml`

@@ -28,6 +28,10 @@ Before installing, you must have an active Deezer account and a valid **ARL Toke
 Deezer Engine can be configured via a `config.yml` file or **Environment Variables**.
 
 > [!TIP]
+> **Start simple first:** Use the minimal runtime templates in [`app/config.yml.template`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/app/config.yml.template) and [`app/strategies.yml.template`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/app/strategies.yml.template).
+>
+> If you want grouped advanced options and expanded examples, use [`templates/startup/config.comprehensive.yml`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/templates/startup/config.comprehensive.yml) and [`templates/startup/strategies.comprehensive.yml`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/templates/startup/strategies.comprehensive.yml).
+>
 > **Precedence:** Environment variables will always override values found in your `config.yml`.
 >
 > **Startup Snapshot:** Configuration is loaded and snapshotted at process startup. Changes to environment variables or `config.yml` require a restart to take effect.
@@ -73,6 +77,9 @@ Docker is the easiest way to run the engine without managing Python dependencies
 ### Option A: Docker Compose
 
 Create a `docker-compose.yml` file. You can run in **Standard mode** (one-time sync) or **Cron mode** (scheduled).
+
+> [!TIP]
+> For first run, keep your runtime files minimal ([`app/config.yml.template`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/app/config.yml.template) and [`app/strategies.yml.template`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/app/strategies.yml.template) copied into your data directory). If you need more examples or grouped advanced config keys, copy from [`templates/startup/`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/templates/startup/).
 
 ```yaml
 services:
@@ -135,7 +142,11 @@ docker run -d \
 If you are modifying the source code and want to test your changes within the Docker environment, follow these steps to build locally.
 
 > [!TIP]
-> Reusable validation templates for config and strategy parsing live in `templates/validation/` (see `templates/validation/README.md`). This is the preferred starting point for validation-focused test runs and can be expanded with additional scenarios over time.
+> Startup template options:
+> - Minimal runtime defaults: [`app/config.yml.template`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/app/config.yml.template) and [`app/strategies.yml.template`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/app/strategies.yml.template)
+> - Expanded startup references: [`templates/startup/`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/templates/startup/)
+>
+> Validation-specific templates for parser and I/O checks live in [`templates/validation/`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/templates/validation/) (see [`templates/validation/README.md`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/templates/validation/README.md)).
 
 >![NOTE]
 >This assumes you have already cloned the repository and are within the working directory.
@@ -160,7 +171,7 @@ docker run --rm \
 
 **3. Development Tips:**
 
-* **Entrypoint:** The image uses `docker-entrypoint.sh`. If you modify this script, you **must** rebuild the image.
+* **Entrypoint:** The image uses [`docker-entrypoint.sh`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/docker-entrypoint.sh). If you modify this script, you **must** rebuild the image.
 
 ## 🐍 4. Deployment: Manual Python
 
@@ -179,11 +190,12 @@ pip install -r requirements.txt
 2. **Configure:**
 
 ```bash
-cp config.yml.template config.yml
-cp strategies.yml.template strategies.yml
+mkdir -p data
+cp app/config.yml.template data/config.yml
+cp app/strategies.yml.template data/strategies.yml
 ```
 
-*Edit these files with your specific settings.*
+*Edit these files with your specific settings. For expanded examples, copy from [`templates/startup/`](https://codeberg.org/kylemmkay/deezer-engine/src/branch/main/templates/startup/) instead.*
 
 3. **Run:**
 

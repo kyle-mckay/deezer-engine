@@ -1,17 +1,25 @@
 config:
-  # Open https://www.deezer.com and log in
-  # Open developer settigns in browser (usually F12)
-  # Go to the Application tab (Chrome) or Storage tab (Firefox).
-  # In the left sidebar, expand Cookies and select https://www.deezer.com
-  # Find the cookie named `arl`
-  # Copy the Value
+  # Required authentication.
   arl_token: "PASTE_ARL_HERE"
-  # https://www.deezer.com/us/profile/ABC123
-  user_id: "YOUR_NUMERIC_USER_ID" # Found in your profile URL
-  log_level: "INFO" # Options: DEBUG, INFO, WARNING, ERROR
-  chunk_size: 50  # Max tracks processed in batch operation's. (Adding/removing from playlist, db checkpoint caching)
-  api_batch_size: 50  # API rate limit check interval (requests before pausing), recommended to leave unchanged
-  rate_limit: 60  # Maximum API requests per minute, recommended to leave unchanged
-  print_banner: true # Whether to print the startup banner
+  user_id: "YOUR_NUMERIC_USER_ID" # Numeric ID from your profile URL
+
+  # Logging and visibility.
+  log_level: "INFO" # DEBUG, INFO, WARNING, ERROR
+  print_banner: true
+
+  # API behavior. Leave these unless troubleshooting.
+  chunk_size: 50
+  api_batch_size: 50
+  rate_limit: 60
+  max_retries: 4
+
+  # Deezer collection caps.
   playlist_cap: 5000
   favorites_cap: 10000
+
+  # Advanced options (optional):
+  # write_logs: true
+  # retention: 0
+  # file_retention: 168
+  # run_before_cron: true
+  # blocklist_expiry_days: 7
