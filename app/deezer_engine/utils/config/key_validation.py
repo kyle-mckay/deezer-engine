@@ -82,6 +82,7 @@ CONFIG_SECTION_KEYS = {
     'history_lookback',
     'history_limit',
     'validation_mode',
+    'run_before_cron',
 }
 
 

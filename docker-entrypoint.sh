@@ -35,6 +35,10 @@ strip_quotes() {
 
 setup_cron(){
     echo "Scheduler active. Schedule: $DEEZER_SCHEDULE"
+    echo "Run before cron: $DEEZER_RUN_BEFORE_CRON"
+    if [ "$DEEZER_RUN_BEFORE_CRON" = "true" ]; then
+        setup_run
+    fi
     echo "Starting scheduler loop at $(date '+%Y-%m-%d %H:%M:%S %:z')..."
     trap 'echo "Stopping scheduler..."; kill -SIGINT "$child_pid" 2>/dev/null; exit 0' SIGINT SIGTERM
     trap 'echo "Interrupting scheduler..."; kill -INT "$child_pid" 2>/dev/null; exit 0' SIGINT
@@ -105,6 +109,7 @@ setup_pytest(){
 [ -n "$DEEZER_LOG_LEVEL" ] && DEEZER_LOG_LEVEL=$(strip_quotes "$DEEZER_LOG_LEVEL") && export DEEZER_LOG_LEVEL
 [ -n "$DEEZER_WRITE_LOGS" ] && DEEZER_WRITE_LOGS=$(strip_quotes "$DEEZER_WRITE_LOGS") && export DEEZER_WRITE_LOGS
 [ -n "$DEEZER_SCHEDULE" ] && DEEZER_SCHEDULE=$(strip_quotes "$DEEZER_SCHEDULE") && export DEEZER_SCHEDULE
+[ -n "$DEEZER_RUN_BEFORE_CRON" ] && DEEZER_RUN_BEFORE_CRON=$(strip_quotes "$DEEZER_RUN_BEFORE_CRON") && export DEEZER_RUN_BEFORE_CRON
 [ -n "$DEEZER_PRINT_BANNER" ] && DEEZER_PRINT_BANNER=$(strip_quotes "$DEEZER_PRINT_BANNER") && export DEEZER_PRINT_BANNER
 [ -n "$DEEZER_PLAYLIST_CAP" ] && DEEZER_PLAYLIST_CAP=$(strip_quotes "$DEEZER_PLAYLIST_CAP") && export DEEZER_PLAYLIST_CAP
 [ -n "$DEEZER_FAVORITES_CAP" ] && DEEZER_FAVORITES_CAP=$(strip_quotes "$DEEZER_FAVORITES_CAP") && export DEEZER_FAVORITES_CAP

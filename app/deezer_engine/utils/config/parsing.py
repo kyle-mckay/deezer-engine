@@ -41,6 +41,7 @@ ENV_MAPPINGS = {
     'DEEZER_HISTORY_LOOKBACK': 'history_lookback',
     'DEEZER_HISTORY_LIMIT': 'history_limit',
     'DEEZER_VALIDATION_MODE': 'validation_mode',
+    'DEEZER_RUN_BEFORE_CRON': 'run_before_cron',
     'CONTAINERIZED': 'containerized',
 }
 
@@ -61,7 +62,7 @@ INT_CONFIG_KEYS = {
     'history_limit',
 }
 
-BOOL_CONFIG_KEYS = {'write_logs', 'print_banner', 'containerized'}
+BOOL_CONFIG_KEYS = {'write_logs', 'print_banner', 'run_before_cron', 'containerized'}
 
 SENSITIVE_KEY_TOKENS = ("arl", "token", "secret", "password", "key")
 

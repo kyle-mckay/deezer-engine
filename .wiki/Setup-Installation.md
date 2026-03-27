@@ -54,6 +54,7 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | `history_lookback` | `DEEZER_HISTORY_LOOKBACK` | No | `14` | Default lookback window in days for `history` sources when not set in strategy config. |
 | `history_limit` | `DEEZER_HISTORY_LIMIT` | No | `100` | Default maximum number of history tracks to fetch when not set in strategy config. |
 | `validation_mode` | `DEEZER_VALIDATION_MODE` | No | `warn` | Default validation mode for when used in conjunction with `i` / `o` keys: `fail` (stop strategy on validation failure) or `warn` (log warning, continue strategy). Can be overridden per component. |
+| `run_before_cron` | `DEEZER_RUN_BEFORE_CRON` | No | `true` | In cron mode, run one sync immediately at container startup before waiting for the next cron slot. Set to `false` to wait until the next scheduled time. |
 
 ### Logic Hierarchy
 
@@ -86,6 +87,7 @@ services:
             - DEEZER_LOG_LEVEL=INFO
             - TZ=UTC
             #- DEEZER_SCHEDULE="0 3 * * *" # Optional: Daily at 3 AM (Based off env TZ)
+            #- DEEZER_RUN_BEFORE_CRON=false # Optional: disable startup run and wait for first cron slot
 ```
 
 > [!TIP]
@@ -116,6 +118,14 @@ docker run --rm \
 docker run -d \
   --name deezer-cron \
   -e DEEZER_SCHEDULE="0 3 * * *" \
+  -v $(pwd)/data:/deezer_engine/data \
+  kylemmkay/deezer-engine:latest cron
+
+# Scheduled Cron (wait until first slot, skip startup run)
+docker run -d \
+  --name deezer-cron-delayed \
+  -e DEEZER_SCHEDULE="0 3 * * *" \
+  -e DEEZER_RUN_BEFORE_CRON=false \
   -v $(pwd)/data:/deezer_engine/data \
   kylemmkay/deezer-engine:latest cron
 ```
