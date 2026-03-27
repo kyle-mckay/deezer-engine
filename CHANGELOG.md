@@ -4,6 +4,7 @@
 
 ### Maintenance
 
+- Merge branch 'template-upkeep' (@kylemmkay)
 - maint: migrate entrypoint logic to python and support cli entry (closes #123) (#126) (@kylemmkay)
 
 ## v0.14.1 - 2026-03-27
