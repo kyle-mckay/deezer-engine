@@ -7,6 +7,7 @@ from .parsing import (
     get_global_value,
     initialize_config_snapshot,
     load_config_with_env_overrides,
+    normalize_runtime_environment,
     reset_config_snapshot,
 )
 from .strategy_validation import load_strategies_with_env_overrides
@@ -20,6 +21,7 @@ __all__ = [
     "get_global_value",
     "initialize_config_snapshot",
     "load_config_with_env_overrides",
+    "normalize_runtime_environment",
     "reset_config_snapshot",
     "load_strategies_with_env_overrides",
     "version_to_int",

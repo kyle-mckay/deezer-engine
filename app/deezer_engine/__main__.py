@@ -8,7 +8,7 @@ _here = Path(__file__).resolve().parent
 if str(_here) not in sys.path:
     sys.path.insert(0, str(_here))
 
-from entrypoint import main  # noqa: E402
+from cli import main  # noqa: E402
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

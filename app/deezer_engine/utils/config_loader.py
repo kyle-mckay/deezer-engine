@@ -23,6 +23,7 @@ from utils.config import (
     initialize_config_snapshot,
     load_config_with_env_overrides,
     load_strategies_with_env_overrides,
+    normalize_runtime_environment,
     reset_config_snapshot,
     version_to_int,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "initialize_config_snapshot",
     "load_config_with_env_overrides",
     "load_strategies_with_env_overrides",
+    "normalize_runtime_environment",
     "reset_config_snapshot",
     "version_to_int",
 ]

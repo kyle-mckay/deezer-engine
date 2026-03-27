@@ -54,6 +54,7 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | `history_lookback` | `DEEZER_HISTORY_LOOKBACK` | No | `14` | Default lookback window in days for `history` sources when not set in strategy config. |
 | `history_limit` | `DEEZER_HISTORY_LIMIT` | No | `100` | Default maximum number of history tracks to fetch when not set in strategy config. |
 | `validation_mode` | `DEEZER_VALIDATION_MODE` | No | `warn` | Default validation mode for when used in conjunction with `i` / `o` keys: `fail` (stop strategy on validation failure) or `warn` (log warning, continue strategy). Can be overridden per component. |
+| `schedule` | `DEEZER_SCHEDULE` | No | `0 3 * * *` (cron mode) | Cron expression used when running in scheduled mode. If provided without an explicit command, default mode resolves to cron. |
 | `run_before_cron` | `DEEZER_RUN_BEFORE_CRON` | No | `true` | In cron mode, run one sync immediately at container startup before waiting for the next cron slot. Set to `false` to wait until the next scheduled time. |
 
 ### Logic Hierarchy
@@ -100,6 +101,7 @@ services:
 | **Default** | None | (Default) Dynamically executes cron if `DEEZER_SCHEDULE` configured, otherwise runs once. |
 | **Run** | `command: run` / not included | Runs once and exits |
 | **Cron** | `command: cron` | Container stays alive and runs on your `DEEZER_SCHEDULE`. |
+| **Pytest** | `command: pytest` | Runs pytest with full argument passthrough (e.g. `-v -s tests/test_main_entrypoint.py`). |
 | **Shell** | `command: shell` | Starts an interactive bash shell for debugging. |
 
 ### Docker Run (CLI)
@@ -160,7 +162,7 @@ docker run --rm \
 
 **3. Development Tips:**
 
-* **Entrypoint:** The image uses `docker-entrypoint.sh`. If you modify this script, you **must** rebuild the image.
+* **Entrypoint:** The image uses `docker-entrypoint.sh` as a thin wrapper that delegates execution to `python -m deezer_engine` (run/cron/pytest/shell). If you modify this script, you **must** rebuild the image.
 
 ## 🐍 4. Deployment: Manual Python
 
@@ -190,6 +192,13 @@ cp strategies.yml.template strategies.yml
 ```bash
 cd app
 python3 -m deezer_engine run
+```
+
+For local test execution through the same CLI mode router:
+
+```bash
+cd app
+python3 -m deezer_engine pytest -v -s tests/test_main_entrypoint.py
 ```
 
 **Next Step:** Once installed, head over to the [Strategy Configuration](https://www.google.com/search?q=Strategy-Configuration) page to define your first smart playlist.

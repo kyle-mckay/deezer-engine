@@ -15,6 +15,8 @@ Run a focused module:
 
 ```bash
 cd app
+pytest -v tests/test_cli.py
+pytest -v tests/test_config_parsing.py
 pytest -v tests/test_main_entrypoint.py
 pytest -v tests/test_input_output_offline.py
 ...
@@ -30,6 +32,14 @@ pytest -v tests/test_input_output_offline.py
 - `test_main_entrypoint.py`
   - Purpose: basic bootstrap validation to ensure expected "fresh install" behavior.
   - Notes: executes `python -m deezer_engine run` (with `PYTHONPATH=app`) using minimal temp config/strategies and verifies startup banner plus expected missing-auth/config signals.
+
+- `test_cli.py`
+  - Purpose: validate CLI mode routing and pytest argument normalization behavior.
+  - Notes: verifies default mode resolution (`run` vs `cron`), interruptible cron wait behavior, and path normalization for relative, Docker-style absolute, and node-id pytest targets.
+
+- `test_config_parsing.py`
+  - Purpose: verify config/env parsing behavior for startup-related overrides.
+  - Notes: covers coercion/precedence for `run_before_cron`, runtime quote normalization, and `DEEZER_SCHEDULE` exposure through global config lookup.
 
 - `test_input_output_offline.py`
   - Purpose: deterministic integration/contract validation of I/O assertions.

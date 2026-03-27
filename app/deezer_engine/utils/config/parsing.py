@@ -29,6 +29,7 @@ ENV_MAPPINGS = {
     'DEEZER_MAX_RETRIES': 'max_retries',
     'DEEZER_LOG_LEVEL': 'log_level',
     'DEEZER_WRITE_LOGS': 'write_logs',
+    'DEEZER_SCHEDULE': 'schedule',
     'DEEZER_PRINT_BANNER': 'print_banner',
     'DEEZER_PLAYLIST_CAP': 'playlist_cap',
     'DEEZER_FAVORITES_CAP': 'favorites_cap',
@@ -67,9 +68,20 @@ BOOL_CONFIG_KEYS = {'write_logs', 'print_banner', 'run_before_cron', 'containeri
 SENSITIVE_KEY_TOKENS = ("arl", "token", "secret", "password", "key")
 
 
+def _strip_surrounding_quotes(value):
+    if not isinstance(value, str):
+        return value
+
+    stripped = value.strip()
+    if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in {'"', "'"}:
+        return stripped[1:-1]
+    return stripped
+
+
 def _coerce_general_env_value(value):
     if not isinstance(value, str):
         return value
+    value = _strip_surrounding_quotes(value)
     if value.isdigit():
         return int(value)
 
@@ -105,6 +117,8 @@ def _snapshot_debug_summary(config_snapshot, env_snapshot):
 
 
 def _coerce_config_value(config_key, value):
+    value = _strip_surrounding_quotes(value)
+
     if config_key in INT_CONFIG_KEYS:
         try:
             return int(value)
@@ -121,10 +135,31 @@ def _coerce_config_value(config_key, value):
 
 def _build_env_snapshot():
     return {
-        env_key: env_value
+        env_key: _strip_surrounding_quotes(env_value)
         for env_key, env_value in os.environ.items()
         if env_key.startswith('DEEZER_') or env_key == 'CONTAINERIZED'
     }
+
+
+def normalize_runtime_environment():
+    """
+    Normalize process environment values used by startup flows.
+
+    This strips surrounding shell quotes from Deezer-related environment
+    variables and clears the cached config snapshot so subsequent config
+    reads observe the normalized values.
+    """
+    changed = False
+    for env_key, env_value in list(os.environ.items()):
+        if not (env_key.startswith('DEEZER_') or env_key == 'CONTAINERIZED'):
+            continue
+
+        normalized_value = _strip_surrounding_quotes(env_value)
+        if normalized_value != env_value:
+            os.environ[env_key] = normalized_value
+            changed = True
+
+    reset_config_snapshot()
 
 
 def _load_base_config():
