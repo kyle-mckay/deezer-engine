@@ -2,11 +2,15 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
+import pytest
 
 from utils.infrastructure.logger import ColorFormatter, initialize_deezer_logger
 
 
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
+
+
+pytestmark = [pytest.mark.unit]
 
 
 def _clear_handlers(logger):
@@ -19,6 +23,7 @@ def _clear_handlers(logger):
 
 
 def test_initialize_deezer_logger_reconciles_handlers():
+    """Ensures repeated logger initialization keeps one console handler and expected state."""
     logger = logging.getLogger("DeezerEngine")
     original_level = logger.level
     original_propagate = logger.propagate
@@ -50,6 +55,7 @@ def test_initialize_deezer_logger_reconciles_handlers():
 
 
 def test_file_output_matches_console_output_without_color(tmp_path, monkeypatch):
+    """Verifies file logs match console content after ANSI color codes are stripped."""
     monkeypatch.setattr("utils.infrastructure.logger.get_logs_dir", lambda: tmp_path)
 
     logger = logging.getLogger("DeezerEngine")

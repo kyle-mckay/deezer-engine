@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from utils.db.connection import get_db_path
 from utils.config import reset_config_snapshot
+from utils.db.connection import get_db_path
 from utils.infrastructure.paths import get_data_dir
 
 
@@ -16,37 +16,36 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OFFLINE_FIXTURE_DIR = PROJECT_ROOT / "tests" / "fixtures" / "album"
 OFFLINE_STRATEGY_PATH = REPO_ROOT / "templates" / "validation" / "input_output" / "strategies.offline.yml"
 
-
 EXPECTED_COUNTS = {
     "IOPASS": 71,
     "IOWARN": 1,
     "WARN": 1,
     "IOERR": 1,
     "ERR": 2,
-    "IOPASS_SF": 29, # Source File
-    "IOPASS_MF": 10, # Modifier Filter
-    "IOPASS_ML": 12, # Modifier Limit
-    "IOPASS_MS": 4, # Modifier Sort
-    "IOPASS_ME": 2, # Modifier Exclude
-    "IOPASS_MD": 2, # Modifier Dedupe
-    "IOPASS_DF": 12, # Destination File
-    "SAVE_DF": 12, # Destination File Save
+    "IOPASS_SF": 29,
+    "IOPASS_MF": 10,
+    "IOPASS_ML": 12,
+    "IOPASS_MS": 4,
+    "IOPASS_ME": 2,
+    "IOPASS_MD": 2,
+    "IOPASS_DF": 12,
+    "SAVE_DF": 12,
 }
 
 TOTAL_COUNT_KEYS = ("IOPASS", "IOWARN", "WARN", "IOERR", "ERR")
 
 COMPONENT_COUNT_CASES = [
-    ("IOPASS_SF", "source-file", EXPECTED_COUNTS["IOPASS_SF"]),
-    ("IOPASS_MF", "modifier-filter", EXPECTED_COUNTS["IOPASS_MF"]),
-    ("IOPASS_ML", "modifier-limit", EXPECTED_COUNTS["IOPASS_ML"]),
-    ("IOPASS_MS", "modifier-sort", EXPECTED_COUNTS["IOPASS_MS"]),
-    ("IOPASS_ME", "modifier-exclude", EXPECTED_COUNTS["IOPASS_ME"]),
-    ("IOPASS_MD", "modifier-dedupe", EXPECTED_COUNTS["IOPASS_MD"]),
-    ("IOPASS_DF", "destination-file", EXPECTED_COUNTS["IOPASS_DF"]),
-    ("SAVE_DF", "destination-file-save", EXPECTED_COUNTS["SAVE_DF"]),
+    pytest.param("IOPASS_SF", "source-file", EXPECTED_COUNTS["IOPASS_SF"], id="source-file-29"),
+    pytest.param("IOPASS_MF", "modifier-filter", EXPECTED_COUNTS["IOPASS_MF"], id="modifier-filter-10"),
+    pytest.param("IOPASS_ML", "modifier-limit", EXPECTED_COUNTS["IOPASS_ML"], id="modifier-limit-12"),
+    pytest.param("IOPASS_MS", "modifier-sort", EXPECTED_COUNTS["IOPASS_MS"], id="modifier-sort-4"),
+    pytest.param("IOPASS_ME", "modifier-exclude", EXPECTED_COUNTS["IOPASS_ME"], id="modifier-exclude-2"),
+    pytest.param("IOPASS_MD", "modifier-dedupe", EXPECTED_COUNTS["IOPASS_MD"], id="modifier-dedupe-2"),
+    pytest.param("IOPASS_DF", "destination-file", EXPECTED_COUNTS["IOPASS_DF"], id="destination-file-12"),
+    pytest.param("SAVE_DF", "destination-file-save", EXPECTED_COUNTS["SAVE_DF"], id="destination-file-save-12"),
 ]
 
-OFFLINE_RUN_RESULT = None
+_OFFLINE_RUN_RESULTS = {}
 
 
 def _strip_ansi(text):
@@ -98,6 +97,7 @@ def _clear_deezer_logger_handlers():
 
 @pytest.fixture(scope="module", autouse=True)
 def check_offline_album_fixtures():
+    """Asserts all required album fixture JSON files are present before any offline test runs."""
     OFFLINE_FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
     required = [
         "102809.json",
@@ -115,6 +115,7 @@ def check_offline_album_fixtures():
 
 @pytest.fixture
 def preserve_runtime_state(monkeypatch, backup_restore_runtime_files):
+    """Backs up runtime state, copies the offline strategy file into place, and restores on teardown."""
     monkeypatch.chdir(PROJECT_ROOT)
     reset_config_snapshot()
     _clear_deezer_logger_handlers()
@@ -132,37 +133,10 @@ def preserve_runtime_state(monkeypatch, backup_restore_runtime_files):
         _clear_deezer_logger_handlers()
 
 
-def _print_log_once(result):
-    if result["log_printed"]:
-        return
-    print(result["log_text"])
-    result["log_printed"] = True
-
-
-def _assert_log_file(result):
-    _print_log_once(result)
-    assert result["log_file_exists"], f"Expected run to write log file: {result['log_file']}"
-    assert result["db_exists"], f"Expected test run to create a fresh {result['db_path']}"
-
-
-def _assert_total_counts(result):
-    counts = result["counts"]
-    for key in TOTAL_COUNT_KEYS:
-        expected = EXPECTED_COUNTS[key]
-        actual = counts[key]
-        assert actual == expected, f"{key} expected {expected}, got {actual}"
-
-
-def _assert_component_count(result, key, expected):
-    actual = result["counts"][key]
-    assert actual == expected, f"{key} expected {expected}, got {actual}"
-
-
-def _run_input_output_once(monkeypatch, preserve_runtime_state, run_engine_main):
-    global OFFLINE_RUN_RESULT
-
-    if OFFLINE_RUN_RESULT is not None:
-        return OFFLINE_RUN_RESULT
+def run_input_output_once(monkeypatch, preserve_runtime_state, run_engine_main, cache_key):
+    """Runs the engine once for a given cache key and returns a dict of log/db/count results; caches per key."""
+    if cache_key in _OFFLINE_RUN_RESULTS:
+        return _OFFLINE_RUN_RESULTS[cache_key]
 
     runtime_paths = preserve_runtime_state
     log_file = runtime_paths["log_file"]
@@ -179,7 +153,7 @@ def _run_input_output_once(monkeypatch, preserve_runtime_state, run_engine_main)
 
     log_text = log_file.read_text(encoding="utf-8") if log_file.exists() else ""
 
-    OFFLINE_RUN_RESULT = {
+    _OFFLINE_RUN_RESULTS[cache_key] = {
         "log_file": log_file,
         "log_file_exists": log_file.exists(),
         "log_text": log_text,
@@ -188,28 +162,12 @@ def _run_input_output_once(monkeypatch, preserve_runtime_state, run_engine_main)
         "db_exists": db_path.exists(),
         "log_printed": False,
     }
-    return OFFLINE_RUN_RESULT
+    return _OFFLINE_RUN_RESULTS[cache_key]
 
 
-OFFLINE_ASSERTIONS = [
-    pytest.param(("log-file", _assert_log_file), id="log-file"),
-    pytest.param((
-        f"total-counts-IOPASS-{EXPECTED_COUNTS['IOPASS']}-IOWARN-{EXPECTED_COUNTS['IOWARN']}-WARN-{EXPECTED_COUNTS['WARN']}-IOERR-{EXPECTED_COUNTS['IOERR']}-ERR-{EXPECTED_COUNTS['ERR']}",
-        _assert_total_counts,
-    ), id=f"total-counts-IOPASS-{EXPECTED_COUNTS['IOPASS']}-IOWARN-{EXPECTED_COUNTS['IOWARN']}-WARN-{EXPECTED_COUNTS['WARN']}-IOERR-{EXPECTED_COUNTS['IOERR']}-ERR-{EXPECTED_COUNTS['ERR']}"),
-]
-
-OFFLINE_ASSERTIONS.extend(
-    pytest.param(
-        (label, lambda result, count_key=count_key, expected=expected: _assert_component_count(result, count_key, expected)),
-        id=f"{label}-{expected}",
-    )
-    for count_key, label, expected in COMPONENT_COUNT_CASES
-)
-
-
-@pytest.mark.parametrize("assertion_case", OFFLINE_ASSERTIONS)
-def test_input_output_offline(monkeypatch, preserve_runtime_state, run_engine_main, assertion_case):
-    result = _run_input_output_once(monkeypatch, preserve_runtime_state, run_engine_main)
-    _, assertion = assertion_case
-    assertion(result)
+def print_log_once(result):
+    """Prints the captured log text to stdout; subsequent calls for the same result are no-ops."""
+    if result["log_printed"]:
+        return
+    print(result["log_text"])
+    result["log_printed"] = True

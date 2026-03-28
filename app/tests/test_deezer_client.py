@@ -21,6 +21,9 @@ SUB_ENTITY_TRACK_MINIMUM = {
     "explicit_content_lyrics", "explicit_content_cover", "md5_image", "artist", "album", "type"
 }
 
+
+pytestmark = [pytest.mark.integration, pytest.mark.network, pytest.mark.slow]
+
 test_ids = [
     ('track', 2322611675, 1, 'idfc', 'blackbear', 'deadroses', 245),
     ('album', 451782425, 10, 'deadroses', 'blackbear', None, None),
@@ -48,6 +51,7 @@ def validate_fields(actual_dict, expected_set, entity_name, strict=False):
 
 @pytest.mark.parametrize("entity,entity_id,object_len,name,artist,album,duration", test_ids)
 def test_deezer_entities(client, entity, entity_id, object_len, name, artist, album, duration):
+    """Checks track/album/artist/playlist fetches expose expected fields and core values."""
     if entity == 'track':
         c = client.get_track(entity_id)
         assert c.title == name

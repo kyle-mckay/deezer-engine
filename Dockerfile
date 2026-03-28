@@ -28,6 +28,8 @@ RUN chmod +x /deezer_engine/docker-entrypoint.sh
 ENV CONTAINERIZED=true
 ENV PYTHONUNBUFFERED=1
 
-# Use entrypoint script to handle cron and application
+# Use entrypoint script to handle cron, application, and pytest
+# Note: The pytest mode routes through the CLI's pytest wrapper to normalize
+# test targets and ensure consistent behavior across source and container execution.
 ENTRYPOINT ["/deezer_engine/docker-entrypoint.sh"]
 CMD ["default"]

@@ -10,6 +10,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ENTRYPOINT_RUN_RESULT = None
 
 
+pytestmark = [pytest.mark.integration, pytest.mark.subprocess, pytest.mark.slow]
+
+
 def _write_minimal_runtime_files(config_path, strategies_path):
 	config_path.write_text("config:\n  log_level: 'DEBUG'\n  arl_token: ''\n", encoding="utf-8")
 	strategies_path.write_text("playlists:\n", encoding="utf-8")
@@ -121,8 +124,6 @@ ENTRYPOINT_ASSERTIONS = [
 @pytest.mark.skipif(sys.platform == "win32", reason="Test not supported on Windows")
 @pytest.mark.parametrize("assertion", ENTRYPOINT_ASSERTIONS)
 def test_main_entrypoint_banner_and_errors(monkeypatch, backup_restore_runtime_files, run_subprocess, assertion):
-	"""
-	Mimics the fresh project execution: checks for banner, config warning, and ARL error in output.
-	"""
+	"""Validates startup outputs and side effects for a fresh entrypoint run."""
 	result = _run_entrypoint_once(monkeypatch, backup_restore_runtime_files, run_subprocess)
 	assertion(result)

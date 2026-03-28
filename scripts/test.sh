@@ -10,8 +10,16 @@ cd "$REPO_ROOT"
 echo "=== Deezer Engine: Tests ==="
 echo
 
-PYTHONPATH=app pytest \
-    --tb=short \
-    -v \
-    app/tests \
-    "$@"
+PYTEST_ARGS=(
+    --tb=short
+    -v
+    app/tests
+)
+
+if [[ -n "${TEST_MARKERS:-}" ]]; then
+    PYTEST_ARGS+=( -m "$TEST_MARKERS" )
+fi
+
+# Run pytest through the CLI wrapper to ensure consistent argument handling
+# (path normalization, mode routing) across local source, CI source, and container execution.
+PYTHONPATH=app python -m deezer_engine pytest "${PYTEST_ARGS[@]}" "$@"

@@ -5,10 +5,25 @@ import shutil
 import re
 import sys
 import subprocess
+import os
+import warnings
 from datetime import datetime
 from contextlib import redirect_stdout
 
 import pytest
+
+
+# Warn if tests are running without the CLI wrapper.
+# This detects whether pytest was invoked via './scripts/test.sh' or 'python -m deezer_engine pytest'
+# versus raw 'pytest', which bypasses the shared execution path contract.
+if not os.getenv("DEEZER_PYTEST_CLI_WRAPPER"):
+    warnings.warn(
+        "Tests running without CLI wrapper. "
+        "Use './scripts/test.sh' or 'python -m deezer_engine pytest' instead of raw pytest. "
+        "This ensures consistent behavior across local, CI source, and container execution.",
+        UserWarning,
+        stacklevel=2,
+    )
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -97,13 +112,15 @@ def run_subprocess():
 
     Defaults to capturing combined stdout/stderr as text and returning the
     CompletedProcess so tests can assert output and exit behavior consistently.
+    Set combine_output=False to capture stdout and stderr separately.
     """
 
-    def _run(command, *, cwd=None, timeout=300, env=None, check=False):
+    def _run(command, *, cwd=None, timeout=300, env=None, check=False, combine_output=True):
+        stderr_target = subprocess.STDOUT if combine_output else subprocess.PIPE
         return subprocess.run(
             command,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
+            stderr=stderr_target,
             text=True,
             cwd=str(cwd) if cwd else None,
             timeout=timeout,

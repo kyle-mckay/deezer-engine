@@ -143,6 +143,10 @@ def _normalize_pytest_args(args):
 def run_pytest_mode(args):
     import pytest
 
+    # Mark that pytest is being invoked through the CLI wrapper for consistent behavior.
+    # This allows downstream code (tests, logging, CI) to verify the execution path.
+    os.environ["DEEZER_PYTEST_CLI_WRAPPER"] = "1"
+
     normalized_args = _normalize_pytest_args(list(args))
 
     # Print the full invocation path and arguments for clarity

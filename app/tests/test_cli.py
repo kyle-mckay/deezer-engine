@@ -1,12 +1,17 @@
 import threading
 import sys
 from datetime import datetime
+import pytest
 
 import cli
 from scheduler import CronScheduler
 
 
+pytestmark = [pytest.mark.unit]
+
+
 def test_default_mode_routes_to_cron_when_schedule_present(monkeypatch):
+    """Routes default CLI mode to cron when DEEZER_SCHEDULE is set."""
     calls = []
 
     monkeypatch.setenv("DEEZER_SCHEDULE", '"0 3 * * *"')
@@ -21,6 +26,7 @@ def test_default_mode_routes_to_cron_when_schedule_present(monkeypatch):
 
 
 def test_default_mode_routes_to_run_without_schedule(monkeypatch):
+    """Routes default CLI mode to one-shot run when no schedule is configured."""
     calls = []
 
     monkeypatch.delenv("DEEZER_SCHEDULE", raising=False)
@@ -35,6 +41,7 @@ def test_default_mode_routes_to_run_without_schedule(monkeypatch):
 
 
 def test_cron_scheduler_wait_is_interruptible():
+    """Confirms scheduler wait exits early when the stop event is already set."""
     event = threading.Event()
     event.set()
     scheduler = CronScheduler(
@@ -50,6 +57,7 @@ def test_cron_scheduler_wait_is_interruptible():
 
 
 def test_normalize_pytest_target_promotes_tests_path_to_app(monkeypatch):
+    """Normalizes tests/... targets to app/tests/... when the mapped path exists."""
     monkeypatch.setattr(cli.Path, "exists", lambda self: str(self) == "app/tests/test_main_entrypoint.py")
 
     normalized = cli._normalize_pytest_target("tests/test_main_entrypoint.py")
@@ -58,6 +66,7 @@ def test_normalize_pytest_target_promotes_tests_path_to_app(monkeypatch):
 
 
 def test_normalize_pytest_target_preserves_nodeid_suffix(monkeypatch):
+    """Preserves pytest node ids (for example, ::test_name) after path normalization."""
     monkeypatch.setattr(
         cli.Path,
         "exists",
@@ -72,12 +81,14 @@ def test_normalize_pytest_target_preserves_nodeid_suffix(monkeypatch):
 
 
 def test_normalize_pytest_target_keeps_existing_app_path():
+    """Leaves already-correct app-relative pytest paths unchanged."""
     normalized = cli._normalize_pytest_target("app/tests/test_main_entrypoint.py")
 
     assert normalized == "app/tests/test_main_entrypoint.py"
 
 
 def test_normalize_pytest_target_maps_docker_absolute_path(monkeypatch):
+    """Maps /deezer_engine/app/... absolute paths into app-relative paths when available."""
     monkeypatch.setattr(cli.Path, "exists", lambda self: str(self) == "app/tests/test_main_entrypoint.py")
 
     normalized = cli._normalize_pytest_target(
@@ -88,6 +99,7 @@ def test_normalize_pytest_target_maps_docker_absolute_path(monkeypatch):
 
 
 def test_normalize_pytest_target_maps_docker_absolute_path_in_app_cwd(monkeypatch):
+    """Maps Docker absolute paths to tests/... when running with app as current directory."""
     monkeypatch.setattr(cli.Path, "exists", lambda self: str(self) == "tests/test_main_entrypoint.py")
 
     normalized = cli._normalize_pytest_target(
@@ -98,6 +110,7 @@ def test_normalize_pytest_target_maps_docker_absolute_path_in_app_cwd(monkeypatc
 
 
 def test_normalize_pytest_target_keeps_unmapped_absolute_path():
+    """Keeps unrelated absolute paths untouched when no workspace mapping applies."""
     normalized = cli._normalize_pytest_target(
         "/opt/random/tests/test_main_entrypoint.py::test_main_entrypoint_banner_and_errors"
     )
@@ -106,6 +119,7 @@ def test_normalize_pytest_target_keeps_unmapped_absolute_path():
 
 
 def test_normalize_pytest_target_keeps_nonexistent_relative_path(monkeypatch):
+    """Keeps relative targets unchanged when neither original nor mapped path exists."""
     monkeypatch.setattr(cli.Path, "exists", lambda self: False)
 
     normalized = cli._normalize_pytest_target("tests/does_not_exist.py::test_missing")
@@ -114,6 +128,7 @@ def test_normalize_pytest_target_keeps_nonexistent_relative_path(monkeypatch):
 
 
 def test_run_pytest_mode_normalizes_complex_arguments(monkeypatch):
+    """Verifies run_pytest_mode normalizes only path args while preserving flags and values."""
     captured = {}
 
     class _FakePytest:

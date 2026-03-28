@@ -1,0 +1,11 @@
+[tool.pytest.ini_options]
+testpaths = ["app/tests"]
+addopts = "--strict-markers"
+markers = [
+    "unit: unit tests (mocked, no external dependencies)",
+    "offline: deterministic fixture-based integration tests",
+    "integration: integration tests exercising runtime behavior",
+    "subprocess: integration tests that spawn subprocesses",
+    "network: tests requiring external API/network",
+    "slow: tests that are expected to be slower than unit tests",
+]

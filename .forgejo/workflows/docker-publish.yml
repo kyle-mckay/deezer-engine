@@ -60,14 +60,12 @@ jobs:
         shell: bash
 
       - name: Run Pytest in Source
-        env:
-          PYTHONPATH: app
         run: |
           echo "Running pytest in source..."
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            pytest -v -s --tb=short app/tests | tee pytest-source.log
+            ./scripts/test.sh -s | tee pytest-source.log
           else
-            pytest -v --tb=short app/tests | tee pytest-source.log
+            ./scripts/test.sh | tee pytest-source.log
           fi
         shell: bash
 
@@ -96,10 +94,12 @@ jobs:
       - name: Run Pytest in Container
         run: |
           echo "Running pytest inside the built Docker image..."
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            docker run --rm deezer-engine:test pytest -v -s --tb=short app/tests | tee pytest-container.log
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            docker run --rm deezer-engine:test pytest -v --tb=short -m "unit or offline" app/tests | tee pytest-container.log
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            docker run --rm deezer-engine:test pytest -v -s --tb=short -m "not network" app/tests | tee pytest-container.log
           else
-            docker run --rm deezer-engine:test pytest -v --tb=short app/tests | tee pytest-container.log
+            docker run --rm deezer-engine:test pytest -v --tb=short -m "not network" app/tests | tee pytest-container.log
           fi
         shell: bash
 
