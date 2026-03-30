@@ -78,6 +78,402 @@ def sync_to_collections(tracklist, logger, collection_name=None):
 
     return _sync_to_collections(tracklist, logger, collection_name)
 
+
+def _normalize_shallow_value(value):
+    if isinstance(value, (list, dict)):
+        return json.dumps(value)
+    return value
+
+
+def _table_columns(cursor, table_name):
+    cursor.execute(f"PRAGMA table_info({table_name})")
+    return [row[1] for row in cursor.fetchall()]
+
+
+def insert_shallow_artist_stubs(artist_list, logger=None):
+    """Insert shallow artist payloads for shallow metadata-collection."""
+    if logger:
+        logger.debug(f"Received {len(artist_list) if artist_list else 0} artists for shallow insert")
+
+    if not artist_list:
+        return
+
+    try:
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            artist_table_columns = _table_columns(cursor, 'artists')
+
+            artists_by_id = {}
+            for artist in artist_list:
+                if hasattr(artist, 'as_dict'):
+                    artist_payload = artist.as_dict()
+                elif isinstance(artist, dict):
+                    artist_payload = dict(artist)
+                else:
+                    artist_payload = dict(artist)
+
+                artist_id = artist_payload.get('id')
+                if artist_id is None:
+                    continue
+
+                existing_artist = artists_by_id.get(artist_id, {})
+                merged_artist = {**existing_artist, **artist_payload}
+                artists_by_id[artist_id] = merged_artist
+
+            artist_usable_columns = [
+                column for column in artist_table_columns
+                if column != 'date_cached'
+                if any(column in payload for payload in artists_by_id.values())
+            ]
+            if 'id' in artist_usable_columns:
+                artist_usable_columns = ['id'] + [c for c in artist_usable_columns if c != 'id']
+
+            if artist_usable_columns:
+                artist_placeholders = ", ".join(["?"] * len(artist_usable_columns))
+                artist_updates = ",\n                        ".join(
+                    [
+                        f"{column} = COALESCE(artists.{column}, excluded.{column})"
+                        for column in artist_usable_columns
+                        if column != 'id'
+                    ]
+                )
+                artist_query = f"""
+                INSERT INTO artists ({", ".join(artist_usable_columns)})
+                VALUES ({artist_placeholders})
+                ON CONFLICT(id) DO UPDATE SET
+                    {artist_updates}
+                WHERE COALESCE(artists.date_cached, '') = '';
+                """
+                artist_rows = [
+                    tuple(_normalize_shallow_value(payload.get(column)) for column in artist_usable_columns)
+                    for payload in artists_by_id.values()
+                ]
+                cursor.executemany(artist_query, artist_rows)
+
+            conn.commit()
+            if logger:
+                logger.debug(f"Shallow artist insert complete: artists={len(artists_by_id)}")
+            mark_fully_populated_artists_as_cached(logger)
+    except Exception as e:
+        if logger:
+            logger.error(f"DB Error: Shallow artist insert failed: {e}")
+        raise
+
+
+def insert_shallow_album_stubs(album_list, logger=None):
+    """Insert shallow album payloads for shallow metadata-collection."""
+    if logger:
+        logger.debug(f"Received {len(album_list) if album_list else 0} albums for shallow insert")
+
+    if not album_list:
+        return
+
+    try:
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            album_table_columns = _table_columns(cursor, 'albums')
+
+            albums_by_id = {}
+            for album in album_list:
+                if hasattr(album, 'as_dict'):
+                    album_payload = album.as_dict()
+                elif isinstance(album, dict):
+                    album_payload = dict(album)
+                else:
+                    album_payload = dict(album)
+
+                album_id = album_payload.get('id')
+                if album_id is None:
+                    continue
+
+                existing_album = albums_by_id.get(album_id, {})
+                merged_album = {**existing_album, **album_payload}
+                albums_by_id[album_id] = merged_album
+
+            if albums_by_id:
+                album_usable_columns = [
+                    column for column in album_table_columns
+                    if column != 'date_cached' and any(column in payload for payload in albums_by_id.values())
+                ]
+                if 'id' in album_usable_columns:
+                    album_usable_columns = ['id'] + [c for c in album_usable_columns if c != 'id']
+
+                if album_usable_columns:
+                    album_placeholders = ", ".join(["?"] * len(album_usable_columns))
+                    album_updates = ",\n                        ".join(
+                        [
+                            f"{column} = COALESCE(albums.{column}, excluded.{column})"
+                            for column in album_usable_columns
+                            if column != 'id'
+                        ]
+                    )
+                    album_query = f"""
+                    INSERT INTO albums ({", ".join(album_usable_columns)})
+                    VALUES ({album_placeholders})
+                    ON CONFLICT(id) DO UPDATE SET
+                        {album_updates}
+                    WHERE COALESCE(albums.date_cached, '') = '';
+                    """
+                    album_rows = [
+                        tuple(_normalize_shallow_value(payload.get(column)) for column in album_usable_columns)
+                        for payload in albums_by_id.values()
+                    ]
+                    cursor.executemany(album_query, album_rows)
+
+            conn.commit()
+            if logger:
+                logger.debug(f"Shallow album insert complete: albums={len(albums_by_id)}")
+            mark_fully_populated_albums_as_cached(logger)
+    except Exception as e:
+        if logger:
+            logger.error(f"DB Error: Shallow album insert failed: {e}")
+        raise
+
+
+def insert_shallow_track_stubs(track_list, logger=None):
+    """Insert shallow paginated track payloads for shallow metadata-collection."""
+    if logger:
+        logger.debug(f"Received {len(track_list) if track_list else 0} tracks for shallow insert")
+
+    if not track_list:
+        return
+
+    artist_rows = []
+    seen_artist_ids = set()
+    album_rows = []
+    seen_album_ids = set()
+
+    for track in track_list:
+        artist_id = track.get('artist_id')
+        if artist_id is not None and artist_id not in seen_artist_ids:
+            artist_rows.append((artist_id, track.get('artist_name')))
+            seen_artist_ids.add(artist_id)
+
+        album_id = track.get('album_id')
+        if album_id is not None and album_id not in seen_album_ids:
+            album_rows.append((album_id, track.get('album_name'), artist_id, track.get('artist_name')))
+            seen_album_ids.add(album_id)
+
+    track_columns = [
+        'id',
+        'readable',
+        'title',
+        'title_short',
+        'title_version',
+        'unseen',
+        'isrc',
+        'link',
+        'share',
+        'duration',
+        'track_position',
+        'disk_number',
+        'rank',
+        'release_date',
+        'explicit_lyrics',
+        'explicit_content_lyrics',
+        'explicit_content_cover',
+        'preview',
+        'available_countries',
+        'alternative',
+        'contributors',
+        'md5_image',
+        'artist_id',
+        'artist_name',
+        'album_id',
+        'album_name',
+    ]
+    track_rows = [tuple(track.get(column) for column in track_columns) for track in track_list]
+
+    update_assignments = ",\n        ".join(
+        [f"{column} = COALESCE(excluded.{column}, tracks.{column})" for column in track_columns if column != 'id']
+    )
+    track_placeholders = ", ".join(["?"] * len(track_columns))
+    track_insert_query = f"""
+    INSERT INTO tracks ({", ".join(track_columns)})
+    VALUES ({track_placeholders})
+    ON CONFLICT(id) DO UPDATE SET
+        {update_assignments}
+    WHERE COALESCE(tracks.date_cached, '') = '';
+    """
+
+    try:
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+
+            if artist_rows:
+                cursor.executemany(
+                    """
+                    INSERT INTO artists (id, name)
+                    VALUES (?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        name = COALESCE(artists.name, excluded.name);
+                    """,
+                    artist_rows,
+                )
+
+            if album_rows:
+                cursor.executemany(
+                    """
+                    INSERT INTO albums (id, title, artist_id, artist_name)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET
+                        title = COALESCE(albums.title, excluded.title),
+                        artist_id = COALESCE(albums.artist_id, excluded.artist_id),
+                        artist_name = COALESCE(albums.artist_name, excluded.artist_name);
+                    """,
+                    album_rows,
+                )
+
+            cursor.executemany(track_insert_query, track_rows)
+            conn.commit()
+
+            if logger:
+                logger.debug(
+                    f"Shallow track insert complete: tracks={len(track_rows)}, albums={len(album_rows)}, artists={len(artist_rows)}"
+                )
+            mark_fully_populated_tracks_as_cached(logger=logger)
+    except Exception as e:
+        if logger:
+            logger.error(f"DB Error: Shallow track insert failed: {e}")
+        raise
+
+
+def _mark_rows_cached_when_fields_populated(table_name, required_fields, logger=None, cached_at=None):
+    """Set date_cached for rows that have all required API fields populated."""
+    if not required_fields:
+        return 0
+
+    marker = cached_at if cached_at is not None else datetime.now().isoformat()
+    where_all_fields_present = " AND ".join(
+        [f"COALESCE(CAST({field} AS TEXT), '') <> ''" for field in required_fields]
+    )
+
+    query = f"""
+    UPDATE {table_name}
+    SET date_cached = ?
+    WHERE COALESCE(date_cached, '') = ''
+      AND {where_all_fields_present};
+    """
+
+    try:
+        with _get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (marker,))
+            rows_affected = cursor.rowcount
+            conn.commit()
+            return rows_affected
+    except Exception as e:
+        if logger:
+            logger.error(f"DB Error: Failed cache finalization for table '{table_name}': {e}")
+        raise
+
+
+def mark_fully_populated_tracks_as_cached(logger=None, cached_at=None):
+    """Mark tracks as cached when all track API fields are populated."""
+    required_track_fields = [
+        'readable',
+        'title',
+        'title_short',
+        'title_version',
+        'unseen',
+        'isrc',
+        'link',
+        'share',
+        'duration',
+        'track_position',
+        'disk_number',
+        'rank',
+        'release_date',
+        'explicit_lyrics',
+        'explicit_content_lyrics',
+        'explicit_content_cover',
+        'preview',
+        'bpm',
+        'gain',
+        'available_countries',
+        'contributors',
+        'md5_image',
+        'track_token',
+        'artist_id',
+        'album_id',
+    ]
+    rows = _mark_rows_cached_when_fields_populated(
+        'tracks',
+        required_track_fields,
+        logger=logger,
+        cached_at=cached_at,
+    )
+    if logger and rows > 0:
+        logger.debug(f"Cache finalization: marked {rows} fully populated tracks as cached.")
+    return rows
+
+
+def mark_fully_populated_albums_as_cached(logger=None, cached_at=None):
+    """Mark albums as cached when all album API fields are populated."""
+    required_album_fields = [
+        'title',
+        'upc',
+        'link',
+        'share',
+        'cover',
+        'cover_small',
+        'cover_medium',
+        'cover_big',
+        'cover_xl',
+        'md5_image',
+        'label',
+        'nb_tracks',
+        'duration',
+        'fans',
+        'release_date',
+        'record_type',
+        'available',
+        'tracklist',
+        'explicit_lyrics',
+        'explicit_content_lyrics',
+        'explicit_content_cover',
+        'genres',
+        'contributors',
+        'artist_id',
+        'artist_name',
+    ]
+    rows = _mark_rows_cached_when_fields_populated(
+        'albums',
+        required_album_fields,
+        logger=logger,
+        cached_at=cached_at,
+    )
+    if logger and rows > 0:
+        logger.debug(f"Cache finalization: marked {rows} fully populated albums as cached.")
+    return rows
+
+
+def mark_fully_populated_artists_as_cached(logger=None, cached_at=None):
+    """Mark artists as cached when all artist API fields are populated."""
+    required_artist_fields = [
+        'name',
+        'link',
+        'share',
+        'picture',
+        'picture_small',
+        'picture_medium',
+        'picture_big',
+        'picture_xl',
+        'nb_album',
+        'nb_fan',
+        'radio',
+        'tracklist',
+    ]
+    rows = _mark_rows_cached_when_fields_populated(
+        'artists',
+        required_artist_fields,
+        logger=logger,
+        cached_at=cached_at,
+    )
+    if logger and rows > 0:
+        logger.debug(f"Cache finalization: marked {rows} fully populated artists as cached.")
+    return rows
+
 def get_unprocessed_track_ids(logger=None, include_blocklisted=False):
     """
     Retrieves all track IDs from the database that have not yet been 

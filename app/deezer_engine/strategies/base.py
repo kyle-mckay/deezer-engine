@@ -22,7 +22,9 @@ from pathlib import Path
 from utils.infrastructure.paths import get_data_dir
 from utils.config import get_global_value
 from utils.collections import sync_to_collections, is_collection_cached
-from utils.db_manager import update_unprocessed
+from utils.db_manager import update_unprocessed, insert_shallow_track_stubs
+from utils.api.fetching import fetch_shallow_tracks 
+from utils.metadata.tracks import track_header_available
 
 class StrategyController:
 
@@ -126,7 +128,8 @@ class StrategyController:
                 new_tracks = []
             # Log tracks and their source
             if new_tracks:
-                self.logger.debug(f"Syncing {len(new_tracks)} tracks from '{src_label}' to local collection database.")
+                self.logger.debug(f"Fetched {len(new_tracks)} tracks from source '{src_label}'. Sample: {new_tracks[0] if new_tracks else None}")
+                self.logger.debug(f"Syncing to local collection database.")
                 sync_to_collections(new_tracks, self.logger)
                 self.logger.debug(f"Source '{src_label}': Found {len(new_tracks)} tracks.")
             # IO Validation (output)
@@ -271,7 +274,43 @@ class StrategyController:
                     if isinstance(result, bool):
                         if self.logger.isEnabledFor(logging.DEBUG):
                             self.logger.debug(f"Module '{module_path}' requires_metadata() returned {result}")
-                        return result
+                        if not result:
+                            return False
+
+                        # For modifiers that declare metadata requirements, only force enrichment
+                        # when they reference fields unavailable in shallow track payloads.
+                        if module_path.startswith("strategies.modifiers."):
+                            modifier_fields = []
+                            if isinstance(config_data, dict):
+                                field_value = config_data.get("field")
+                                if isinstance(field_value, str) and field_value.strip():
+                                    modifier_fields.append(field_value.strip())
+
+                                fields_value = config_data.get("fields")
+                                if isinstance(fields_value, (list, tuple, set)):
+                                    for field_name in fields_value:
+                                        if isinstance(field_name, str) and field_name.strip():
+                                            modifier_fields.append(field_name.strip())
+
+                            if modifier_fields:
+                                unavailable_fields = [
+                                    field_name for field_name in modifier_fields
+                                    if not track_header_available(field_name)
+                                ]
+                                if unavailable_fields:
+                                    if self.logger.isEnabledFor(logging.DEBUG):
+                                        self.logger.debug(
+                                            f"Modifier '{module_path}' requires full metadata; fields not available in shallow payload: {unavailable_fields}"
+                                        )
+                                    return True
+
+                                if self.logger.isEnabledFor(logging.DEBUG):
+                                    self.logger.debug(
+                                        f"Modifier '{module_path}' field requirements are available in shallow payload: {modifier_fields}. Skipping metadata enrichment."
+                                    )
+                                return False
+
+                        return True
                     else:
                         self.logger.debug(f"Module '{module_path}' requires_metadata() returned non-bool {type(result)}, defaulting to True")
                         return True

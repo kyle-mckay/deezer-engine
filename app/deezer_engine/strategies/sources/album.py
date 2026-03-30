@@ -4,9 +4,9 @@
 import re
 import logging
 from utils.infrastructure.paths import get_cache_dir 
-from utils.deezer_auth import get_tracks
 from utils.collections import handle_cached_data, get_collection_name
 from utils.config import get_global_value
+from utils.api.fetching import fetch_shallow_tracks
 
 def requires_metadata(source_data=None):
     """
@@ -58,9 +58,8 @@ def run(client, config, logger, source_data):
         def fetch_album():
             """Closure triggered only if cache is invalid or missing."""
             logger.debug(f"Initiating live API fetch for album: {album.id}")
-            context_name = f"album__{album.title}__{album.id}"
-            # get_tracks handles the heavy lifting of API interaction
-            return get_tracks(album.get_tracks(), logger, album, context_name, cache_file)
+            return fetch_shallow_tracks(album.get_tracks(), logger)
+
 
         # Execution via Cache Manager (with database collection support)
         tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_album, "album", collection_name=collection_name)

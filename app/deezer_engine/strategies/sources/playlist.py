@@ -4,9 +4,9 @@
 import re
 import logging
 from utils.infrastructure.paths import get_cache_dir 
-from utils.deezer_auth import get_tracks
 from utils.collections import handle_cached_data, get_collection_name
 from utils.config import get_global_value
+from utils.api.fetching import fetch_shallow_tracks
 
 def requires_metadata(source_data=None):
     """
@@ -57,8 +57,7 @@ def run(client, config, logger, source_data):
         def fetch_playlist():
             # This logic is triggered only if cache is invalid
             logger.debug(f"Cache miss or expired. Initiating live fetch for '{playlist.title}'")
-            context_name = f"playlist__{playlist.title}__{playlist.id}"
-            return get_tracks(playlist.get_tracks(), logger, playlist, context_name, cache_file)
+            return fetch_shallow_tracks(playlist.get_tracks(), logger)
 
         # Process data (with database collection support)
         tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_playlist, "playlist", collection_name=collection_name)
