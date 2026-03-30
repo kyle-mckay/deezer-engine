@@ -1,9 +1,10 @@
 # Changelog
 
-## v0.14.2 - 2026-03-28
+## v0.14.2 - 2026-03-30
 
 ### Maintenance
 
+- maint: use the paginated fetch outputs without stripping data for metadata collection (progress in #95) (#130) (@kylemmkay)
 - chore: document delegate and mark unit tests (#128) (@kylemmkay)
 - Merge branch 'template-upkeep' (@kylemmkay)
 - maint: migrate entrypoint logic to python and support cli entry (closes #123) (#126) (@kylemmkay)
