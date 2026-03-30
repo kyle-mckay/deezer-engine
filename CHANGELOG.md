@@ -4,6 +4,7 @@
 
 ### Maintenance
 
+- chore: clean up version bump logic (closes #101) (#131) (@kylemmkay)
 - maint: use the paginated fetch outputs without stripping data for metadata collection (progress in #95) (#130) (@kylemmkay)
 - chore: document delegate and mark unit tests (#128) (@kylemmkay)
 - Merge branch 'template-upkeep' (@kylemmkay)
