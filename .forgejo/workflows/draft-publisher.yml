@@ -19,6 +19,7 @@ jobs:
     if: |
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[release-draft]')) ||
       (github.event_name == 'workflow_dispatch')
+    timeout-minutes: 10
     runs-on: py-runner
     permissions:
       contents: write
@@ -27,12 +28,13 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           token: ${{ secrets.REPO_PAT }}
 
       - name: Validate Release Version
         id: validator
         run: |
+          set -eo pipefail
           # extract drafted version
           
           NEW_TAG=$(grep "__version__ =" app/deezer_engine/__version__.py | cut -d '"' -f 2)
@@ -41,6 +43,7 @@ jobs:
       - name: Prepare Release Body
         id: body
         run: |
+          set -eo pipefail
           # use changelog to populate release body if available
           if [ -f "./CHANGELOG.md" ]; then
             echo "--- Snip of Changelog ---"

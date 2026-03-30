@@ -1,5 +1,6 @@
 # --- TEMP FILES ---
 /data
+*.tmp
 
 # --- PYTHON SETTINGS ---
 # Byte-compiled / optimized / DLL files

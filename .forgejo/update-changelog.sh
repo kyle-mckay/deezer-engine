@@ -88,6 +88,9 @@ inject_changes() {
     local category="$2"
     local commit_msg="$3"
     local tmp_file="inject.tmp"
+    local bullets
+
+    bullets=$(printf '%s\n' "$commit_msg" | sed '/^$/d; s/^/- /')
 
     # if category exists, insert after header
     if grep -q "^### $category" "$dest_file"; then
@@ -95,7 +98,7 @@ inject_changes() {
         local insert_at=$((cat_line + 1)) 
 
         head -n "$insert_at" "$dest_file" > "$tmp_file"
-        echo "- $commit_msg" >> "$tmp_file"
+        printf '%s\n' "$bullets" >> "$tmp_file"
         tail -n +"$((insert_at + 1))" "$dest_file" >> "$tmp_file"
         mv "$tmp_file" "$dest_file"
         return
@@ -128,13 +131,15 @@ inject_changes() {
         fi
     elif [ "$category" == "Maintenance" ]; then
         [ -n "$(tail -n 1 "$dest_file")" ] && echo "" >> "$dest_file"
-        echo -e "### Maintenance\n\n- $commit_msg" >> "$dest_file"
+        echo -e "### Maintenance\n" >> "$dest_file"
+        printf '%s\n' "$bullets" >> "$dest_file"
         return
     fi
 
     # reassemble using sandwich method
     head -n "$final_target" "$dest_file" > "$tmp_file"
-    echo -e "\n### $category\n\n- $commit_msg" >> "$tmp_file"
+    echo -e "\n### $category\n" >> "$tmp_file"
+    printf '%s\n' "$bullets" >> "$tmp_file"
     tail -n +"$((final_target + 1))" "$dest_file" >> "$tmp_file"
     mv "$tmp_file" "$dest_file"
 }
