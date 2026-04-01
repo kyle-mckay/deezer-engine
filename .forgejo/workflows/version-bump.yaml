@@ -59,21 +59,55 @@ jobs:
           NEW_TAG=$(grep "__version__ =" app/deezer_engine/__version__.py | cut -d '"' -f 2)
           echo "final_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
-      - name: Update and Commit Version
+      - name: Open Version PR
+        env:
+          FORGEJO_TOKEN: ${{ secrets.REPO_PAT }}
+          SERVER_URL: ${{ github.server_url }}
+          REPOSITORY: ${{ github.repository }}
+          FINAL_TAG: ${{ steps.validator.outputs.final_tag }}
         run: |
           git config user.name "forgejo-actions"
           git config user.email "actions-user@noreply.codeberg.org"
           git add app/deezer_engine/__version__.py CHANGELOG.md
-  
+
           if ! git diff --cached --quiet; then
-            git commit -m "chore: release ${{ steps.validator.outputs.final_tag }} [release-draft]"
-            if [[ "${{ github.ref_name }}" == "main" ]]; then
-              git push origin main
+            BRANCH_NAME="version-bump"
+
+            # Create or reset the static branch from current HEAD
+            git checkout -B "$BRANCH_NAME"
+            git commit -m "chore: release ${FINAL_TAG} [release-draft]"
+            git push origin "$BRANCH_NAME" --force
+
+            # Check if an open PR already exists for this branch
+            EXISTING_PR=$(curl -fsS \
+              -H "Authorization: token ${FORGEJO_TOKEN}" \
+              "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls?state=open&head=${BRANCH_NAME}&base=main&limit=1" \
+              | grep -o '"number":[0-9]*' | head -1 | cut -d: -f2)
+
+            if [[ -n "$EXISTING_PR" ]]; then
+              echo "Updating existing PR #${EXISTING_PR} title."
+              curl -fsS -X PATCH \
+                -H "Authorization: token ${FORGEJO_TOKEN}" \
+                -H "Content-Type: application/json" \
+                "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls/${EXISTING_PR}" \
+                --data-binary "{
+                  \"title\": \"chore: release ${FINAL_TAG}\"
+                }"
             else
-              # Determine current branch name for dry run
-              BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
-              echo "Dry run push:"
-              git push --dry-run origin HEAD:$BRANCH_NAME
+              echo "Opening new PR."
+              curl -fsS -X POST \
+                -H "Authorization: token ${FORGEJO_TOKEN}" \
+                -H "Content-Type: application/json" \
+                "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls" \
+                --data-binary "{
+                  \"title\": \"chore: release ${FINAL_TAG}\",
+                  \"body\": \"Automated version bump and changelog update for ${FINAL_TAG}.\",
+                  \"head\": \"${BRANCH_NAME}\",
+                  \"base\": \"main\"
+                }"
             fi
+          else
+            echo "No version changes detected, skipping PR creation."
           fi
+
 
