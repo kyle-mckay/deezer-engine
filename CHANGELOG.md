@@ -4,6 +4,7 @@
 
 ### Maintenance
 
+- chore: modify version-bump to use PR updates and create follow-along tags for change tracking
 - chore: utility sprawl (progress in #86) - chunk 8 (#134) (@kylemmkay)
 - chore: utility sprawl chunk 7 - deezer_auth (progress #86) (#133) (@kylemmkay)
 - chore: deal with utility sprawl - chunk 6 db_manager (progress in #86) (#132) (@kylemmkay)
