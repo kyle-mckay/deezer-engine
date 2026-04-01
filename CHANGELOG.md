@@ -4,6 +4,7 @@
 
 ### Maintenance
 
+- chore: utility sprawl chunk 7 - deezer_auth (progress #86) (#133) (@kylemmkay)
 - chore: deal with utility sprawl - chunk 6 db_manager (progress in #86) (#132) (@kylemmkay)
 - chore: clean up version bump logic (closes #101) (#131) (@kylemmkay)
 - maint: use the paginated fetch outputs without stripping data for metadata collection (progress in #95) (#130) (@kylemmkay)
