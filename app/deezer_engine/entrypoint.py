@@ -24,7 +24,8 @@ from pathlib import Path
 from utils.infrastructure.logger import initialize_deezer_logger
 from utils.infrastructure.paths import get_data_dir
 from utils.config import load_config_with_env_overrides, load_strategies_with_env_overrides, check_for_updates, get_config_snapshot_debug_summary, get_global_value, get_bootstrap_logging_settings, initialize_config_snapshot
-from utils.deezer_auth import get_authenticated_client, get_tracks
+from utils.api.auth import get_authenticated_client
+from utils.api.fetching import get_tracks
 from strategies.base import StrategyController
 from utils.db.connection import initialize_all
 from utils.collections import get_collection_name

@@ -7,7 +7,7 @@ import re
 import random
 import logging
 from datetime import datetime
-from utils.deezer_auth import get_authenticated_session
+from utils.api.auth import get_authenticated_session
 from utils.infrastructure.paths import get_cache_dir
 from utils.collections import handle_cached_data, get_collection_name
 from utils.config import get_global_value

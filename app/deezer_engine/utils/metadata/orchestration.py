@@ -3,7 +3,7 @@
 
 """Metadata orchestration helpers."""
 
-from utils.deezer_auth import get_albums, get_tracks
+from utils.api.fetching import get_albums, get_tracks
 from utils.infrastructure.signals import shutdown_event
 from utils.metadata.albums import update_album_metadata, update_albums_partial_batch
 from utils.metadata.genres import (
