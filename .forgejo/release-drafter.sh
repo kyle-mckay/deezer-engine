@@ -17,6 +17,7 @@ IGNORED_RELEASE_DRAFT_COUNT=0
 IGNORED_EXISTING_CHANGELOG_COUNT=0
 FILTERED_COMMIT_MSG=""
 TEST_TMP_DIR=""
+DRAFT_TAG=""
 
 usage() {
     cat <<'USAGE'
@@ -126,6 +127,14 @@ increment_version() {
     echo "v$major.$minor.$patch"
 }
 
+is_stable_tag() {
+    [[ "$1" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+latest_stable_tag() {
+    git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1
+}
+
 current_version_from_file() {
     grep "__version__ =" "$VERSION_FILE" | cut -d '"' -f 2
 }
@@ -154,6 +163,12 @@ collect_commit_messages_from_git() {
     elif [[ -n "${BEFORE_SHA:-}" ]] && [[ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
         if git rev-parse -q --verify "$BEFORE_SHA^{commit}" >/dev/null 2>&1 && git rev-parse -q --verify "$end_ref^{commit}" >/dev/null 2>&1; then
             range="$BEFORE_SHA..$end_ref"
+        fi
+    fi
+
+    if [[ -z "$range" ]] && [[ -n "${DRAFT_TAG:-}" ]]; then
+        if git rev-parse -q --verify "$DRAFT_TAG^{commit}" >/dev/null 2>&1; then
+            range="$DRAFT_TAG..HEAD"
         fi
     fi
 
@@ -281,8 +296,21 @@ calculate_logic() {
 }
 
 apply_release_logic() {
+    if [[ -n "$CURRENT_TAG" ]]; then
+        CURRENT_TAG="${CURRENT_TAG%.b}"
+    fi
+
     if [[ -z "$CURRENT_TAG" ]]; then
-        CURRENT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        CURRENT_TAG=$(latest_stable_tag || true)
+    fi
+
+    if ! is_stable_tag "$CURRENT_TAG"; then
+        CURRENT_TAG="v0.0.0"
+    fi
+
+    DRAFT_TAG="${CURRENT_TAG}.b"
+    if ! git rev-parse -q --verify "$DRAFT_TAG^{commit}" >/dev/null 2>&1; then
+        DRAFT_TAG=""
     fi
 
     if [[ -z "$COMMIT_MSG" ]]; then
@@ -358,6 +386,11 @@ apply_release_logic() {
     echo "Commit Raw : $RAW_COMMIT_COUNT"
     echo "Commit Cnt : $(echo "$COMMIT_MSG" | sed '/^$/d' | wc -l)"
     echo "Ignored    : [release-draft]=$IGNORED_RELEASE_DRAFT_COUNT, in_changelog=$IGNORED_EXISTING_CHANGELOG_COUNT"
+    if [[ -n "$DRAFT_TAG" ]]; then
+        echo "Range Base : $DRAFT_TAG"
+    else
+        echo "Range Base : $CURRENT_TAG"
+    fi
     echo "Labels     : ${LABELS:-[None]}"
     echo "Formatted  : $(echo "$formatted_lines" | head -n 1)"
     echo "Category   : $category"

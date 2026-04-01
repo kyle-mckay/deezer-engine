@@ -68,6 +68,7 @@ jobs:
         run: |
           git config user.name "forgejo-actions"
           git config user.email "actions-user@noreply.codeberg.org"
+          BASE_SHA=$(git rev-parse HEAD)
           git add app/deezer_engine/__version__.py CHANGELOG.md
 
           if ! git diff --cached --quiet; then
@@ -106,6 +107,11 @@ jobs:
                   \"base\": \"main\"
                 }"
             fi
+
+            DRAFT_TAG="${FINAL_TAG}.b"
+            git tag -f "$DRAFT_TAG" "$BASE_SHA"
+            git push origin -f "refs/tags/$DRAFT_TAG"
+            echo "Moved draft tag $DRAFT_TAG to $BASE_SHA"
           else
             echo "No version changes detected, skipping PR creation."
           fi
