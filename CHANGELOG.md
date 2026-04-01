@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.14.2 - 2026-04-01
+## v0.15.0 - 2026-04-01
+
+### Enhancements
+
+- enhance: allow source id's to be singular or array/lists (closes #139) (#143) (@kylemmkay)
 
 ### Maintenance
 
