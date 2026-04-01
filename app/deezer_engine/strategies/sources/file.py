@@ -12,6 +12,11 @@ from utils.collections import get_collection_name
 from utils.infrastructure.paths import get_data_dir
 from utils.infrastructure.files import read_from_csv, read_from_json
 
+# Headers returned from files:
+# File import currently returns IDs only (`id`), plus internal
+# cache fields (`collection`, `date_cached`).
+# Deezer track headers from the tracks table are not present until enrichment.
+
 def requires_metadata(source_data=None):
     """
     Only extracts track IDs from the file for later enrichment

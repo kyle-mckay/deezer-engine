@@ -11,6 +11,9 @@ from utils.collections import handle_cached_data
 from utils.config import get_global_value
 import strategies.sources.album as album_strategy 
 
+# Headers returned from Artists
+# Artist delegates to `album.py`, so returned rows follow the Album payload shape.
+
 def requires_metadata(source_data=None):
     """
     Artist source only requires entity ID to fetch tracks through albums

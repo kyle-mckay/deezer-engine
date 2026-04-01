@@ -8,6 +8,14 @@ from utils.collections import handle_cached_data, get_collection_name
 from utils.config import get_global_value
 from utils.api.fetching import fetch_shallow_tracks
 
+# Header returned from Favorites:
+# Returns: id, readable, title, link, duration, rank, explicit_lyrics,
+# explicit_content_lyrics, explicit_content_cover, md5_image, time_add,
+# artist, album, type.
+# Not returned: title_short, title_version, isrc, share, track_position,
+# disk_number, release_date, preview, bpm, gain, available_countries,
+# contributors, track_token, playlist.
+
 def requires_metadata(source_data=None):
     """
     No requirements to pull beyond user ID and arl for authentication
