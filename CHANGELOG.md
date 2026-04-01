@@ -1,9 +1,10 @@
 # Changelog
 
-## v0.14.2 - 2026-03-30
+## v0.14.2 - 2026-04-01
 
 ### Maintenance
 
+- chore: deal with utility sprawl - chunk 6 db_manager (progress in #86) (#132) (@kylemmkay)
 - chore: clean up version bump logic (closes #101) (#131) (@kylemmkay)
 - maint: use the paginated fetch outputs without stripping data for metadata collection (progress in #95) (#130) (@kylemmkay)
 - chore: document delegate and mark unit tests (#128) (@kylemmkay)
