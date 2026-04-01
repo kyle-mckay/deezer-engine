@@ -8,6 +8,13 @@ from utils.collections import handle_cached_data, get_collection_name
 from utils.config import get_global_value
 from utils.api.fetching import fetch_shallow_tracks
 
+# Headers returned from Albums:
+# Returns: id, readable, title, title_short, title_version, link, isrc, duration,
+# track_position, disk_number, rank, explicit_lyrics, explicit_content_lyrics,
+# explicit_content_cover, preview, md5_image, artist, album, type.
+# Not returned: share, release_date, bpm, gain, available_countries,
+# contributors, track_token, time_add, playlist.
+
 def requires_metadata(source_data=None):
     """
     Album source only requires entity ID to fetch tracks

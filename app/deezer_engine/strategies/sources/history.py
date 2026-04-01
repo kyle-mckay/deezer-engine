@@ -11,6 +11,11 @@ from utils.config import get_global_value
 from utils.collections import get_collection_name
 from utils.infrastructure.paths import get_data_dir
 
+# Headers returned from History:
+# History currently returns IDs only (`id` from `SNG_ID`), plus internal
+# cache fields (`collection`, `date_cached`).
+# Deezer track headers from the tracks table are not present until enrichment.
+
 def requires_metadata(source_data=None):
     """
     No requirements to pull beyond user ID and arl for authentication

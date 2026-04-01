@@ -12,6 +12,11 @@ from utils.infrastructure.paths import get_cache_dir
 from utils.collections import handle_cached_data, get_collection_name
 from utils.config import get_global_value
 
+# Headers returnd from smarttracklists:
+# Smarttracklist currently returns IDs only (`id`), plus internal
+# cache fields (`collection`, `date_cached`).
+# Deezer track headers from the tracks table are not present until enrichment.
+
 def requires_metadata(source_data=None):
     """
     No requirements to pull beyond user ID and arl for authentication

@@ -8,6 +8,14 @@ from utils.collections import handle_cached_data, get_collection_name
 from utils.config import get_global_value
 from utils.api.fetching import fetch_shallow_tracks
 
+# Headers returned from Playlists:
+# Returns: id, readable, title, title_short, title_version, link, isrc,
+# duration, rank, explicit_lyrics, explicit_content_lyrics,
+# explicit_content_cover, preview, md5_image, time_add, artist, album,
+# type, playlist.
+# Not returned: share, track_position, disk_number, release_date, bpm,
+# gain, available_countries, contributors, track_token.
+
 def requires_metadata(source_data=None):
     """
     Only requires playlist ID to fetch tracks

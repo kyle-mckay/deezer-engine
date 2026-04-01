@@ -1,0 +1,52 @@
+name: Publish Release On Version-Bump Merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+jobs:
+  publish-release:
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'version-bump'
+    timeout-minutes: 10
+    runs-on: py-runner
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.REPO_PAT }}
+
+      - name: Create Stable Tag And Remove Draft Tag
+        env:
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -eo pipefail
+
+          git config user.name "forgejo-actions"
+          git config user.email "actions-user@noreply.codeberg.org"
+          git fetch --tags --force
+
+          RELEASE_TAG=$(grep "__version__ =" app/deezer_engine/__version__.py | cut -d '"' -f 2)
+          if ! [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Invalid release tag '$RELEASE_TAG' from version file."
+            exit 1
+          fi
+
+          if git rev-parse -q --verify "refs/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Stable tag ${RELEASE_TAG} already exists; skipping create."
+          else
+            git tag "$RELEASE_TAG" "$MERGE_SHA"
+            git push origin "refs/tags/${RELEASE_TAG}"
+            echo "Created stable tag ${RELEASE_TAG} at ${MERGE_SHA}."
+          fi
+
+          DRAFT_TAG="${RELEASE_TAG}.b"
+          if git ls-remote --tags origin "refs/tags/${DRAFT_TAG}" | grep -q .; then
+            git push origin ":refs/tags/${DRAFT_TAG}"
+            echo "Removed draft tag ${DRAFT_TAG}."
+          else
+            echo "Draft tag ${DRAFT_TAG} not found; nothing to delete."
+          fi
