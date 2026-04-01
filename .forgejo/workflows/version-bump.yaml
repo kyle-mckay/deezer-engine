@@ -85,21 +85,43 @@ jobs:
             HEAD_REF="${REPO_OWNER}:${BRANCH_NAME}"
 
             pr_number_from_response() {
-              grep -o '"number":[0-9]*' | head -1 | cut -d: -f2
+              sed -n 's/.*"number":\([0-9][0-9]*\).*/\1/p' | head -n1
+            }
+
+            lookup_pr_by_state() {
+              local state="$1"
+              local head_ref="$2"
+              local lookup_resp lookup_code lookup_body
+
+              lookup_resp=$(curl -sS -w "\n%{http_code}" \
+                -H "Authorization: token ${FORGEJO_TOKEN}" \
+                "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls?state=${state}&head=${head_ref}&base=main&limit=1")
+
+              lookup_code=$(printf '%s\n' "$lookup_resp" | tail -n1)
+              lookup_body=$(printf '%s\n' "$lookup_resp" | sed '$d')
+
+              if [[ "$lookup_code" != "200" ]]; then
+                echo ""
+                return 0
+              fi
+
+              printf '%s\n' "$lookup_body" | pr_number_from_response
+            }
+
+            lookup_open_pr() {
+              lookup_pr_by_state "open" "$1"
+            }
+
+            lookup_closed_pr() {
+              lookup_pr_by_state "closed" "$1"
             }
 
             # Check if an open PR already exists for this branch
-            EXISTING_PR=$(curl -fsS \
-              -H "Authorization: token ${FORGEJO_TOKEN}" \
-              "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls?state=open&head=${HEAD_REF}&base=main&limit=1" \
-              | pr_number_from_response)
+            EXISTING_PR=$(lookup_open_pr "$HEAD_REF")
 
             # Compatibility fallback if instance expects bare branch name
             if [[ -z "$EXISTING_PR" ]]; then
-              EXISTING_PR=$(curl -fsS \
-                -H "Authorization: token ${FORGEJO_TOKEN}" \
-                "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls?state=open&head=${BRANCH_NAME}&base=main&limit=1" \
-                | pr_number_from_response)
+              EXISTING_PR=$(lookup_open_pr "$BRANCH_NAME")
             fi
 
             if [[ -n "$EXISTING_PR" ]]; then
@@ -130,17 +152,24 @@ jobs:
               if [[ "$CREATE_CODE" == "201" ]]; then
                 echo "Opened PR successfully."
               elif [[ "$CREATE_CODE" == "409" ]]; then
-                echo "PR already exists (HTTP 409). Locating and updating title."
-                EXISTING_PR=$(curl -fsS \
-                  -H "Authorization: token ${FORGEJO_TOKEN}" \
-                  "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls?state=open&head=${HEAD_REF}&base=main&limit=1" \
-                  | pr_number_from_response)
+                echo "PR already exists (HTTP 409). Locating existing PR."
+                PR_MATCH_SOURCE=""
+                EXISTING_PR=$(lookup_open_pr "$HEAD_REF")
+                [[ -n "$EXISTING_PR" ]] && PR_MATCH_SOURCE="open:${HEAD_REF}"
 
                 if [[ -z "$EXISTING_PR" ]]; then
-                  EXISTING_PR=$(curl -fsS \
-                    -H "Authorization: token ${FORGEJO_TOKEN}" \
-                    "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls?state=open&head=${BRANCH_NAME}&base=main&limit=1" \
-                    | pr_number_from_response)
+                  EXISTING_PR=$(lookup_open_pr "$BRANCH_NAME")
+                  [[ -n "$EXISTING_PR" ]] && PR_MATCH_SOURCE="open:${BRANCH_NAME}"
+                fi
+
+                if [[ -z "$EXISTING_PR" ]]; then
+                  EXISTING_PR=$(lookup_closed_pr "$HEAD_REF")
+                  [[ -n "$EXISTING_PR" ]] && PR_MATCH_SOURCE="closed:${HEAD_REF}"
+                fi
+
+                if [[ -z "$EXISTING_PR" ]]; then
+                  EXISTING_PR=$(lookup_closed_pr "$BRANCH_NAME")
+                  [[ -n "$EXISTING_PR" ]] && PR_MATCH_SOURCE="closed:${BRANCH_NAME}"
                 fi
 
                 if [[ -z "$EXISTING_PR" ]]; then
@@ -149,11 +178,13 @@ jobs:
                   exit 1
                 fi
 
+                echo "Resolved PR #${EXISTING_PR} via ${PR_MATCH_SOURCE}."
+
                 curl -fsS -X PATCH \
                   -H "Authorization: token ${FORGEJO_TOKEN}" \
                   -H "Content-Type: application/json" \
                   "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls/${EXISTING_PR}" \
-                  --data-binary "{\"title\": \"chore: release ${FINAL_TAG}\"}"
+                  --data-binary "{\"title\": \"chore: release ${FINAL_TAG}\", \"state\": \"open\"}"
               else
                 echo "Failed to open PR (HTTP ${CREATE_CODE})."
                 echo "$CREATE_BODY"
