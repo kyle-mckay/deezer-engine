@@ -191,6 +191,162 @@ def test_all_known_types_can_load_without_unknown_key_warnings(monkeypatch, tmp_
     assert "Unknown key(s)" not in caplog.text
 
 
+@pytest.mark.parametrize("source_type", ["album", "artist", "playlist"])
+def test_id_based_source_accepts_scalar_or_list_id(monkeypatch, tmp_path, validation_logger, caplog, source_type):
+    """Allows id-based sources to use a single id or a list of ids in the same id field."""
+    payload = {
+        "playlists": [
+            {
+                "name": f"{source_type}-id-list",
+                "source": [
+                    {"type": source_type, "id": "123"},
+                    {"type": source_type, "id": ["123", "456", 789, None]},
+                ],
+                "destination": [{"type": "playlist", "id": "999"}],
+            }
+        ]
+    }
+    monkeypatch.setattr(strategy_validation, "get_data_dir", lambda: _write_strategies(tmp_path, payload))
+
+    with caplog.at_level("ERROR", logger="tests.strategy_validation"):
+        loaded = load_strategies_with_env_overrides(validation_logger)
+
+    assert len(loaded["playlists"]) == 1
+    assert "Invalid 'id'" not in caplog.text
+
+
+@pytest.mark.parametrize("source_type", ["album", "artist", "playlist"])
+def test_id_based_source_rejects_invalid_id_shape(monkeypatch, tmp_path, validation_logger, caplog, source_type):
+    """Rejects id-based sources when id uses unsupported shapes like nested objects/lists."""
+    payload = {
+        "playlists": [
+            {
+                "name": f"{source_type}-invalid-id-shape",
+                "source": [
+                    {"type": source_type, "id": {"bad": "shape"}},
+                ],
+                "destination": [{"type": "playlist", "id": "999"}],
+            }
+        ]
+    }
+    monkeypatch.setattr(strategy_validation, "get_data_dir", lambda: _write_strategies(tmp_path, payload))
+
+    with caplog.at_level("ERROR", logger="tests.strategy_validation"):
+        loaded = load_strategies_with_env_overrides(validation_logger)
+
+    assert loaded == {"playlists": []}
+    assert "Invalid 'id' type" in caplog.text
+
+
+def test_smarttracklist_source_accepts_scalar_or_list_name(monkeypatch, tmp_path, validation_logger, caplog):
+    """Allows smarttracklist source to use a single name or a list of names."""
+    payload = {
+        "playlists": [
+            {
+                "name": "smarttracklist-name-list",
+                "source": [
+                    {"type": "smarttracklist", "name": "discovery"},
+                    {"type": "smarttracklist", "name": ["new-releases", "inspired-by-1", None]},
+                ],
+                "destination": [{"type": "playlist", "id": "999"}],
+            }
+        ]
+    }
+    monkeypatch.setattr(strategy_validation, "get_data_dir", lambda: _write_strategies(tmp_path, payload))
+
+    with caplog.at_level("ERROR", logger="tests.strategy_validation"):
+        loaded = load_strategies_with_env_overrides(validation_logger)
+
+    assert len(loaded["playlists"]) == 1
+    assert "Invalid 'name'" not in caplog.text
+
+
+def test_file_source_accepts_scalar_or_list_name_keys(monkeypatch, tmp_path, validation_logger, caplog):
+    """Allows file source to use name/filename as scalar or list."""
+    payload = {
+        "playlists": [
+            {
+                "name": "file-name-list",
+                "source": [
+                    {"type": "file", "filename": "backup.json"},
+                    {"type": "file", "name": ["backup_a.csv", "backup_b.csv", None]},
+                ],
+                "destination": [{"type": "playlist", "id": "999"}],
+            }
+        ]
+    }
+    monkeypatch.setattr(strategy_validation, "get_data_dir", lambda: _write_strategies(tmp_path, payload))
+
+    with caplog.at_level("ERROR", logger="tests.strategy_validation"):
+        loaded = load_strategies_with_env_overrides(validation_logger)
+
+    assert len(loaded["playlists"]) == 1
+    assert "Invalid 'filename'" not in caplog.text
+    assert "Invalid 'name'" not in caplog.text
+
+
+def test_name_based_source_rejects_invalid_name_shape(monkeypatch, tmp_path, validation_logger, caplog):
+    """Rejects invalid name field shapes for smarttracklist/file sources."""
+    payload = {
+        "playlists": [
+            {
+                "name": "invalid-name-shape",
+                "source": [
+                    {"type": "smarttracklist", "name": {"bad": "shape"}},
+                ],
+                "destination": [{"type": "playlist", "id": "999"}],
+            }
+        ]
+    }
+    monkeypatch.setattr(strategy_validation, "get_data_dir", lambda: _write_strategies(tmp_path, payload))
+
+    with caplog.at_level("ERROR", logger="tests.strategy_validation"):
+        loaded = load_strategies_with_env_overrides(validation_logger)
+
+    assert loaded == {"playlists": []}
+    assert "Invalid 'name' type" in caplog.text
+
+
+def test_top_level_strategy_name_rejects_invalid_shape(monkeypatch, tmp_path, validation_logger, caplog):
+    """Rejects malformed top-level strategy names so runtime sanitization is a fallback only."""
+    payload = {
+        "playlists": [
+            {
+                "name": {"bad": "shape"},
+                "source": [{"type": "favorites"}],
+                "destination": [{"type": "playlist", "id": "999"}],
+            }
+        ]
+    }
+    monkeypatch.setattr(strategy_validation, "get_data_dir", lambda: _write_strategies(tmp_path, payload))
+
+    with caplog.at_level("ERROR", logger="tests.strategy_validation"):
+        loaded = load_strategies_with_env_overrides(validation_logger)
+
+    assert loaded == {"playlists": []}
+    assert "Invalid top-level 'name' type" in caplog.text
+
+
+def test_top_level_strategy_name_rejects_list(monkeypatch, tmp_path, validation_logger, caplog):
+    """Rejects list-valued top-level strategy names to catch indentation mistakes early."""
+    payload = {
+        "playlists": [
+            {
+                "name": ["discovery", "new-releases"],
+                "source": [{"type": "favorites"}],
+                "destination": [{"type": "playlist", "id": "999"}],
+            }
+        ]
+    }
+    monkeypatch.setattr(strategy_validation, "get_data_dir", lambda: _write_strategies(tmp_path, payload))
+
+    with caplog.at_level("ERROR", logger="tests.strategy_validation"):
+        loaded = load_strategies_with_env_overrides(validation_logger)
+
+    assert loaded == {"playlists": []}
+    assert "Invalid top-level 'name' type 'list'" in caplog.text
+
+
 def test_random_top_level_strategy_typo_warns(monkeypatch, tmp_path, validation_logger, caplog):
     """Checks random top-level key typos are reported as unknown strategy keys."""
     key_candidates = [key for key in sorted(STRATEGY_TOP_LEVEL_KEYS) if len(key) >= 4 and key != "name"]

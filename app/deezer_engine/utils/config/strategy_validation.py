@@ -54,6 +54,135 @@ def _find_exact_duplicate_entries(entries):
     return [group for group in duplicate_groups.values() if len(group) > 1]
 
 
+def _is_scalar_id(value):
+    """Return True for scalar ID values we can coerce to API-safe strings."""
+    return isinstance(value, (str, int))
+
+
+def _is_scalar_name(value):
+    """Return True for scalar name values we can coerce to safe keys."""
+    return isinstance(value, (str, int))
+
+
+def _validate_strategy_name_value(logger, strategy_name, strategy, strategy_index):
+    """Validate top-level strategy name shape to avoid runtime naming crashes."""
+    if "name" not in strategy:
+        return True
+
+    raw_name = strategy.get("name")
+    log_prefix = f"[Depth: 1] Strategy #{strategy_index + 1} '{strategy_name}'"
+
+    if _is_scalar_name(raw_name):
+        return True
+
+    if isinstance(raw_name, list):
+        logger.error(
+            f"{log_prefix}: Invalid top-level 'name' type 'list'. "
+            "Strategy 'name' must be a scalar string/integer."
+        )
+        return False
+
+    logger.error(
+        f"{log_prefix}: Invalid top-level 'name' type '{type(raw_name).__name__}'. "
+        "Strategy 'name' must be a scalar string/integer."
+    )
+    return False
+
+
+def _validate_source_id_value(logger, strategy_name, source_type, source, depth, source_index, current_path):
+    """Validate source.id shape for ID-based sources while preserving old key contracts."""
+    id_based_sources = {"album", "artist", "playlist"}
+    if source_type not in id_based_sources:
+        return True
+
+    if "id" not in source:
+        return True
+
+    source_id = source.get("id")
+    log_prefix = f"[Depth: {depth}, Source # {source_index}] Strategy '{strategy_name}' at {current_path}"
+
+    if _is_scalar_id(source_id):
+        return True
+
+    if isinstance(source_id, list):
+        for item in source_id:
+            if item is None:
+                continue
+            if not _is_scalar_id(item):
+                logger.error(
+                    f"{log_prefix}: Invalid 'id' list item type '{type(item).__name__}'. "
+                    "Allowed item types are string, integer, or null."
+                )
+                return False
+        return True
+
+    logger.error(
+        f"{log_prefix}: Invalid 'id' type '{type(source_id).__name__}'. "
+        "Use a scalar string/integer or a list of scalar IDs."
+    )
+    return False
+
+
+def _validate_source_name_value(logger, strategy_name, source_type, source, depth, source_index, current_path):
+    """Validate source.name/filename shape for name-based sources."""
+    log_prefix = f"[Depth: {depth}, Source # {source_index}] Strategy '{strategy_name}' at {current_path}"
+
+    if source_type == "smarttracklist":
+        if "name" not in source:
+            return True
+
+        source_name = source.get("name")
+        if _is_scalar_name(source_name):
+            return True
+
+        if isinstance(source_name, list):
+            for item in source_name:
+                if item is None:
+                    continue
+                if not _is_scalar_name(item):
+                    logger.error(
+                        f"{log_prefix}: Invalid 'name' list item type '{type(item).__name__}'. "
+                        "Allowed item types are string, integer, or null."
+                    )
+                    return False
+            return True
+
+        logger.error(
+            f"{log_prefix}: Invalid 'name' type '{type(source_name).__name__}'. "
+            "Use a scalar string/integer or a list of scalar names."
+        )
+        return False
+
+    if source_type == "file":
+        for field_name in ("filename", "name"):
+            if field_name not in source:
+                continue
+
+            source_name = source.get(field_name)
+            if _is_scalar_name(source_name):
+                continue
+
+            if isinstance(source_name, list):
+                for item in source_name:
+                    if item is None:
+                        continue
+                    if not _is_scalar_name(item):
+                        logger.error(
+                            f"{log_prefix}: Invalid '{field_name}' list item type '{type(item).__name__}'. "
+                            "Allowed item types are string, integer, or null."
+                        )
+                        return False
+                continue
+
+            logger.error(
+                f"{log_prefix}: Invalid '{field_name}' type '{type(source_name).__name__}'. "
+                "Use a scalar string/integer or a list of scalar names."
+            )
+            return False
+
+    return True
+
+
 def _validate_modifiers(logger, strategy_name, modifiers, depth=1, path="root"):
     """
     Validates modifiers. If a modifier contains a source (like 'exclude'),
@@ -177,6 +306,28 @@ def _validate_sources(logger, strategy_name, sources, depth=1, path="root"):
             logger.error(f"[Depth: {depth}, {vtype} # {idx + 1}/{len(sources)}] Strategy '{strategy_name}' at {current_path}: Missing 'type'.")
             return False
 
+        if not _validate_source_id_value(
+            logger,
+            strategy_name,
+            source_type,
+            source,
+            depth,
+            idx + 1,
+            current_path,
+        ):
+            return False
+
+        if not _validate_source_name_value(
+            logger,
+            strategy_name,
+            source_type,
+            source,
+            depth,
+            idx + 1,
+            current_path,
+        ):
+            return False
+
         # Recursion: Source contains nested modifiers
         if "modifiers" in source:
             logger.debug(f"[Depth: {depth}, {vtype} # {idx + 1}/{len(sources)}] Found nested modifiers in {source_type}. Recursing...")
@@ -273,6 +424,8 @@ def load_strategies_with_env_overrides(logger):
             continue
 
         name = strategy.get("name", f"Unnamed_Strategy_{idx}")
+        if not _validate_strategy_name_value(logger, name, strategy, idx):
+            continue
         logger.debug(f"--- Processing Strategy {idx + 1}/{len(raw_playlists)}: '{name}' ---")
 
         unknown_strategy_keys = get_unknown_keys(strategy, STRATEGY_TOP_LEVEL_KEYS)

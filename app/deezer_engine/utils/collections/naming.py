@@ -20,9 +20,27 @@ def get_collection_name(logger, type, name=None, id=None):
     type = type.lower()
     prefix = f"{type}__"
 
+    def _normalize_scalar_or_list(raw_value):
+        if isinstance(raw_value, list):
+            normalized_values = []
+            for item in raw_value:
+                if item is None:
+                    continue
+                item_str = str(item).strip()
+                if item_str:
+                    normalized_values.append(item_str)
+            return normalized_values
+
+        if raw_value is None:
+            return None
+
+        raw_value_str = str(raw_value).strip()
+        return raw_value_str or None
+
     def _has_id():
         """Return True if id is provided and not empty."""
-        if id:
+        normalized_id = _normalize_scalar_or_list(id)
+        if normalized_id:
             logger.debug(f"id '{id}' is provided")
             return True
 
@@ -31,7 +49,8 @@ def get_collection_name(logger, type, name=None, id=None):
 
     def _has_name():
         """Return True if name is provided and not empty."""
-        if name:
+        normalized_name = _normalize_scalar_or_list(name)
+        if normalized_name:
             logger.debug(f"name '{name}' is provided")
             return True
 
@@ -39,20 +58,37 @@ def get_collection_name(logger, type, name=None, id=None):
         return False
 
     collection = "unknown"
+    normalized_id = _normalize_scalar_or_list(id)
+    normalized_name = _normalize_scalar_or_list(name)
     match type:
         case "favorites" | "history":
             collection = f"{type}"
         case "playlist" | "album" | "artist":
             if _has_id():
-                collection = f"{prefix}{id}"
+                if isinstance(normalized_id, list):
+                    collection = f"{prefix}{'__'.join(normalized_id)}"
+                else:
+                    collection = f"{prefix}{normalized_id}"
         case "smarttracklist":
             if _has_name():
-                normalized_name = _normalize_smarttracklist_name(name)
-                if normalized_name:
-                    collection = f"{prefix}{normalized_name}"
+                if isinstance(normalized_name, list):
+                    normalized_parts = []
+                    for item in normalized_name:
+                        normalized_item = _normalize_smarttracklist_name(item)
+                        if normalized_item:
+                            normalized_parts.append(normalized_item)
+                    if normalized_parts:
+                        collection = f"{prefix}{'__'.join(normalized_parts)}"
+                else:
+                    normalized_smart_name = _normalize_smarttracklist_name(normalized_name)
+                    if normalized_smart_name:
+                        collection = f"{prefix}{normalized_smart_name}"
         case "file":
             if _has_name():
-                collection = f"{prefix}{name}"
+                if isinstance(normalized_name, list):
+                    collection = f"{prefix}{'__'.join(normalized_name)}"
+                else:
+                    collection = f"{prefix}{normalized_name}"
 
     logger.debug(f"Collection name identified as: '{collection}'")
     return collection

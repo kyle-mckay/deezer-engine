@@ -128,3 +128,35 @@ playlists:
       - type: "playlist"
         id: "REPLACE_PLAYLIST_ID"
         ordr: "smart"
+
+  - name: "Validation - Multi ID In Single Source"
+    source:
+      - type: "album"
+        id: ["REPLACE_ALBUM_ID_1", "REPLACE_ALBUM_ID_2", null, ""]
+      - type: "playlist"
+        id:
+          - "REPLACE_SOURCE_PLAYLIST_ID_1"
+          - "REPLACE_SOURCE_PLAYLIST_ID_2"
+      - type: "artist"
+        id: ["REPLACE_ARTIST_ID_1", "REPLACE_ARTIST_ID_2"]
+    modifiers:
+      - type: "dedupe"
+      - type: "limit"
+        order: "top"
+        count: 200
+    destination:
+      - type: "playlist"
+        id: "REPLACE_PLAYLIST_ID"
+        order: "replace"
+
+  - name: "Validation - Multi Name In Single Source"
+    source:
+      - type: "smarttracklist"
+        name: ["discovery", "new-releases", null, ""]
+      - type: "file"
+        dir: "./exports"
+        name: ["backup_a.csv", "backup_b.csv"]
+    destination:
+      - type: "playlist"
+        id: "REPLACE_PLAYLIST_ID"
+        order: "replace"

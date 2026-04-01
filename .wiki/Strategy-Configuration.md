@@ -36,9 +36,9 @@ Every source entry supports these optional fields:
 | --- | --- | --- |
 | `favorites` | None | Tracks from your "Loved Tracks" profile. |
 | `history` | None | Tracks from your play history |
-| `playlist` | `id` | All tracks from a specific playlist ID. |
-| `album` | `id` | All tracks from a specific album ID. |
-| `artist` | `id` | Iterates through an artist's discography. |
+| `playlist` | `id` | All tracks from one playlist ID or multiple playlist IDs. |
+| `album` | `id` | All tracks from one album ID or multiple album IDs. |
+| `artist` | `id` | Iterates through one or multiple artists' discographies. |
 | `smarttracklist` | `name` | Curated: `discovery`, `new-releases`, `inspired-by-1` to `5`. |
 | `file` | `format` | Imports tracks from a file on your computer. |
 
@@ -76,6 +76,11 @@ Gets songs from a specific playlist. Currently only supports playlist id: `https
     source:
       - type: "playlist"
         id: "12345678"
+
+# You can also merge multiple playlist IDs in one source block
+    source:
+      - type: "playlist"
+        id: ["12345678", "23456789", "34567890"]
 ```
 
 #### `album`
@@ -86,6 +91,11 @@ Gets songs from a specific album. Currently only supports album id: `https://www
     source:
       - type: "album"
         id: "12345678"
+
+# You can also merge multiple album IDs in one source block
+    source:
+      - type: "album"
+        id: ["12345678", "23456789"]
 ```
 
 #### `artist`
@@ -96,7 +106,16 @@ Gets all songs from a specific artist by itterating through their albums. Curren
     source:
       - type: "artist"
         id: "123"
+
+# You can also merge multiple artists in one source block
+    source:
+      - type: "artist"
+        id: ["123", "456"]
 ```
+
+> [!NOTE]
+> For `playlist`, `album`, and `artist`, the `id` field accepts either a single value or a list.
+> If an ID list includes invalid entries (empty/null), they are skipped with a warning and valid IDs continue.
 
 #### `smarttracklist`
 
@@ -117,6 +136,10 @@ Deezer's curated lists: `https://www.deezer.com/us/smarttracklist/<list name>`
       # leaving out 2-4 for example
       - type: "smarttracklist"
         name: "inspired-by-5"
+
+      # A single source can also merge multiple smarttracklist names
+      - type: "smarttracklist"
+        name: ["discovery", "new-releases", "inspired-by-1"]
 ```
 
 #### `file`
@@ -128,6 +151,11 @@ Imports your tracklist from a local file in either JSON or CSV format. This is u
       - type: "file"
         dir: "./exports" # optional, relative to script directory
         name: "my_favorites.csv"
+
+      # A single source can import multiple files in order
+      - type: "file"
+        dir: "./exports"
+        name: ["favorites_1.csv", "favorites_2.csv"]
 ```
 
 **Optional keys**:

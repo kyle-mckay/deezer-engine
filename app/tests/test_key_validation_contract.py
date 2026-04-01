@@ -118,3 +118,12 @@ def test_unknown_key_formatting_suggests_expected_key(allowed_keys):
     assert typo in formatted
     assert "did you mean" in formatted
     assert selected in formatted
+
+
+@pytest.mark.parametrize("source_type", ["album", "artist", "playlist"])
+def test_id_based_source_contract_does_not_add_ids_key(source_type):
+    """Confirms multi-ID support stays on the existing id key rather than adding ids."""
+    allowed = get_allowed_source_keys(source_type)
+
+    assert "id" in allowed
+    assert "ids" not in allowed

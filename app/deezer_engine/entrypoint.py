@@ -243,8 +243,12 @@ def main():
             logger.debug("Shutdown acknowledged. No more strategies will be run.")
             break
 
-        strategy_name = s_data.get('name', 'unnamed_strategy')
-        
+        strategy_name_raw = s_data.get('name', 'unnamed_strategy')
+        if strategy_name_raw is None:
+            strategy_name = 'unnamed_strategy'
+        else:
+            strategy_name = str(strategy_name_raw)
+
         # Sanitize the name for the temp filename
         safe_name = strategy_name.lower().replace(" ", "_")
         
