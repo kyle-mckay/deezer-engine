@@ -19,6 +19,7 @@ from utils.metadata.queries import (
 	get_unprocessed_album_ids,
 	get_unprocessed_track_ids,
 )
+from utils.metadata.safeguards import blocklist_albums_for_unavailable_tracks
 from utils.metadata.sync import (
 	get_missing_album_ids,
 	get_missing_artist_ids,
@@ -38,6 +39,7 @@ __all__ = [
 	"get_unique_album_ids_from_tracks",
 	"get_unprocessed_album_ids",
 	"get_unprocessed_track_ids",
+	"blocklist_albums_for_unavailable_tracks",
 	"populate_album_genres",
 	"populate_track_genres",
 	"populate_track_genres_for_album",

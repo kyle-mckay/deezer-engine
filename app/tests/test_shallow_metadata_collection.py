@@ -3,7 +3,7 @@ import logging
 import pytest
 
 from utils.db.connection import get_connection, initialize_all
-from utils.db_manager import (
+from utils.db.cache import (
     mark_fully_populated_albums_as_cached,
     mark_fully_populated_artists_as_cached,
     mark_fully_populated_tracks_as_cached,

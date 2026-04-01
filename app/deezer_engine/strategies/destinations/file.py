@@ -24,7 +24,7 @@ def requires_metadata(dest_data=None):
     Export benefits from having full metadata available for complete exports.
     """
     return True
-from utils.files import write_to_json, write_to_csv
+from utils.infrastructure.files import write_to_json, write_to_csv
 
 def cleanup_old_exports(directory, prefix, extension, retention_hours, logger):
     """

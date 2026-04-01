@@ -1,7 +1,7 @@
 import pytest
 from utils.infrastructure import logger as logger_module
 from utils.infrastructure.logger import initialize_deezer_logger
-from utils import deezer_auth
+from utils.api.auth import get_authenticated_client
 """
 Test for basic deezer-python API client functionality, including field presence and types for various fetch types (track, album, artist, playlist).
 Requires entity to be publicly available in Deezer.
@@ -34,7 +34,7 @@ test_ids = [
 @pytest.fixture(scope="module")
 def client():
     log = initialize_deezer_logger()
-    return deezer_auth.get_authenticated_client(None, log)
+    return get_authenticated_client(None, log)
 
 def validate_fields(actual_dict, expected_set, entity_name, strict=False):
     actual_fields = set(actual_dict.keys())

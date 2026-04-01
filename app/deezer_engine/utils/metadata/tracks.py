@@ -5,8 +5,8 @@
 
 import json
 from utils.db.connection import get_connection
-from utils.db.blocklist import blocklist_albums_for_unavailable_tracks
 from utils.metadata.albums import flatten_albums
+from utils.metadata.safeguards import blocklist_albums_for_unavailable_tracks
 
 
 def insert_shallow_track_stubs(track_list, logger=None):

@@ -64,7 +64,7 @@ class StrategyController:
         """
         Refresh the in-memory pipeline with the latest metadata from the database for all track IDs in the pipeline.
         """
-        from utils.db_manager import fetch_entities_by
+        from utils.db.fetch import fetch_entities_by
         if not self.pipeline:
             return
         id_list = [t['id'] for t in self.pipeline if 'id' in t]

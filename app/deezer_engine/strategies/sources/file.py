@@ -10,7 +10,7 @@ from utils.api.auth import get_authenticated_session
 from utils.config import get_global_value
 from utils.collections import get_collection_name
 from utils.infrastructure.paths import get_data_dir
-from utils.files import read_from_csv, read_from_json
+from utils.infrastructure.files import read_from_csv, read_from_json
 
 def requires_metadata(source_data=None):
     """

@@ -74,3 +74,18 @@ def _run_integrity_check(conn, logger=None):
 		raise RuntimeError(f"SQLite integrity check failed: {integrity_status}")
 	if logger:
 		logger.debug("SQLite integrity check passed.")
+
+
+def backup_database(logger=None):
+	"""Public wrapper for creating a timestamped database backup."""
+	return _backup_database(logger)
+
+
+def foreign_key_check(conn, logger=None):
+	"""Public wrapper for validating foreign key consistency."""
+	return _run_foreign_key_check(conn, logger)
+
+
+def integrity_check(conn, logger=None):
+	"""Public wrapper for validating SQLite integrity."""
+	return _run_integrity_check(conn, logger)

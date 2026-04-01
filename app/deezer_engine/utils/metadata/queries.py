@@ -4,7 +4,7 @@
 """Metadata query helpers for unprocessed/expired/missing entities."""
 
 from utils.config import get_global_value
-from utils.db.blocklist import _blocklist_where_clause
+from utils.db.blocklist import blocklist_where_clause
 from utils.db.connection import get_connection
 
 
@@ -13,7 +13,7 @@ def get_unprocessed_track_ids(logger=None, include_blocklisted=False):
     if logger:
         logger.debug(f"Querying unprocessed track IDs (include_blocklisted={include_blocklisted}).")
 
-    track_filter = _blocklist_where_clause(include_blocklisted)
+    track_filter = blocklist_where_clause(include_blocklisted)
     query = f"""
     SELECT id
     FROM tracks
@@ -43,7 +43,7 @@ def get_unprocessed_album_ids(logger=None, include_blocklisted=False):
     if logger:
         logger.debug(f"Querying unprocessed album IDs (include_blocklisted={include_blocklisted}).")
 
-    album_filter = _blocklist_where_clause(include_blocklisted)
+    album_filter = blocklist_where_clause(include_blocklisted)
     query = f"""
     SELECT id
     FROM albums
@@ -79,7 +79,7 @@ def get_albums_missing_genres(logger=None, include_blocklisted=False):
     try:
         with get_connection(logger) as conn:
             cursor = conn.cursor()
-            album_filter = _blocklist_where_clause(include_blocklisted)
+            album_filter = blocklist_where_clause(include_blocklisted)
             query = f"""
             SELECT id
             FROM albums
@@ -110,7 +110,7 @@ def get_tracks_missing_genres(logger=None, include_blocklisted=False):
     try:
         with get_connection(logger) as conn:
             cursor = conn.cursor()
-            track_filter = _blocklist_where_clause(include_blocklisted)
+            track_filter = blocklist_where_clause(include_blocklisted)
             query = f"""
             SELECT id
             FROM tracks
@@ -142,7 +142,7 @@ def get_expired_track_ids(logger=None, include_blocklisted=False):
             f"(include_blocklisted={include_blocklisted})."
         )
 
-    track_filter = _blocklist_where_clause(include_blocklisted)
+    track_filter = blocklist_where_clause(include_blocklisted)
     query = f"""
     SELECT id
     FROM tracks
@@ -175,7 +175,7 @@ def get_expired_album_ids(logger=None, include_blocklisted=False):
             f"(include_blocklisted={include_blocklisted})."
         )
 
-    album_filter = _blocklist_where_clause(include_blocklisted)
+    album_filter = blocklist_where_clause(include_blocklisted)
     query = f"""
     SELECT id
     FROM albums

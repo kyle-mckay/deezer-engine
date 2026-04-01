@@ -1,99 +1,14 @@
 # SPDX-FileCopyrightText: 2026 kylemmkay
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import json
-from datetime import datetime, timedelta
+"""Collection cache orchestration helpers."""
 
-from utils.config import get_global_value
-from utils.db.connection import get_connection
-from utils.collections.sync import sync_to_collections, validate_sync_integrity
-
-
-def _blocklist_where_clause(include_blocklisted):
-	"""Return SQL predicate for including or excluding blocklisted entities."""
-	return "1=1" if include_blocklisted else "COALESCE(blocklisted, 0) = 0"
-
-
-def fetch_collection(source_name, logger=None, include_blocklisted=False):
-	"""Retrieve all tracks and metadata associated with a specific source."""
-	track_filter = _blocklist_where_clause(include_blocklisted)
-	query = f"""
-	SELECT t.* FROM tracks t
-	JOIN collections c ON t.id = c.track_id
-		WHERE c.source_name = ?
-			AND {track_filter};
-	"""
-
-	collection_data = []
-
-	try:
-		with get_connection() as conn:
-			cursor = conn.execute(query, (source_name,))
-			rows = cursor.fetchall()
-
-			for row in rows:
-				track = dict(row)
-
-				if track.get("available_countries"):
-					track["available_countries"] = json.loads(track["available_countries"])
-				if track.get("contributors"):
-					track["contributors"] = json.loads(track["contributors"])
-
-				collection_data.append(track)
-
-			if logger:
-				logger.debug(f"DB: Retrieved {len(collection_data)} tracks for '{source_name}'.")
-
-			return collection_data
-
-	except Exception as exc:
-		if logger:
-			logger.error(f"DB Error: Failed to fetch '{source_name}': {exc}")
-		return []
-
-
-def is_collection_cached(source_name, config, logger=None):
-	"""Check whether a collection exists in DB and is within retention window."""
-	retention_hrs = config.get("retention", get_global_value("retention", default=0))
-	if logger:
-		logger.debug(f"Retention hours for '{source_name}': {retention_hrs}")
-
-	query = """
-	SELECT date_cached FROM collections
-	WHERE source_name = ?
-	ORDER BY date_cached DESC LIMIT 1;
-	"""
-
-	try:
-		with get_connection() as conn:
-			cursor = conn.execute(query, (source_name,))
-			row = cursor.fetchone()
-
-			if not row or not row["date_cached"]:
-				if logger:
-					logger.debug(f"Cache miss: '{source_name}' not found.")
-				return False
-
-			cache_time = datetime.fromisoformat(row["date_cached"])
-			expiration_time = datetime.now() - timedelta(hours=retention_hrs)
-			is_valid = cache_time > expiration_time
-
-			if logger:
-				if is_valid:
-					logger.debug(
-						f"Cache verify: Valid (Age: {cache_time} > Exp: {expiration_time})"
-					)
-				else:
-					logger.debug(
-						f"Cache verify: Expired (Age: {cache_time} < Exp: {expiration_time})"
-					)
-
-			return is_valid
-
-	except Exception as exc:
-		if logger:
-			logger.error(f"DB Error: Cache validation failed: {exc}")
-		return False
+from utils.db.collections import (
+	fetch_collection,
+	is_collection_cached,
+	sync_to_collections,
+	validate_sync_integrity,
+)
 
 
 def handle_cached_data(

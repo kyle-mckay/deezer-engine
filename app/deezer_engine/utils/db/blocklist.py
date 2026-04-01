@@ -9,9 +9,14 @@ from utils.infrastructure.signals import shutdown_event
 
 from .connection import get_connection
 
-def _blocklist_where_clause(include_blocklisted):
-    """Returns SQL predicate for including or excluding blocklisted entities."""
+def blocklist_where_clause(include_blocklisted):
+    """Return SQL predicate for including or excluding blocklisted entities."""
     return "1=1" if include_blocklisted else "COALESCE(blocklisted, 0) = 0"
+
+
+def _blocklist_where_clause(include_blocklisted):
+    """Backward-compatible alias for existing internal imports."""
+    return blocklist_where_clause(include_blocklisted)
 
 def release_expired_blocklisted_entities(logger=None):
     """
@@ -388,33 +393,4 @@ def get_album_ids_for_unavailable_tracks(logger=None):
     except Exception as e:
         if logger:
             logger.error(f"DB Error: Failed retrieving albums for unavailable track safeguard: {e}")
-        raise
-
-def blocklist_albums_for_unavailable_tracks(logger=None):
-    """
-    DB-driven safeguard: find unavailable tracks and blocklist their albums by reusing
-    the existing album failure path.
-    """
-    marker_error_code = "available_countries_empty"
-
-    try:
-        album_ids = get_album_ids_for_unavailable_tracks(logger)
-        if not album_ids:
-            if logger:
-                logger.debug("No albums require safeguard blocklisting for empty available_countries.")
-            return
-
-        created_count = 0
-        for album_id in album_ids:
-            mark_album_metadata_fetch_failed(album_id, marker_error_code, logger)
-            created_count += 1
-
-        if logger:
-            logger.debug(
-                "Safeguard blocklist applied for unavailable tracks: "
-                f"albums_blocklisted={created_count}."
-            )
-    except Exception as e:
-        if logger:
-            logger.error(f"DB Error: Failed safeguard blocklist for unavailable tracks: {e}")
         raise
