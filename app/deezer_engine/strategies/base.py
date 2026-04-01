@@ -22,7 +22,8 @@ from pathlib import Path
 from utils.infrastructure.paths import get_data_dir
 from utils.config import get_global_value
 from utils.collections import sync_to_collections, is_collection_cached
-from utils.db_manager import update_unprocessed, insert_shallow_track_stubs
+from utils.metadata.tracks import insert_shallow_track_stubs
+from utils.metadata.orchestration import update_unprocessed
 from utils.api.fetching import fetch_shallow_tracks 
 from utils.metadata.tracks import track_header_available
 

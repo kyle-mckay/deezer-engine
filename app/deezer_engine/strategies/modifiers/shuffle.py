@@ -5,7 +5,7 @@ import importlib
 import logging
 import random
 from collections import defaultdict
-from utils.db_manager import update_unprocessed
+from utils.metadata.orchestration import update_unprocessed
 
 def requires_metadata(mod_data=None):
     """

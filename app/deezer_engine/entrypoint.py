@@ -30,7 +30,8 @@ from utils.db.connection import initialize_all
 from utils.collections import get_collection_name
 from utils.infrastructure.signals import shutdown_event
 from utils.collections import fetch_collection, is_collection_cached
-from utils.db_manager import get_unprocessed_track_ids, update_track_metadata, get_expired_track_ids, update_tracks_partial_batch, update_unprocessed, refresh_stats, release_expired_blocklisted_entities
+from utils.db.blocklist import release_expired_blocklisted_entities
+from utils.metadata.orchestration import update_unprocessed, refresh_stats
 from __version__ import __version__, __banner__
 
 

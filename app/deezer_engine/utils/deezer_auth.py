@@ -545,9 +545,9 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     """
     Transforms Deezer API objects into a list of dictionaries with rate-limiting protection.
     """
-    from utils.db_manager import (
+    from utils.db.blocklist import mark_track_metadata_fetch_failed
+    from utils.metadata.tracks import (
         update_track_metadata,
-        mark_track_metadata_fetch_failed,
         update_tracks_partial_batch,
     )
     from utils.collections import sync_to_collections
@@ -837,12 +837,12 @@ def get_albums(client, logger, identifier, album_ids=None):
     """
     Fetches album metadata from Deezer API with rate-limiting protection.
     """
-    from utils.db_manager import (
+    from utils.db.blocklist import mark_album_metadata_fetch_failed
+    from utils.metadata.albums import (
         update_album_metadata,
-        populate_album_genres,
-        mark_album_metadata_fetch_failed,
         update_albums_partial_batch,
     )
+    from utils.metadata.genres import populate_album_genres
     
     albums = []
     cached_albums = []

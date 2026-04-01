@@ -89,8 +89,6 @@ sequenceDiagram
 
 For building, running, and testing Deezer Engine as a developer, see the [Development Guide](https://codeberg.org/kylemmkay/deezer-engine/wiki/Development). This includes instructions for local Docker builds and details on developer templates for config and strategy validation.
 
----
-
 ## Acknowledgements
 
 For all acknowledgements, see [the wiki page](https://codeberg.org/kylemmkay/deezer-engine/wiki/Acknowledgments)

@@ -5,8 +5,75 @@
 
 import json
 
-from utils.db_manager import insert_shallow_album_stubs
+from utils.db.connection import get_connection
 from utils.metadata.artists import flatten_artists
+
+
+def insert_shallow_album_stubs(album_list, logger=None):
+	"""Insert shallow album payloads for shallow metadata-collection."""
+	if logger:
+		logger.debug(f"Received {len(album_list) if album_list else 0} albums for shallow insert")
+
+	if not album_list:
+		return
+
+	from utils.db.connection import get_connection
+	from utils.db.cache import mark_fully_populated_albums_as_cached
+
+	try:
+		with get_connection(logger) as conn:
+			cursor = conn.cursor()
+			cursor.execute("PRAGMA table_info(albums)")
+			album_table_columns = [row[1] for row in cursor.fetchall()]
+
+			albums_by_id = {}
+			for album in album_list:
+				album_payload = _coerce_album(album)
+				album_id = album_payload.get('id')
+				if album_id is None:
+					continue
+				existing_album = albums_by_id.get(album_id, {})
+				merged_album = {**existing_album, **album_payload}
+				albums_by_id[album_id] = merged_album
+
+			if albums_by_id:
+				album_usable_columns = [
+					column for column in album_table_columns
+					if column != 'date_cached' and any(column in payload for payload in albums_by_id.values())
+				]
+				if 'id' in album_usable_columns:
+					album_usable_columns = ['id'] + [c for c in album_usable_columns if c != 'id']
+
+				if album_usable_columns:
+					album_placeholders = ", ".join(["?"] * len(album_usable_columns))
+					album_updates = ",\n						".join(
+						[
+							f"{column} = COALESCE(albums.{column}, excluded.{column})"
+							for column in album_usable_columns
+							if column != 'id'
+						]
+					)
+					album_query = f"""
+					INSERT INTO albums ({", ".join(album_usable_columns)})
+					VALUES ({album_placeholders})
+					ON CONFLICT(id) DO UPDATE SET
+						{album_updates}
+					WHERE COALESCE(albums.date_cached, '') = '';
+					"""
+					album_rows = [
+						tuple(_normalize_field(payload.get(column)) for column in album_usable_columns)
+						for payload in albums_by_id.values()
+					]
+					cursor.executemany(album_query, album_rows)
+
+			conn.commit()
+			if logger:
+				logger.debug(f"Shallow album insert complete: albums={len(albums_by_id)}")
+			mark_fully_populated_albums_as_cached(logger)
+	except Exception as e:
+		if logger:
+			logger.error(f"DB Error: Shallow album insert failed: {e}")
+		raise
 
 
 def _normalize_field(value):
@@ -82,3 +149,139 @@ def flatten_albums(albumlist, logger):
 	flatten_artists(artists, logger)
 	insert_shallow_album_stubs(flattened_albums, logger)
 	return flattened_albums
+
+
+def update_album_metadata(album_list, logger=None):
+	"""
+	Update albums with full metadata payload fetched from Deezer.
+	"""
+	if logger:
+		logger.debug(f"Received {len(album_list) if album_list else 0} albums for metadata update")
+
+	if not album_list:
+		if logger:
+			logger.debug("Album list is empty, returning early.")
+		return
+
+	query = """
+	UPDATE albums SET
+		title = ?, upc = ?, link = ?, share = ?, cover = ?, cover_small = ?,
+		cover_medium = ?, cover_big = ?, cover_xl = ?, md5_image = ?,
+		label = ?, nb_tracks = ?, duration = ?, fans = ?, release_date = ?,
+		record_type = ?, available = ?, tracklist = ?, explicit_lyrics = ?,
+		explicit_content_lyrics = ?, explicit_content_cover = ?, genres = ?, contributors = ?,
+		artist_id = ?, artist_name = ?, date_cached = ?
+	WHERE id = ?;
+	"""
+
+	data_tuples = [
+		(
+			album.get("title"),
+			album.get("upc"),
+			album.get("link"),
+			album.get("share"),
+			album.get("cover"),
+			album.get("cover_small"),
+			album.get("cover_medium"),
+			album.get("cover_big"),
+			album.get("cover_xl"),
+			album.get("md5_image"),
+			album.get("label"),
+			album.get("nb_tracks"),
+			album.get("duration"),
+			album.get("fans"),
+			album.get("release_date"),
+			album.get("record_type"),
+			album.get("available"),
+			album.get("tracklist"),
+			album.get("explicit_lyrics"),
+			album.get("explicit_content_lyrics"),
+			album.get("explicit_content_cover"),
+			album.get("genres"),
+			album.get("contributors"),
+			album.get("artist_id"),
+			album.get("artist_name"),
+			album.get("date_cached"),
+			album.get("id"),
+		)
+		for album in album_list
+	]
+
+	if logger and data_tuples:
+		sample_album = album_list[0]
+		logger.debug(
+			f"Sample album data structure: id={sample_album.get('id')} "
+			f"(type: {type(sample_album.get('id')).__name__}), title={sample_album.get('title')}, "
+			f"date_cached={sample_album.get('date_cached')}"
+		)
+		logger.debug(
+			f"Sample data tuple (last 3 fields): artist_name={data_tuples[0][-3]}, "
+			f"date_cached={data_tuples[0][-2]}, id={data_tuples[0][-1]}"
+		)
+
+	try:
+		with get_connection(logger) as conn:
+			cursor = conn.cursor()
+
+			artist_ids = sorted({album.get("artist_id") for album in album_list if album.get("artist_id") is not None})
+			if artist_ids:
+				cursor.executemany(
+					"INSERT OR IGNORE INTO artists (id) VALUES (?)",
+					[(artist_id,) for artist_id in artist_ids],
+				)
+				if logger:
+					logger.debug(f"Upserted {len(artist_ids)} artist stubs from album metadata payload.")
+
+			if logger:
+				logger.debug(f"Executing UPDATE query for {len(data_tuples)} albums...")
+			cursor.executemany(query, data_tuples)
+			rows_affected = cursor.rowcount
+			if logger:
+				logger.debug(f"UPDATE query affected {rows_affected} rows.")
+			conn.commit()
+			if logger:
+				logger.debug(f"Metadata enrichment complete for {len(album_list)} albums.")
+	except Exception as exc:
+		if logger:
+			logger.error(f"DB Error: Album metadata update failed: {exc}")
+			logger.exception("Stack trace for album metadata update error:")
+		raise
+
+
+def update_albums_partial_batch(album_list, logger=None):
+	"""
+	Update albums with refreshable fields only (fans, available, date_cached).
+	"""
+	if not album_list:
+		return
+
+	if logger:
+		logger.debug(f"Refreshing partial album stats for album_count={len(album_list)}.")
+
+	query = """
+	UPDATE albums SET
+		fans = ?, available = ?, date_cached = ?
+	WHERE id = ?
+	"""
+
+	data_tuples = [
+		(
+			album.get("fans"),
+			album.get("available"),
+			album.get("date_cached"),
+			album.get("id"),
+		)
+		for album in album_list
+	]
+
+	try:
+		with get_connection(logger) as conn:
+			cursor = conn.cursor()
+			cursor.executemany(query, data_tuples)
+			conn.commit()
+			if logger:
+				logger.info(f"Refreshed stats (fans/available) for {len(album_list)} albums.")
+	except Exception as exc:
+		if logger:
+			logger.error(f"DB Error: Partial album batch update failed: {exc}")
+		raise

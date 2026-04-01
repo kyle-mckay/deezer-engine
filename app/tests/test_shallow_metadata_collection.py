@@ -4,15 +4,13 @@ import pytest
 
 from utils.db.connection import get_connection, initialize_all
 from utils.db_manager import (
-    get_unprocessed_album_ids,
-    get_unprocessed_track_ids,
-    insert_shallow_track_stubs,
     mark_fully_populated_albums_as_cached,
     mark_fully_populated_artists_as_cached,
     mark_fully_populated_tracks_as_cached,
 )
 from utils.metadata.albums import flatten_albums
-from utils.metadata.tracks import flatten_tracks
+from utils.metadata.queries import get_unprocessed_album_ids, get_unprocessed_track_ids
+from utils.metadata.tracks import flatten_tracks, insert_shallow_track_stubs
 
 
 pytestmark = [pytest.mark.unit]
