@@ -231,6 +231,61 @@ build_formatted_lines() {
     echo "$formatted"
 }
 
+format_commit_line() {
+    local line="$1"
+    local rendered="$line"
+    if [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] && [[ "$PR_NUMBER" != "0" ]]; then
+        rendered="$rendered #$PR_NUMBER"
+    fi
+    if [[ -n "$AUTHOR" && "$AUTHOR" != "***" ]]; then
+        rendered="$rendered (@$AUTHOR)"
+    fi
+    echo "$rendered"
+}
+
+category_for_line() {
+    local input
+    input=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+    local prefix=""
+    [[ "$input" == *":"* ]] && prefix="${input%%:*}"
+
+    if [[ "$prefix" =~ ^major$ || "$input" =~ major || "$input" =~ breaking || "$input" =~ ! ]]; then
+        echo "Breaking"
+    elif [[ "$prefix" =~ ^(minor|feat) || "$input" =~ feature || "$input" =~ feat || "$input" =~ enhancement || "$input" =~ enhance ]] || \
+         [[ -z "$prefix" && "$input" =~ minor ]]; then
+        echo "Enhancements"
+    elif [[ "$prefix" =~ ^(patch|fix) || "$input" =~ bug || "$input" =~ patch ]]; then
+        echo "Fixes"
+    elif [[ "$input" =~ skip || "$input" =~ ignore-release ]]; then
+        echo ""
+    else
+        # `chore:` and other non-feature/non-fix lines are treated as maintenance.
+        echo "Maintenance"
+    fi
+}
+
+build_formatted_lines_for_category() {
+    local target_category="$1"
+    local formatted=""
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "$line" ]] && continue
+        local line_category
+        line_category=$(category_for_line "$line")
+        [[ "$line_category" != "$target_category" ]] && continue
+
+        local rendered
+        rendered=$(format_commit_line "$line")
+        if [[ -z "$formatted" ]]; then
+            formatted="$rendered"
+        else
+            formatted="$formatted"$'\n'"$rendered"
+        fi
+    done <<< "$COMMIT_MSG"
+
+    echo "$formatted"
+}
+
 get_priority() {
     local input
     input=$(echo "$1" | tr '[:upper:]' '[:lower:]')
@@ -400,7 +455,13 @@ apply_release_logic() {
     echo "------------------------------------------"
 
     if [[ "$DRY_RUN" == false ]]; then
-        bash .forgejo/update-changelog.sh "$CURRENT_TAG" "$final_tag" "$category" "$formatted_lines"
+        local section category_lines
+        for section in Breaking Enhancements Fixes Maintenance; do
+            category_lines=$(build_formatted_lines_for_category "$section")
+            if [[ -n "$(echo "$category_lines" | sed '/^$/d')" ]]; then
+                bash .forgejo/update-changelog.sh "$CURRENT_TAG" "$final_tag" "$section" "$category_lines"
+            fi
+        done
     fi
 }
 
