@@ -66,6 +66,8 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           FINAL_TAG: ${{ steps.validator.outputs.final_tag }}
         run: |
+          set -eo pipefail
+
           git config user.name "forgejo-actions"
           git config user.email "actions-user@noreply.codeberg.org"
           BASE_SHA=$(git rev-parse HEAD)
@@ -79,11 +81,26 @@ jobs:
             git commit -m "chore: release ${FINAL_TAG} [release-draft]"
             git push origin "$BRANCH_NAME" --force
 
+            REPO_OWNER="${REPOSITORY%%/*}"
+            HEAD_REF="${REPO_OWNER}:${BRANCH_NAME}"
+
+            pr_number_from_response() {
+              grep -o '"number":[0-9]*' | head -1 | cut -d: -f2
+            }
+
             # Check if an open PR already exists for this branch
             EXISTING_PR=$(curl -fsS \
               -H "Authorization: token ${FORGEJO_TOKEN}" \
-              "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls?state=open&head=${BRANCH_NAME}&base=main&limit=1" \
-              | grep -o '"number":[0-9]*' | head -1 | cut -d: -f2)
+              "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls?state=open&head=${HEAD_REF}&base=main&limit=1" \
+              | pr_number_from_response)
+
+            # Compatibility fallback if instance expects bare branch name
+            if [[ -z "$EXISTING_PR" ]]; then
+              EXISTING_PR=$(curl -fsS \
+                -H "Authorization: token ${FORGEJO_TOKEN}" \
+                "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls?state=open&head=${BRANCH_NAME}&base=main&limit=1" \
+                | pr_number_from_response)
+            fi
 
             if [[ -n "$EXISTING_PR" ]]; then
               echo "Updating existing PR #${EXISTING_PR} title."
@@ -96,7 +113,7 @@ jobs:
                 }"
             else
               echo "Opening new PR."
-              curl -fsS -X POST \
+              CREATE_RESP=$(curl -sS -w "\n%{http_code}" -X POST \
                 -H "Authorization: token ${FORGEJO_TOKEN}" \
                 -H "Content-Type: application/json" \
                 "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls" \
@@ -105,7 +122,43 @@ jobs:
                   \"body\": \"Automated version bump and changelog update for ${FINAL_TAG}.\",
                   \"head\": \"${BRANCH_NAME}\",
                   \"base\": \"main\"
-                }"
+                }")
+
+              CREATE_CODE=$(printf '%s\n' "$CREATE_RESP" | tail -n1)
+              CREATE_BODY=$(printf '%s\n' "$CREATE_RESP" | sed '$d')
+
+              if [[ "$CREATE_CODE" == "201" ]]; then
+                echo "Opened PR successfully."
+              elif [[ "$CREATE_CODE" == "409" ]]; then
+                echo "PR already exists (HTTP 409). Locating and updating title."
+                EXISTING_PR=$(curl -fsS \
+                  -H "Authorization: token ${FORGEJO_TOKEN}" \
+                  "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls?state=open&head=${HEAD_REF}&base=main&limit=1" \
+                  | pr_number_from_response)
+
+                if [[ -z "$EXISTING_PR" ]]; then
+                  EXISTING_PR=$(curl -fsS \
+                    -H "Authorization: token ${FORGEJO_TOKEN}" \
+                    "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls?state=open&head=${BRANCH_NAME}&base=main&limit=1" \
+                    | pr_number_from_response)
+                fi
+
+                if [[ -z "$EXISTING_PR" ]]; then
+                  echo "Failed to resolve existing PR after HTTP 409."
+                  echo "$CREATE_BODY"
+                  exit 1
+                fi
+
+                curl -fsS -X PATCH \
+                  -H "Authorization: token ${FORGEJO_TOKEN}" \
+                  -H "Content-Type: application/json" \
+                  "${SERVER_URL}/api/v1/repos/${REPOSITORY}/pulls/${EXISTING_PR}" \
+                  --data-binary "{\"title\": \"chore: release ${FINAL_TAG}\"}"
+              else
+                echo "Failed to open PR (HTTP ${CREATE_CODE})."
+                echo "$CREATE_BODY"
+                exit 1
+              fi
             fi
 
             DRAFT_TAG="${FINAL_TAG}.b"
