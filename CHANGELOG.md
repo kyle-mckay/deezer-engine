@@ -1,9 +1,10 @@
 # Changelog
 
-## v0.15.0 - 2026-04-01
+## v0.15.0 - 2026-04-02
 
 ### Enhancements
 
+- enhance: create dedicated track source (progress in #140) (#145) (@kylemmkay)
 - enhance: allow source id's to be singular or array/lists (closes #139) (#143) (@kylemmkay)
 
 ### Maintenance
