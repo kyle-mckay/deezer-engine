@@ -11,6 +11,7 @@ from datetime import datetime
 from contextlib import redirect_stdout
 
 import pytest
+from utils.config import reset_config_snapshot
 
 
 # Warn if tests are running without the CLI wrapper.
@@ -71,13 +72,18 @@ def _build_pytest_log_path(pytest_logs_dir, test_name):
     return candidate
 
 
+def _runtime_file_paths_for(data_dir):
+    return {
+        "data_dir": data_dir,
+        "config_path": data_dir / "config.yml",
+        "strategies_path": data_dir / "strategies.yml",
+        "db_path": data_dir / "db" / "deezer_engine.db",
+    }
+
+
 @pytest.fixture
 def runtime_file_paths():
-    return {
-        "config_path": REPO_ROOT / "data" / "config.yml",
-        "strategies_path": REPO_ROOT / "data" / "strategies.yml",
-        "db_path": REPO_ROOT / "data" / "db" / "deezer_engine.db",
-    }
+    return _runtime_file_paths_for(REPO_ROOT / "data")
 
 
 @pytest.fixture
@@ -132,71 +138,29 @@ def run_subprocess():
 
 
 @pytest.fixture
-def backup_restore_runtime_files(runtime_file_paths, request):
-    config_path = runtime_file_paths["config_path"]
-    strategies_path = runtime_file_paths["strategies_path"]
-    db_path = runtime_file_paths["db_path"]
+def backup_restore_runtime_files(tmp_path, monkeypatch, request):
     test_name = request.node.name
-    logs_dir = REPO_ROOT / "data" / "logs"
-    pytest_logs_dir = logs_dir / "pytest"
+    runtime_data_dir = tmp_path / "data"
+    runtime_paths = _runtime_file_paths_for(runtime_data_dir)
+    runtime_logs_dir = runtime_data_dir / "logs"
+    pytest_logs_dir = REPO_ROOT / "data" / "logs" / "pytest"
     today_log_stem = datetime.now().strftime('%Y-%m-%d')
     today_log_name = f"{today_log_stem}.log"
-    today_log_path = logs_dir / today_log_name
-    prod_log_backup = logs_dir / f"{today_log_name}.pytest-backup"
+    today_log_path = runtime_logs_dir / today_log_name
 
-    config_backup = config_path.with_suffix(".yml.pytest-backup")
-    strategies_backup = strategies_path.with_suffix(".yml.pytest-backup")
-    db_backup = db_path.with_suffix(".db.pytest-backup")
+    runtime_data_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("DEEZER_DATA_DIR", str(runtime_data_dir))
+    reset_config_snapshot()
 
     try:
-        if config_path.exists():
-            if config_backup.exists():
-                config_backup.unlink()
-            shutil.move(str(config_path), str(config_backup))
-
-        if strategies_path.exists():
-            if strategies_backup.exists():
-                strategies_backup.unlink()
-            shutil.move(str(strategies_path), str(strategies_backup))
-
-        if db_path.exists():
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            if db_backup.exists():
-                db_backup.unlink()
-            shutil.move(str(db_path), str(db_backup))
-
-        logs_dir.mkdir(parents=True, exist_ok=True)
-        pytest_logs_dir.mkdir(parents=True, exist_ok=True)
-        if today_log_path.exists():
-            if prod_log_backup.exists():
-                prod_log_backup.unlink()
-            shutil.move(str(today_log_path), str(prod_log_backup))
-
-        yield runtime_file_paths
+        yield runtime_paths
     finally:
+        reset_config_snapshot()
+
         if today_log_path.exists():
+            pytest_logs_dir.mkdir(parents=True, exist_ok=True)
             if today_log_path.stat().st_size == 0:
                 today_log_path.unlink()
             else:
                 pytest_log_path = _build_pytest_log_path(pytest_logs_dir, test_name)
                 shutil.move(str(today_log_path), str(pytest_log_path))
-
-        if prod_log_backup.exists():
-            if today_log_path.exists():
-                today_log_path.unlink()
-            shutil.move(str(prod_log_backup), str(today_log_path))
-
-        if config_path.exists():
-            config_path.unlink()
-        if config_backup.exists():
-            shutil.move(str(config_backup), str(config_path))
-
-        if strategies_path.exists():
-            strategies_path.unlink()
-        if strategies_backup.exists():
-            shutil.move(str(strategies_backup), str(strategies_path))
-
-        if db_path.exists():
-            db_path.unlink()
-        if db_backup.exists():
-            shutil.move(str(db_backup), str(db_path))

@@ -7,6 +7,7 @@ import pytest
 from utils.infrastructure.paths import get_data_dir
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 ENTRYPOINT_RUN_RESULT = None
 
 
@@ -127,3 +128,28 @@ def test_main_entrypoint_banner_and_errors(monkeypatch, backup_restore_runtime_f
 	"""Validates startup outputs and side effects for a fresh entrypoint run."""
 	result = _run_entrypoint_once(monkeypatch, backup_restore_runtime_files, run_subprocess)
 	assertion(result)
+
+
+def test_backup_restore_runtime_files_isolates_repo_data_dir(backup_restore_runtime_files):
+	"""Ensures runtime fixture writes stay inside a temp data dir and leave repo files untouched."""
+	repo_config_path = REPO_ROOT / "data" / "config.yml"
+	repo_strategies_path = REPO_ROOT / "data" / "strategies.yml"
+	repo_config_before = repo_config_path.read_text(encoding="utf-8") if repo_config_path.exists() else None
+	repo_strategies_before = repo_strategies_path.read_text(encoding="utf-8") if repo_strategies_path.exists() else None
+
+	assert backup_restore_runtime_files["data_dir"] != REPO_ROOT / "data"
+	assert backup_restore_runtime_files["config_path"].parent == backup_restore_runtime_files["data_dir"]
+	assert backup_restore_runtime_files["strategies_path"].parent == backup_restore_runtime_files["data_dir"]
+
+	backup_restore_runtime_files["config_path"].write_text("config:\n  log_level: 'INFO'\n", encoding="utf-8")
+	backup_restore_runtime_files["strategies_path"].write_text("playlists:\n", encoding="utf-8")
+
+	if repo_config_before is None:
+		assert not repo_config_path.exists()
+	else:
+		assert repo_config_path.read_text(encoding="utf-8") == repo_config_before
+
+	if repo_strategies_before is None:
+		assert not repo_strategies_path.exists()
+	else:
+		assert repo_strategies_path.read_text(encoding="utf-8") == repo_strategies_before

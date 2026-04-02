@@ -9,6 +9,7 @@ from utils.infrastructure.paths import get_cache_dir
 from utils.api.fetching import get_tracks
 from utils.collections import handle_cached_data, get_collection_name
 from utils.config import get_global_value
+from utils.infrastructure.signals import shutdown_event
 import strategies.sources.album as album_strategy 
 
 # Headers returned from Artists
@@ -67,6 +68,10 @@ def run(client, config, logger, source_data):
 
         artist_tracks = []
         for artist_id in normalized_artist_ids:
+            if shutdown_event.is_set():
+                logger.debug("Shutdown acknowledged before next artist lookup. Skipping remaining artists.")
+                break
+
             # Logic Tracing: Artist metadata
             try:
                 artist = client.get_artist(artist_id)
@@ -84,6 +89,13 @@ def run(client, config, logger, source_data):
             last_log_time = start_log_time
             log_interval = get_global_value('log_interval',120)
             for i, album_obj in enumerate(albums, start=1):
+                if shutdown_event.is_set():
+                    logger.debug(
+                        "Shutdown acknowledged during artist album dispatch. "
+                        "Skipping remaining albums for this artist."
+                    )
+                    break
+
                 logger.debug(f"[{i}/{total_albums}] Dispatching to album strategy: '{album_obj.title}' (ID: {album_obj.id})")
 
                 # Inform user during long waits
@@ -116,6 +128,13 @@ def run(client, config, logger, source_data):
                 # Delegate to existing logic
                 tracks = album_strategy.run(client, config, logger, album_payload)
                 artist_tracks.extend(tracks)
+
+                if shutdown_event.is_set():
+                    logger.debug(
+                        "Shutdown acknowledged after album strategy run. "
+                        "Stopping artist aggregation early."
+                    )
+                    break
 
             logger.debug(f"Successfully aggregated {len(artist_tracks)} tracks from artist '{artist.name}'.")
 

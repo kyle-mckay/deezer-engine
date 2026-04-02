@@ -1,11 +1,9 @@
 import pytest
 
-from tests.input_output_offline_support import EXPECTED_COUNTS, TOTAL_COUNT_KEYS, preserve_runtime_state, run_input_output_once
+from tests.input_output_offline_support import EXPECTED_COUNTS, OFFLINE_SHARED_CACHE_KEY, TOTAL_COUNT_KEYS, preserve_runtime_state, run_input_output_once
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.offline, pytest.mark.slow]
-
-MODULE_CACHE_KEY = "offline-totals"
 
 
 def test_input_output_offline_total_counts(monkeypatch, preserve_runtime_state, run_engine_main):
@@ -14,7 +12,7 @@ def test_input_output_offline_total_counts(monkeypatch, preserve_runtime_state, 
         monkeypatch,
         preserve_runtime_state,
         run_engine_main,
-        cache_key=MODULE_CACHE_KEY,
+        cache_key=OFFLINE_SHARED_CACHE_KEY,
     )
     counts = result["counts"]
 

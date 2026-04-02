@@ -5,6 +5,8 @@ import pytest
 
 from strategies.sources import file as file_source
 from strategies.sources import history, smarttracklist
+from strategies.sources import artist, album
+from utils.infrastructure.signals import shutdown_event
 
 
 pytestmark = [pytest.mark.unit]
@@ -132,3 +134,53 @@ def test_file_delegates_to_track_worker(monkeypatch, tmp_path):
         "id": ["401", "402", "403"],
         "override_collection": "file__merged",
     }]
+
+
+def test_album_source_honors_shutdown_before_fetch(monkeypatch):
+    logger = logging.getLogger("tests.source_delegation.album_shutdown")
+
+    calls = {"get_album": 0}
+
+    class DummyClient:
+        def get_album(self, _album_id):
+            calls["get_album"] += 1
+            raise AssertionError("get_album should not be called when shutdown is active")
+
+    shutdown_event.set()
+    try:
+        result = album.run(
+            client=DummyClient(),
+            config={},
+            logger=logger,
+            source_data={"type": "album", "id": ["111", "222"]},
+        )
+    finally:
+        shutdown_event.clear()
+
+    assert result == []
+    assert calls["get_album"] == 0
+
+
+def test_artist_source_honors_shutdown_before_artist_lookup(monkeypatch):
+    logger = logging.getLogger("tests.source_delegation.artist_shutdown")
+
+    calls = {"get_artist": 0}
+
+    class DummyClient:
+        def get_artist(self, _artist_id):
+            calls["get_artist"] += 1
+            raise AssertionError("get_artist should not be called when shutdown is active")
+
+    shutdown_event.set()
+    try:
+        result = artist.run(
+            client=DummyClient(),
+            config={},
+            logger=logger,
+            source_data={"type": "artist", "id": ["333", "444"]},
+        )
+    finally:
+        shutdown_event.clear()
+
+    assert result == []
+    assert calls["get_artist"] == 0

@@ -4,6 +4,7 @@
 """Genre metadata helpers."""
 
 import json
+import sqlite3
 
 from utils.db.connection import get_connection
 from utils.infrastructure.signals import shutdown_event
@@ -145,12 +146,6 @@ def populate_album_genres(album_list, logger=None):
 				if logger:
 					logger.debug(f"Marked {len(set(processed_album_ids))} albums as genre_mapped=1")
 
-			conn.commit()
-			if logger:
-				logger.debug(
-					f"Genre population complete: {len(all_genres)} genres, {len(album_genres_tuples)} relationships"
-				)
-
 			enriched_album_ids = set(album_id for album_id, _ in album_genre_relationships)
 			if logger:
 				logger.debug(f"Retroactively populating track genres for {len(enriched_album_ids)} enriched albums")
@@ -169,11 +164,18 @@ def populate_album_genres(album_list, logger=None):
 						logger,
 						album_position=album_position,
 						album_total=total_enriched_albums,
+						conn=conn,
 					)
 				except Exception as album_err:
 					if logger:
 						logger.warning(f"Failed to populate track genres for album {album_id}: {album_err}")
 					continue
+
+			conn.commit()
+			if logger:
+				logger.debug(
+					f"Genre population complete: {len(all_genres)} genres, {len(album_genres_tuples)} relationships"
+				)
 
 	except Exception as exc:
 		if logger:
@@ -258,58 +260,64 @@ def populate_track_genres(logger=None):
 		raise
 
 
-def populate_track_genres_for_album(album_id, logger=None, album_position=None, album_total=None):
+def populate_track_genres_for_album(album_id, logger=None, album_position=None, album_total=None, conn=None):
 	"""
 	Populate track_genres for a specific album.
 	"""
 	try:
-		with get_connection(logger) as conn:
-			cursor = conn.cursor()
-			progress_suffix = ""
-			if album_position is not None and album_total is not None:
-				progress_suffix = f" ({album_position}/{album_total})"
+		managed_conn = conn if conn is not None else get_connection(logger)
+		should_close = conn is None
+		cursor = managed_conn.cursor()
+		progress_suffix = ""
+		if album_position is not None and album_total is not None:
+			progress_suffix = f" ({album_position}/{album_total})"
 
-			cursor.execute("SELECT COUNT(*) FROM album_genres WHERE album_id = ?", (album_id,))
-			genre_count = cursor.fetchone()[0]
+		cursor.execute("SELECT COUNT(*) FROM album_genres WHERE album_id = ?", (album_id,))
+		genre_count = cursor.fetchone()[0]
 
-			if genre_count == 0:
-				cursor.execute("UPDATE tracks SET genre_mapped = 1 WHERE album_id = ?", (album_id,))
-				conn.commit()
-				if logger:
-					logger.debug(
-						f"Album {album_id}{progress_suffix} has no genres to populate. "
-						"Marked tracks as genre_mapped=1."
-					)
-				return 0
-
-			insert_query = """
-			INSERT OR REPLACE INTO track_genres (track_id, genre_id)
-			SELECT DISTINCT t.id, ag.genre_id
-			FROM tracks t
-			JOIN album_genres ag ON ag.album_id = ?
-			WHERE t.album_id = ?
-			"""
-
-			cursor.execute(insert_query, (album_id, album_id))
-			rows_affected = cursor.rowcount
-
+		if genre_count == 0:
 			cursor.execute("UPDATE tracks SET genre_mapped = 1 WHERE album_id = ?", (album_id,))
-			tracks_marked = cursor.rowcount
-
-			conn.commit()
-
+			if should_close:
+				managed_conn.commit()
 			if logger:
 				logger.debug(
-					f"Populated {rows_affected} track-genre relationships for album {album_id}{progress_suffix}, "
-					f"marked {tracks_marked} tracks as genre_mapped=1"
+					f"Album {album_id}{progress_suffix} has no genres to populate. "
+					"Marked tracks as genre_mapped=1."
 				)
+			return 0
 
-			return rows_affected
+		insert_query = """
+		INSERT OR REPLACE INTO track_genres (track_id, genre_id)
+		SELECT DISTINCT t.id, ag.genre_id
+		FROM tracks t
+		JOIN album_genres ag ON ag.album_id = ?
+		WHERE t.album_id = ?
+		"""
+
+		cursor.execute(insert_query, (album_id, album_id))
+		rows_affected = cursor.rowcount
+
+		cursor.execute("UPDATE tracks SET genre_mapped = 1 WHERE album_id = ?", (album_id,))
+		tracks_marked = cursor.rowcount
+
+		if should_close:
+			managed_conn.commit()
+
+		if logger:
+			logger.debug(
+				f"Populated {rows_affected} track-genre relationships for album {album_id}{progress_suffix}, "
+				f"marked {tracks_marked} tracks as genre_mapped=1"
+			)
+
+		return rows_affected
 
 	except Exception as exc:
 		if logger:
 			logger.error(f"DB Error: Failed to populate track genres for album {album_id}: {exc}")
 		raise
+	finally:
+		if conn is None and 'managed_conn' in locals() and isinstance(managed_conn, sqlite3.Connection):
+			managed_conn.close()
 
 
 def reset_album_genres_by_track_ids(track_ids, logger=None):

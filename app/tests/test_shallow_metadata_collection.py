@@ -8,7 +8,9 @@ from utils.db.cache import (
     mark_fully_populated_artists_as_cached,
     mark_fully_populated_tracks_as_cached,
 )
+from utils.metadata import genres as genre_metadata
 from utils.metadata.albums import flatten_albums
+from utils.metadata.genres import populate_track_genres_for_album
 from utils.metadata.queries import get_unprocessed_album_ids, get_unprocessed_track_ids
 from utils.metadata.tracks import flatten_tracks, insert_shallow_track_stubs
 
@@ -408,3 +410,124 @@ def test_mark_fully_populated_entities_as_cached(backup_restore_runtime_files):
     assert track_cached is not None
     assert get_unprocessed_track_ids(logger) == []
     assert get_unprocessed_album_ids(logger) == []
+
+
+def test_populate_track_genres_for_album_uses_caller_transaction(backup_restore_runtime_files):
+    """Ensures shared connections keep commit ownership with the caller."""
+    logger = logging.getLogger("tests.shallow_metadata")
+    initialize_all(logger)
+
+    with get_connection(logger) as conn:
+        conn.execute("INSERT INTO albums (id, title, genre_mapped) VALUES (?, ?, ?)", (910, "Shared Album", 1))
+        conn.execute("INSERT INTO tracks (id, title, album_id, genre_mapped) VALUES (?, ?, ?, ?)", (911, "Shared Track", 910, 0))
+        conn.execute("INSERT INTO genres (id, name) VALUES (?, ?)", (81, "Synthwave"))
+        conn.execute("INSERT INTO album_genres (album_id, genre_id) VALUES (?, ?)", (910, 81))
+        conn.commit()
+
+    with get_connection(logger) as shared_conn:
+        rows_affected = populate_track_genres_for_album(910, logger=logger, conn=shared_conn)
+
+        assert rows_affected == 1
+
+        with get_connection(logger) as observer_conn:
+            observer_count = observer_conn.execute(
+                "SELECT COUNT(*) FROM track_genres WHERE track_id = ? AND genre_id = ?",
+                (911, 81),
+            ).fetchone()[0]
+            observer_track_mapped = observer_conn.execute(
+                "SELECT genre_mapped FROM tracks WHERE id = ?",
+                (911,),
+            ).fetchone()[0]
+
+        assert observer_count == 0
+        assert observer_track_mapped == 0
+
+        shared_conn.commit()
+
+    with get_connection(logger) as conn:
+        persisted_count = conn.execute(
+            "SELECT COUNT(*) FROM track_genres WHERE track_id = ? AND genre_id = ?",
+            (911, 81),
+        ).fetchone()[0]
+        persisted_track_mapped = conn.execute(
+            "SELECT genre_mapped FROM tracks WHERE id = ?",
+            (911,),
+        ).fetchone()[0]
+
+    assert persisted_count == 1
+    assert persisted_track_mapped == 1
+
+
+def test_populate_album_genres_reuses_one_connection_for_track_backfill(
+    backup_restore_runtime_files,
+    monkeypatch,
+):
+    """Confirms retroactive track genre backfill reuses the batch connection."""
+    logger = logging.getLogger("tests.shallow_metadata")
+    initialize_all(logger)
+
+    with get_connection(logger) as conn:
+        conn.executemany(
+            "INSERT INTO albums (id, title, genre_mapped) VALUES (?, ?, ?)",
+            [
+                (1001, "Batch Album One", 0),
+                (1002, "Batch Album Two", 0),
+            ],
+        )
+        conn.executemany(
+            "INSERT INTO tracks (id, title, album_id, genre_mapped) VALUES (?, ?, ?, ?)",
+            [
+                (2001, "Album One Track", 1001, 0),
+                (2002, "Album Two Track A", 1002, 0),
+                (2003, "Album Two Track B", 1002, 0),
+            ],
+        )
+        conn.commit()
+
+    original_get_connection = genre_metadata.get_connection
+    connection_calls = 0
+
+    def counting_get_connection(*args, **kwargs):
+        nonlocal connection_calls
+        connection_calls += 1
+        return original_get_connection(*args, **kwargs)
+
+    monkeypatch.setattr(genre_metadata, "get_connection", counting_get_connection)
+
+    genre_metadata.populate_album_genres(
+        [
+            {"id": 1001, "genres": [{"id": 7, "name": "Rock"}]},
+            {"id": 1002, "genres": [{"id": 7, "name": "Rock"}, {"id": 8, "name": "Soul"}]},
+        ],
+        logger,
+    )
+
+    assert connection_calls == 1
+
+    with get_connection(logger) as conn:
+        track_genre_rows = conn.execute(
+            "SELECT track_id, genre_id FROM track_genres ORDER BY track_id, genre_id"
+        ).fetchall()
+        track_mapping_rows = conn.execute(
+            "SELECT id, genre_mapped FROM tracks ORDER BY id"
+        ).fetchall()
+        album_mapping_rows = conn.execute(
+            "SELECT id, genre_mapped FROM albums ORDER BY id"
+        ).fetchall()
+
+    assert [tuple(row) for row in track_genre_rows] == [
+        (2001, 7),
+        (2002, 7),
+        (2002, 8),
+        (2003, 7),
+        (2003, 8),
+    ]
+    assert [tuple(row) for row in track_mapping_rows] == [
+        (2001, 1),
+        (2002, 1),
+        (2003, 1),
+    ]
+    assert [tuple(row) for row in album_mapping_rows] == [
+        (1001, 1),
+        (1002, 1),
+    ]

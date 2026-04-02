@@ -45,6 +45,8 @@ COMPONENT_COUNT_CASES = [
     pytest.param("SAVE_DF", "destination-file-save", EXPECTED_COUNTS["SAVE_DF"], id="destination-file-save-12"),
 ]
 
+OFFLINE_SHARED_CACHE_KEY = "offline-shared"
+
 _OFFLINE_RUN_RESULTS = {}
 
 

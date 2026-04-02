@@ -7,6 +7,7 @@ from utils.infrastructure.paths import get_cache_dir
 from utils.collections import handle_cached_data, get_collection_name
 from utils.config import get_global_value
 from utils.api.fetching import fetch_shallow_tracks
+from utils.infrastructure.signals import shutdown_event
 
 # Headers returned from Albums:
 # Returns: id, readable, title, title_short, title_version, link, isrc, duration,
@@ -68,6 +69,10 @@ def run(client, config, logger, source_data):
         collected_tracks = []
 
         for album_id in normalized_album_ids:
+            if shutdown_event.is_set():
+                logger.debug("Shutdown acknowledged before next album fetch. Skipping remaining albums.")
+                break
+
             # Logic Tracing: Metadata retrieval
             logger.debug(f"Targeting Album ID: {album_id} | Retention: {retention_hrs}h")
 
@@ -101,6 +106,10 @@ def run(client, config, logger, source_data):
             logger.debug(f"Loaded {len(tracks)} tracks from album '{album.title}'.")
             if tracks:
                 collected_tracks.extend([{**track, 'collection': source_collection} for track in tracks])
+
+            if shutdown_event.is_set():
+                logger.debug("Shutdown acknowledged after album fetch. Returning partial album source results.")
+                break
 
         # Data Samples for Debugging
         if collected_tracks:
