@@ -28,6 +28,7 @@ Sources fetch tracks from Deezer. You can combine multiple sources into a single
 Every source entry supports these optional fields:
 
 * `retention`: (Int) Hours to cache data. `0` (default) means fetch live.
+* `override_collection`: (String) Optional explicit collection tag to apply to returned tracks.
 * `modifiers`: (List) **Local Modifiers** that apply *only* to this source before merging.
 
 ### Supported Types
@@ -39,6 +40,7 @@ Every source entry supports these optional fields:
 | `playlist` | `id` | All tracks from one playlist ID or multiple playlist IDs. |
 | `album` | `id` | All tracks from one album ID or multiple album IDs. |
 | `artist` | `id` | Iterates through one or multiple artists' discographies. |
+| `track` | `id` | Fetches one track ID or multiple track IDs directly. |
 | `smarttracklist` | `name` | Curated: `discovery`, `new-releases`, `inspired-by-1` to `5`. |
 | `file` | `format` | Imports tracks from a file on your computer. |
 
@@ -114,8 +116,32 @@ Gets all songs from a specific artist by itterating through their albums. Curren
 ```
 
 > [!NOTE]
-> For `playlist`, `album`, and `artist`, the `id` field accepts either a single value or a list.
+> For `playlist`, `album`, `artist`, and `track`, the `id` field accepts either a single value or a list.
 > If an ID list includes invalid entries (empty/null), they are skipped with a warning and valid IDs continue.
+
+#### `track`
+
+Gets one or more specific tracks by Deezer track ID: `https://www.deezer.com/us/track/<track_id>`
+
+```yaml
+    source:
+      - type: "track"
+        id: "1008610492"
+
+# You can also merge multiple track IDs in one source block
+    source:
+      - type: "track"
+        id: ["1008610492", "1008610493", "1008610494"]
+
+# Optional: preserve or force a specific collection tag from an upstream workflow
+    source:
+      - type: "track"
+        id: ["1008610492", "1008610493"]
+        override_collection: "smarttracklist__discovery"
+```
+
+By default, the `track` source does not force a synthetic source collection tag.
+Use `override_collection` when you want an explicit collection identity in output rows.
 
 #### `smarttracklist`
 

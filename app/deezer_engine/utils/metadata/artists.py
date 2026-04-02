@@ -5,17 +5,20 @@
 
 import json
 
+from utils.db.cache import mark_fully_populated_artists_as_cached
+from utils.db.connection import get_connection
 
-def insert_shallow_artist_stubs(artist_list, logger=None):
+
+def insert_shallow_artist_stubs(artist_list, logger=None, skip_fully_populated=False):
     """Insert shallow artist payloads for shallow metadata-collection."""
     if logger:
-        logger.debug(f"Received {len(artist_list) if artist_list else 0} artists for shallow insert")
+        logger.debug(
+            f"Received {len(artist_list) if artist_list else 0} artists for shallow insert "
+            f"(skip_fully_populated={skip_fully_populated})."
+        )
 
     if not artist_list:
         return
-
-    from utils.db.connection import get_connection
-    from utils.db.cache import mark_fully_populated_artists_as_cached
 
     try:
         with get_connection(logger) as conn:
@@ -63,10 +66,16 @@ def insert_shallow_artist_stubs(artist_list, logger=None):
                 ]
                 cursor.executemany(artist_query, artist_rows)
 
+            if not skip_fully_populated:
+                if logger:
+                    logger.debug("Marking fully populated artists as cached.")
+                mark_fully_populated_artists_as_cached(logger=logger, conn=conn)
+            elif logger:
+                logger.debug("Skipping artist cache finalization (deferred).")
+
             conn.commit()
             if logger:
                 logger.debug(f"Shallow artist insert complete: artists={len(artists_by_id)}")
-            mark_fully_populated_artists_as_cached(logger)
     except Exception as e:
         if logger:
             logger.error(f"DB Error: Shallow artist insert failed: {e}")
@@ -87,38 +96,49 @@ def _coerce_artist(artist):
     return dict(artist)
 
 
-def _dedupe_artists(artistlist):
-    deduped_artists = []
-    seen_artist_ids = set()
+def _dedupe_entities(entities, coerce_fn, logger=None, entity_label="entities"):
+    """Merge duplicate entities by id, combining fields from all occurrences."""
+    if logger:
+        logger.debug(f"_dedupe_entities: received {len(entities)} {entity_label}.")
 
-    for artist in artistlist:
-        artist_payload = _coerce_artist(artist)
-        artist_id = artist_payload.get("id")
-        if artist_id is None:
-            deduped_artists.append(artist_payload)
+    by_id = {}
+    no_id = []
+
+    for entity in entities:
+        payload = coerce_fn(entity)
+        entity_id = payload.get("id")
+        if entity_id is None:
+            no_id.append(payload)
             continue
-        if artist_id in seen_artist_ids:
-            continue
-        seen_artist_ids.add(artist_id)
-        deduped_artists.append(artist_payload)
+        existing = by_id.get(entity_id, {})
+        by_id[entity_id] = {**existing, **{k: v for k, v in payload.items() if v is not None}}
 
-    return deduped_artists
+    deduped = list(by_id.values()) + no_id
+
+    if logger:
+        logger.debug(
+            f"_dedupe_entities: {len(entities)} in, {len(deduped)} out "
+            f"({len(entities) - len(deduped)} merged)."
+        )
+    return deduped
 
 
-def flatten_artists(artistlist, logger):
+def flatten_artists(artistlist, logger, skip_fully_populated=False):
     """Flatten artist payloads into dictionaries suitable for shallow database writes."""
     if artistlist is None:
         logger.debug("Flattening 0 artists.")
         return []
 
     artists = artistlist if isinstance(artistlist, list) else [artistlist]
-    artists = _dedupe_artists(artists)
-    logger.debug(f"Flattening {len(artists)} artists.")
+    artists = _dedupe_entities(artists, _coerce_artist, logger=logger, entity_label="artists")
+    logger.debug(f"Flattening {len(artists)} artists (skip_fully_populated={skip_fully_populated}).")
 
     flattened_artists = []
     for artist in artists:
         try:
             flattened = dict(artist) if isinstance(artist, dict) else _coerce_artist(artist)
+            flattened.pop("playlist", None)
+            flattened.pop("album", None)
             flattened_artists.append(
                 {key: _normalize_field(value) for key, value in flattened.items()}
             )
@@ -130,5 +150,9 @@ def flatten_artists(artistlist, logger):
         f"Flattened artists. Start count: {len(artists)}, end count: {len(flattened_artists)}."
     )
 
-    insert_shallow_artist_stubs(flattened_artists, logger)
+    insert_shallow_artist_stubs(
+        flattened_artists,
+        logger,
+        skip_fully_populated=skip_fully_populated,
+    )
     return flattened_artists

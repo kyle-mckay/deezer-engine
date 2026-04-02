@@ -74,6 +74,11 @@ def test_unknown_type_falls_back_to_base_key_sets():
     assert get_allowed_destination_keys("no-such-destination") == DESTINATION_BASE_KEYS
 
 
+def test_source_base_keys_include_override_collection():
+    """Confirms source base contract allows an explicit collection override."""
+    assert "override_collection" in SOURCE_BASE_KEYS
+
+
 @pytest.mark.parametrize(
     "allowed_keys",
     [
@@ -120,7 +125,7 @@ def test_unknown_key_formatting_suggests_expected_key(allowed_keys):
     assert selected in formatted
 
 
-@pytest.mark.parametrize("source_type", ["album", "artist", "playlist"])
+@pytest.mark.parametrize("source_type", ["album", "artist", "playlist", "track"])
 def test_id_based_source_contract_does_not_add_ids_key(source_type):
     """Confirms multi-ID support stays on the existing id key rather than adding ids."""
     allowed = get_allowed_source_keys(source_type)

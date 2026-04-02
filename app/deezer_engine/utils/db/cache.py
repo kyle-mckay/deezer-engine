@@ -7,7 +7,7 @@ from datetime import datetime
 from utils.db.connection import get_connection
 
 
-def _mark_rows_cached_when_fields_populated(table_name, required_fields, logger=None, cached_at=None):
+def _mark_rows_cached_when_fields_populated(table_name, required_fields, logger=None, cached_at=None, conn=None):
     """Set date_cached for rows that have all required API fields populated."""
     if not required_fields:
         return 0
@@ -24,12 +24,22 @@ def _mark_rows_cached_when_fields_populated(table_name, required_fields, logger=
       AND {where_all_fields_present};
     """
 
+    if logger:
+        logger.debug(
+            f"Cache finalization for '{table_name}': using {'shared' if conn is not None else 'standalone'} connection."
+        )
+
     try:
-        with get_connection(logger) as conn:
+        if conn is not None:
             cursor = conn.cursor()
             cursor.execute(query, (marker,))
+            return cursor.rowcount
+
+        with get_connection(logger) as managed_conn:
+            cursor = managed_conn.cursor()
+            cursor.execute(query, (marker,))
             rows_affected = cursor.rowcount
-            conn.commit()
+            managed_conn.commit()
             return rows_affected
     except Exception as e:
         if logger:
@@ -37,7 +47,7 @@ def _mark_rows_cached_when_fields_populated(table_name, required_fields, logger=
         raise
 
 
-def mark_fully_populated_tracks_as_cached(logger=None, cached_at=None):
+def mark_fully_populated_tracks_as_cached(logger=None, cached_at=None, conn=None):
     """Mark tracks as cached when all track API fields are populated."""
     required_track_fields = [
         'readable',
@@ -71,13 +81,14 @@ def mark_fully_populated_tracks_as_cached(logger=None, cached_at=None):
         required_track_fields,
         logger=logger,
         cached_at=cached_at,
+        conn=conn,
     )
     if logger and rows > 0:
         logger.debug(f"Cache finalization: marked {rows} fully populated tracks as cached.")
     return rows
 
 
-def mark_fully_populated_albums_as_cached(logger=None, cached_at=None):
+def mark_fully_populated_albums_as_cached(logger=None, cached_at=None, conn=None):
     """Mark albums as cached when all album API fields are populated."""
     required_album_fields = [
         'title',
@@ -111,13 +122,14 @@ def mark_fully_populated_albums_as_cached(logger=None, cached_at=None):
         required_album_fields,
         logger=logger,
         cached_at=cached_at,
+        conn=conn,
     )
     if logger and rows > 0:
         logger.debug(f"Cache finalization: marked {rows} fully populated albums as cached.")
     return rows
 
 
-def mark_fully_populated_artists_as_cached(logger=None, cached_at=None):
+def mark_fully_populated_artists_as_cached(logger=None, cached_at=None, conn=None):
     """Mark artists as cached when all artist API fields are populated."""
     required_artist_fields = [
         'name',
@@ -138,7 +150,24 @@ def mark_fully_populated_artists_as_cached(logger=None, cached_at=None):
         required_artist_fields,
         logger=logger,
         cached_at=cached_at,
+        conn=conn,
     )
     if logger and rows > 0:
         logger.debug(f"Cache finalization: marked {rows} fully populated artists as cached.")
     return rows
+
+
+def mass_mark_fully_populated_as_cached(logger=None):
+    """Mark artists, albums, and tracks as cached in a single DB transaction."""
+    if logger:
+        logger.debug("mass_mark_fully_populated_as_cached: starting batch cache finalization (artists, albums, tracks).")
+    try:
+        with get_connection(logger) as conn:
+            mark_fully_populated_artists_as_cached(logger=logger, conn=conn)
+            mark_fully_populated_albums_as_cached(logger=logger, conn=conn)
+            mark_fully_populated_tracks_as_cached(logger=logger, conn=conn)
+            conn.commit()
+    except Exception as e:
+        if logger:
+            logger.error(f"DB Error: mass_mark_fully_populated_as_cached failed: {e}")
+        raise

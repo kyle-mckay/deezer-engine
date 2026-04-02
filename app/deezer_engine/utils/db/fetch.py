@@ -7,7 +7,15 @@ import logging
 from utils.db.connection import get_connection
 
 
-def fetch_entities_by(table_name, column_name, operator, values, return_ids_only=False, logger=None):
+def fetch_entities_by(
+    table_name,
+    column_name,
+    operator,
+    values,
+    return_ids_only=False,
+    blocklist_clause=None,
+    logger=None,
+):
     """
     General-purpose fetch for entities from a table by column and operator.
     - table_name: str, e.g. 'tracks'
@@ -15,11 +23,16 @@ def fetch_entities_by(table_name, column_name, operator, values, return_ids_only
     - operator: str, '=', 'IN', etc.
     - values: single value or list of values
     - return_ids_only: if True, return only the id column; else, return all columns
+    - blocklist_clause: optional SQL predicate appended with AND (e.g. "COALESCE(blocklisted, 0) = 0")
     Returns a list of dicts (all columns) or a list of ids (if return_ids_only).
     """
     norm_operator = _normalize_operator(operator)
     if logger:
-        logger.debug(f"Query database for table_name={table_name}, column_name={column_name}, operator={norm_operator}, values={values}, return_ids_only={return_ids_only}")
+        logger.debug(
+            f"Query database for table_name={table_name}, column_name={column_name}, "
+            f"operator={norm_operator}, values={values}, return_ids_only={return_ids_only}, "
+            f"blocklist_clause={blocklist_clause}"
+        )
     if not table_name or not column_name or not norm_operator or values is None:
         return []
     if norm_operator == 'IN':
@@ -33,6 +46,8 @@ def fetch_entities_by(table_name, column_name, operator, values, return_ids_only
         params = [values]
     select_cols = 'id' if return_ids_only else '*'
     query = f"SELECT {select_cols} FROM {table_name} WHERE {where_clause}"
+    if blocklist_clause:
+        query = f"{query} AND {blocklist_clause}"
     try:
         with get_connection(logger) as conn:
             cursor = conn.cursor()

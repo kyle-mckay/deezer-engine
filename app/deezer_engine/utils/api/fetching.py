@@ -57,11 +57,11 @@ def _get_favorites(client, logger):
 
 def fetch_shallow_tracks(paginated_tracks, logger):
     """Consume a paginated track source and return flattened shallow metadata rows."""
-    from utils.metadata.tracks import flatten_tracks
+    from utils.metadata.tracks import ingest_shallow_tracks
 
     raw_tracks = list(paginated_tracks) if paginated_tracks is not None else []
     logger.debug(f"Fetched {len(raw_tracks)} raw paginated tracks for shallow processing.")
-    return flatten_tracks(raw_tracks, logger)
+    return ingest_shallow_tracks(raw_tracks, logger, skip_fully_populated=True)
 
 
 def _is_json_string(value):
@@ -113,6 +113,73 @@ def persist_track_batch(tracks, cached_tracks, logger, phase_label, update_track
 
     update_track_metadata(tracks, logger)
     cached_tracks.extend(tracks)
+    return cached_tracks, []
+
+
+def _prepare_track_metadata_rows(flattened_tracks, date_time):
+    """Shape flattened track payloads into full metadata rows for DB updates."""
+    metadata_rows = []
+    for track in flattened_tracks:
+        metadata_rows.append(
+            {
+                "id": str(track.get("id")) if track.get("id") is not None else None,
+                "readable": track.get("readable"),
+                "title": track.get("title"),
+                "title_short": track.get("title_short"),
+                "title_version": track.get("title_version"),
+                "unseen": track.get("unseen", False),
+                "isrc": track.get("isrc"),
+                "link": track.get("link"),
+                "share": track.get("share"),
+                "duration": track.get("duration", 0),
+                "track_position": track.get("track_position"),
+                "disk_number": track.get("disk_number"),
+                "rank": track.get("rank", 0),
+                "release_date": track.get("release_date"),
+                "explicit_lyrics": track.get("explicit_lyrics", False),
+                "explicit_content_lyrics": track.get("explicit_content_lyrics", 0),
+                "explicit_content_cover": track.get("explicit_content_cover", 0),
+                "preview": track.get("preview"),
+                "bpm": track.get("bpm", 0),
+                "gain": track.get("gain", 0),
+                "available_countries": _normalize_json_field(track.get("available_countries", [])),
+                "contributors": _normalize_json_field(track.get("contributors", [])),
+                "md5_image": track.get("md5_image"),
+                "track_token": track.get("track_token"),
+                "artist_id": track.get("artist_id"),
+                "album_id": track.get("album_id"),
+                "date_cached": date_time,
+            }
+        )
+    return [row for row in metadata_rows if row.get("id") is not None]
+
+
+def persist_track_metadata_raw_batch(
+    raw_tracks,
+    cached_tracks,
+    logger,
+    phase_label,
+    flatten_tracks,
+    update_track_metadata,
+    date_time,
+):
+    """Flatten raw track payloads at checkpoint and persist metadata in batch."""
+    if not raw_tracks:
+        return cached_tracks, raw_tracks
+
+    if phase_label == "Database Checkpoint":
+        logger.debug(
+            f"{phase_label}: Flattening and persisting chunk of {len(raw_tracks)} raw track payloads"
+        )
+    else:
+        logger.debug(
+            f"{phase_label}: Flattening and persisting remaining {len(raw_tracks)} raw track payloads"
+        )
+
+    flattened_tracks = flatten_tracks(raw_tracks, logger)
+    metadata_rows = _prepare_track_metadata_rows(flattened_tracks, date_time)
+    update_track_metadata(metadata_rows, logger)
+    cached_tracks.extend(metadata_rows)
     return cached_tracks, []
 
 
@@ -226,7 +293,7 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
     """Transforms Deezer API objects into a list of dictionaries with rate-limiting protection."""
     from utils.collections import sync_to_collections
     from utils.db.blocklist import mark_track_metadata_fetch_failed
-    from utils.metadata.tracks import update_track_metadata, update_tracks_partial_batch
+    from utils.metadata.tracks import flatten_tracks, update_track_metadata, update_tracks_partial_batch
 
     logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
 
@@ -268,12 +335,14 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
 
         if source_type == "database":
             if identifier == "tracks":
-                cached_tracks, tracks = persist_track_batch(
+                cached_tracks, tracks = persist_track_metadata_raw_batch(
                     tracks,
                     cached_tracks,
                     logger,
                     phase_label,
+                    flatten_tracks,
                     update_track_metadata,
+                    date_time,
                 )
             elif identifier == "stats":
                 cached_tracks, tracks = _persist_stats_batch(
@@ -297,13 +366,17 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
 
     def flush_pending_tracks_on_shutdown():
         nonlocal tracks
+        if source_type == "database" and identifier == "tracks":
+            persist_tracks_for_cooldown("Shutdown Flush")
+            return
+
         tracks = _flush_pending_database_batches_on_shutdown(
             tracks,
             logger,
             "track",
-            should_flush_metadata=(source_type == "database" and identifier == "tracks"),
+            should_flush_metadata=False,
             should_flush_stats=(source_type == "database" and identifier == "stats"),
-            update_metadata_batch=update_track_metadata,
+            update_metadata_batch=None,
             update_stats_batch=update_tracks_partial_batch,
         )
 
@@ -378,43 +451,8 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
                 else:
                     logger.debug(f"Using prefetched track payload for track {t_id}; skipping per-track API fetch.")
 
-                artist_blob = d.get("artist") if isinstance(d.get("artist"), dict) else {}
-                album_blob = d.get("album") if isinstance(d.get("album"), dict) else {}
-                artist_id = d.get("artist_id") if d.get("artist_id") is not None else artist_blob.get("id")
-                album_id = d.get("album_id") if d.get("album_id") is not None else album_blob.get("id")
-
                 if identifier == "tracks":
-                    tracks.append(
-                        {
-                            "id": str(d.get("id") if d.get("id") is not None else t_id),
-                            "readable": d.get("readable"),
-                            "title": d.get("title"),
-                            "title_short": d.get("title_short"),
-                            "title_version": d.get("title_version"),
-                            "unseen": d.get("unseen", False),
-                            "isrc": d.get("isrc"),
-                            "link": d.get("link"),
-                            "share": d.get("share"),
-                            "duration": d.get("duration", 0),
-                            "track_position": d.get("track_position"),
-                            "disk_number": d.get("disk_number"),
-                            "rank": d.get("rank", 0),
-                            "release_date": d.get("release_date"),
-                            "explicit_lyrics": d.get("explicit_lyrics", False),
-                            "explicit_content_lyrics": d.get("explicit_content_lyrics", 0),
-                            "explicit_content_cover": d.get("explicit_content_cover", 0),
-                            "preview": d.get("preview"),
-                            "bpm": d.get("bpm", 0),
-                            "gain": d.get("gain", 0),
-                            "available_countries": _normalize_json_field(d.get("available_countries", [])),
-                            "contributors": _normalize_json_field(d.get("contributors", [])),
-                            "md5_image": d.get("md5_image"),
-                            "track_token": d.get("track_token"),
-                            "artist_id": artist_id,
-                            "album_id": album_id,
-                            "date_cached": date_time,
-                        }
-                    )
+                    tracks.append(d)
                 else:
                     tracks.append(
                         {
@@ -446,12 +484,14 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
             logger.debug(f"Processed track {track}: {i}/{total_len}")
 
             if source_type == "database" and identifier == "tracks" and i % chunk_size == 0:
-                cached_tracks, tracks = persist_track_batch(
+                cached_tracks, tracks = persist_track_metadata_raw_batch(
                     tracks,
                     cached_tracks,
                     logger,
                     "Database Checkpoint",
+                    flatten_tracks,
                     update_track_metadata,
+                    date_time,
                 )
 
             if source_type == "database" and identifier in ("tracks", "stats"):
@@ -479,12 +519,14 @@ def get_tracks(client, logger, source_type, identifier, cache_file=None, track_i
             continue
 
     if source_type == "database" and identifier == "tracks" and tracks:
-        cached_tracks, tracks = persist_track_batch(
+        cached_tracks, tracks = persist_track_metadata_raw_batch(
             tracks,
             cached_tracks,
             logger,
             "Database Cleanup",
+            flatten_tracks,
             update_track_metadata,
+            date_time,
         )
         tracks = cached_tracks
     elif source_type == "database" and identifier == "tracks":

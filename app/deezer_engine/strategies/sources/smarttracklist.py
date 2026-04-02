@@ -11,11 +11,11 @@ from utils.api.auth import get_authenticated_session
 from utils.infrastructure.paths import get_cache_dir
 from utils.collections import handle_cached_data, get_collection_name
 from utils.config import get_global_value
+from strategies.sources.track import run as fetch_enriched_tracks
 
 # Headers returnd from smarttracklists:
-# Smarttracklist currently returns IDs only (`id`), plus internal
-# cache fields (`collection`, `date_cached`).
-# Deezer track headers from the tracks table are not present until enrichment.
+# smarttracklists delegates to `track.py` with the extracted id's, so returned rows follow the Track payload shape.
+
 
 def requires_metadata(source_data=None):
     """
@@ -152,12 +152,22 @@ def run(client, config, logger, source_data):
             # Execute via Cache Manager (with database collection support)
             results = handle_cached_data(cache_file, retention_hrs, logger, fetch_smart_list, "smarttracklist", collection_name=collection_name)
             if results:
-                all_results.extend([{**track, 'collection': source_collection} for track in results])
+                all_results.extend(results)
 
         # Consolidated INFO: One line for the user
-        logger.debug(f"Loaded {len(all_results)} tracks from SmartTracklists {normalized_list_names}.")
+        logger.debug(f"Loaded {len(all_results)} track IDs from SmartTracklists {normalized_list_names}.")
         logger.debug(f"SmartTracklist source end: names='{normalized_list_names}', returned={len(all_results)}")
-        return all_results
+
+        if not all_results:
+            return []
+
+        collected_ids = list(dict.fromkeys(str(t['id']) for t in all_results))
+        logger.info(f"Fetching metadata for {len(collected_ids)} SmartTracklist track IDs...")
+        return fetch_enriched_tracks(client, config, logger, [{
+            'id': collected_ids,
+            'override_collection': source_collection,
+            'retention': retention_hrs,
+        }])
 
     except Exception as e:
         logger.error(f"SmartTracklist execution failed for '{list_name}': {e}")

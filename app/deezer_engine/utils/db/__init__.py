@@ -11,6 +11,7 @@ from .blocklist import (
 	release_expired_blocklisted_entities,
 )
 from .cache import (
+	mass_mark_fully_populated_as_cached,
 	mark_fully_populated_albums_as_cached,
 	mark_fully_populated_artists_as_cached,
 	mark_fully_populated_tracks_as_cached,
@@ -40,6 +41,7 @@ __all__ = [
 	"integrity_check",
 	"is_collection_cached",
 	"mark_album_metadata_fetch_failed",
+	"mass_mark_fully_populated_as_cached",
 	"mark_fully_populated_albums_as_cached",
 	"mark_fully_populated_artists_as_cached",
 	"mark_fully_populated_tracks_as_cached",

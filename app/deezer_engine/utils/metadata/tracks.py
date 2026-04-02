@@ -4,15 +4,20 @@
 """Track metadata helpers."""
 
 import json
+
+from utils.db.cache import mark_fully_populated_tracks_as_cached, mass_mark_fully_populated_as_cached
 from utils.db.connection import get_connection
-from utils.metadata.albums import flatten_albums
+from utils.metadata.albums import flatten_albums, _dedupe_entities
 from utils.metadata.safeguards import blocklist_albums_for_unavailable_tracks
 
 
-def insert_shallow_track_stubs(track_list, logger=None):
+def insert_shallow_track_stubs(track_list, logger=None, skip_fully_populated=False):
     """Insert shallow paginated track payloads for shallow metadata collection."""
     if logger:
-        logger.debug(f"Received {len(track_list) if track_list else 0} tracks for shallow insert")
+        logger.debug(
+            f"Received {len(track_list) if track_list else 0} tracks for shallow insert "
+            f"(skip_fully_populated={skip_fully_populated})."
+        )
 
     if not track_list:
         return
@@ -104,16 +109,20 @@ def insert_shallow_track_stubs(track_list, logger=None):
                 )
 
             cursor.executemany(track_insert_query, track_rows)
+
+            if not skip_fully_populated:
+                if logger:
+                    logger.debug("Marking fully populated tracks as cached.")
+                mark_fully_populated_tracks_as_cached(logger=logger, conn=conn)
+            elif logger:
+                logger.debug("Skipping track cache finalization (deferred).")
+
             conn.commit()
 
             if logger:
                 logger.debug(
                     f"Shallow track insert complete: tracks={len(track_rows)}, albums={len(album_rows)}, artists={len(artist_rows)}"
                 )
-
-        from utils.db.cache import mark_fully_populated_tracks_as_cached
-
-        mark_fully_populated_tracks_as_cached(logger=logger)
     except Exception as exc:
         if logger:
             logger.error(f"DB Error: Shallow track insert failed: {exc}")
@@ -160,36 +169,33 @@ def _coerce_track(track):
     return dict(track)
 
 
-def _dedupe_tracks(tracklist):
-    deduped_tracks = []
-    seen_track_ids = set()
-
-    for track in tracklist:
-        track_payload = _coerce_track(track)
-        track_id = track_payload.get("id")
-        if track_id is None:
-            deduped_tracks.append(track_payload)
-            continue
-        if track_id in seen_track_ids:
-            continue
-        seen_track_ids.add(track_id)
-        deduped_tracks.append(track_payload)
-
-    return deduped_tracks
 
 
-def flatten_tracks(tracklist, logger):
+
+def flatten_tracks(tracklist, logger, skip_fully_populated=False, albumlist=None, artistlist=None):
     """Flatten paginated track payloads into shallow track dictionaries."""
     if tracklist is None:
         logger.debug("Flattening 0 tracks.")
         return []
 
     tracks = tracklist if isinstance(tracklist, list) else [tracklist]
-    tracks = _dedupe_tracks(tracks)
-    logger.debug(f"Flattening {len(tracks)} tracks.")
+    tracks = _dedupe_entities(tracks, _coerce_track, logger=logger, entity_label="tracks")
+    logger.debug(f"Flattening {len(tracks)} tracks (skip_fully_populated={skip_fully_populated}).")
 
     flattened_tracks = []
-    albums = []
+    
+    if albumlist:
+        logger.debug(f"Received {len(albumlist)} albums for passthrough alongside tracks.")
+        albums = albumlist if isinstance(albumlist, list) else [albumlist]
+    else:
+        albums = []
+
+    if artistlist:
+        logger.debug(f"Received {len(artistlist)} artists for passthrough alongside tracks.")
+        artists = artistlist if isinstance(artistlist, list) else [artistlist]
+    else:
+        artists = []
+
     for track in tracks:
         try:
             flattened = dict(track) if isinstance(track, dict) else _coerce_track(track)
@@ -203,6 +209,7 @@ def flatten_tracks(tracklist, logger):
 
             artist = flattened.pop("artist", None)
             if isinstance(artist, dict):
+                artists.append(artist)
                 flattened["artist_id"] = flattened.get("artist_id", artist.get("id"))
                 flattened["artist_name"] = flattened.get("artist_name", artist.get("name"))
 
@@ -227,10 +234,36 @@ def flatten_tracks(tracklist, logger):
 
     logger.debug(f"Flattened tracks. Start count: {len(tracks)}, end count: {len(flattened_tracks)}.")
 
-    flatten_albums(albums, logger)
-    insert_shallow_track_stubs(flattened_tracks, logger)
+    flatten_albums(albums, logger, skip_fully_populated=skip_fully_populated, artistlist=artists)
+    insert_shallow_track_stubs(
+        flattened_tracks,
+        logger,
+        skip_fully_populated=skip_fully_populated,
+    )
     return flattened_tracks
 
+
+def ingest_shallow_tracks(tracklist, logger, skip_fully_populated=False):
+    """Primary shallow ingestion entry point for flattening tracks and deferred cache finalization."""
+    if not tracklist:
+        logger.debug("ingest_shallow_tracks: received empty tracklist, returning early.")
+        return []
+    try:
+        logger.debug(
+            f"ingest_shallow_tracks: received {len(tracklist)} tracks "
+            f"(skip_fully_populated={skip_fully_populated})."
+        )
+        flattened_tracks = flatten_tracks(
+            tracklist,
+            logger,
+            skip_fully_populated=skip_fully_populated,
+        )
+        logger.debug("ingest_shallow_tracks: flattening complete, running batch cache finalization.")
+        mass_mark_fully_populated_as_cached(logger)
+        return flattened_tracks
+    except Exception as exc:
+        logger.error(f"Error in ingest_shallow_tracks: {exc}")
+        raise
 
 def update_tracks_partial_batch(track_list, logger=None):
     """

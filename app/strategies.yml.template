@@ -30,3 +30,14 @@ playlists:
       - type: "playlist"
         id: "REPLACE_WITH_YOUR_PLAYLIST_ID"
         order: "replace"
+
+  - name: "Track Quick Picks"
+    source:
+      - type: "track"
+        id: ["1008610492", "1008610493"]
+    modifiers:
+      - type: "dedupe"
+    destination:
+      - type: "playlist"
+        id: "REPLACE_WITH_YOUR_PLAYLIST_ID"
+        order: "replace"

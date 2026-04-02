@@ -36,6 +36,7 @@ playlists:
     source:
       - type: "favorites"
         retention: 4
+        override_collection: "favorites__manual"
       - type: "history"
         lookback: 7
         limit: 80
@@ -45,6 +46,8 @@ playlists:
         id: "REPLACE_ALBUM_ID"
       - type: "artist"
         id: "REPLACE_ARTIST_ID"
+      - type: "track"
+        id: "REPLACE_TRACK_ID"
       - type: "smarttracklist"
         name: "inspired-by-1"
       - type: "file"
@@ -139,6 +142,8 @@ playlists:
           - "REPLACE_SOURCE_PLAYLIST_ID_2"
       - type: "artist"
         id: ["REPLACE_ARTIST_ID_1", "REPLACE_ARTIST_ID_2"]
+      - type: "track"
+        id: ["REPLACE_TRACK_ID_1", "REPLACE_TRACK_ID_2", null, ""]
     modifiers:
       - type: "dedupe"
       - type: "limit"

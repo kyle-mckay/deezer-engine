@@ -1,21 +1,15 @@
 # SPDX-FileCopyrightText: 2026 kylemmkay
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import json
-import random
 import time
 from pathlib import Path
-from datetime import datetime
-from utils.api.auth import get_authenticated_session
 from utils.config import get_global_value
 from utils.collections import get_collection_name
-from utils.infrastructure.paths import get_data_dir
 from utils.infrastructure.files import read_from_csv, read_from_json
+from strategies.sources.track import run as fetch_enriched_tracks
 
 # Headers returned from files:
-# File import currently returns IDs only (`id`), plus internal
-# cache fields (`collection`, `date_cached`).
-# Deezer track headers from the tracks table are not present until enrichment.
+# File  delegates to `track.py` with the extracted id's, so returned rows follow the Track payload shape.
 
 def requires_metadata(source_data=None):
     """
@@ -66,7 +60,6 @@ def run(client, config, logger, source_data):
         )
 
         tracks = []
-        date_time = datetime.now().isoformat()
         for filename in normalized_file_names:
             full_path = Path(f"{dir}/{filename}").resolve() if dir else Path(filename).resolve()
             logger.debug(f"Full path: {full_path}")
@@ -83,20 +76,24 @@ def run(client, config, logger, source_data):
                     logger.error(f"Unsupported file type: {extention}")
                     continue
 
-            # Applies collection name for cache
+            # Collect IDs for enrichment
             for i, track in enumerate(imported, 1):
                 try:
-                    tracks.append({
-                        'id': str(track.get('id')),
-                        'collection': f"{collection}",
-                        'date_cached': date_time
-                    })
+                    tracks.append(str(track.get('id')))
                 except Exception as e:
                     logger.debug(f"Non-critical loop error at index {i} (Track {track}): {e}")
                     time.sleep(1)
                     continue
 
-        return tracks
+        if not tracks:
+            return []
+
+        collected_ids = list(dict.fromkeys(tracks))
+        logger.info(f"Fetching metadata for {len(collected_ids)} file-imported track IDs...")
+        return fetch_enriched_tracks(client, config, logger, [{
+            'id': collected_ids,
+            'override_collection': collection,
+        }])
 
     except Exception as e:
         logger.error(f"File import failed: {e}")

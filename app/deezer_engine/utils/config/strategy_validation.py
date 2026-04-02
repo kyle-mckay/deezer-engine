@@ -91,7 +91,7 @@ def _validate_strategy_name_value(logger, strategy_name, strategy, strategy_inde
 
 def _validate_source_id_value(logger, strategy_name, source_type, source, depth, source_index, current_path):
     """Validate source.id shape for ID-based sources while preserving old key contracts."""
-    id_based_sources = {"album", "artist", "playlist"}
+    id_based_sources = {"album", "artist", "playlist", "track"}
     if source_type not in id_based_sources:
         return True
 
@@ -181,6 +181,26 @@ def _validate_source_name_value(logger, strategy_name, source_type, source, dept
             return False
 
     return True
+
+
+def _validate_source_override_collection(logger, strategy_name, source, depth, source_index, current_path):
+    """Validate optional source.override_collection scalar shape."""
+    if "override_collection" not in source:
+        return True
+
+    override_value = source.get("override_collection")
+    if override_value is None:
+        return True
+
+    if _is_scalar_name(override_value):
+        return True
+
+    logger.error(
+        f"[Depth: {depth}, Source # {source_index}] Strategy '{strategy_name}' at {current_path}: "
+        f"Invalid 'override_collection' type '{type(override_value).__name__}'. "
+        "Use a scalar string/integer value."
+    )
+    return False
 
 
 def _validate_modifiers(logger, strategy_name, modifiers, depth=1, path="root"):
@@ -321,6 +341,16 @@ def _validate_sources(logger, strategy_name, sources, depth=1, path="root"):
             logger,
             strategy_name,
             source_type,
+            source,
+            depth,
+            idx + 1,
+            current_path,
+        ):
+            return False
+
+        if not _validate_source_override_collection(
+            logger,
+            strategy_name,
             source,
             depth,
             idx + 1,

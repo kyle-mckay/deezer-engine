@@ -63,7 +63,7 @@ def get_collection_name(logger, type, name=None, id=None):
     match type:
         case "favorites" | "history":
             collection = f"{type}"
-        case "playlist" | "album" | "artist":
+        case "playlist" | "album" | "artist" | "track":
             if _has_id():
                 if isinstance(normalized_id, list):
                     collection = f"{prefix}{'__'.join(normalized_id)}"

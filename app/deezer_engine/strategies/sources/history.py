@@ -9,12 +9,11 @@ from datetime import datetime
 from utils.api.auth import get_authenticated_session
 from utils.config import get_global_value
 from utils.collections import get_collection_name
-from utils.infrastructure.paths import get_data_dir
+from strategies.sources.track import run as fetch_enriched_tracks
 
 # Headers returned from History:
-# History currently returns IDs only (`id` from `SNG_ID`), plus internal
-# cache fields (`collection`, `date_cached`).
-# Deezer track headers from the tracks table are not present until enrichment.
+# History delegates to `track.py` with the extracted id's, so returned rows follow the Track payload shape.
+
 
 def requires_metadata(source_data=None):
     """
@@ -131,8 +130,8 @@ def run(client, config, logger, source_data):
                     f"cutoff_ts={cutoff_ts} ({datetime.fromtimestamp(cutoff_ts).isoformat()}))"
                 )
 
-        filtered_tracks = []
-        date_time = datetime.now().isoformat()
+        collected_ids = []
+        seen_ids = set()
 
         for item in history_tracks:
             # Get the timestamp from the track metadata
@@ -140,13 +139,12 @@ def run(client, config, logger, source_data):
 
             # Only append if the track was played after the cutoff
             if track_ts >= cutoff_ts:
-                filtered_tracks.append({
-                    'id': str(item.get('SNG_ID')),
-                    'collection': collection,
-                    'date_cached': date_time
-                })
+                track_id = str(item.get('SNG_ID'))
+                if track_id not in seen_ids:
+                    seen_ids.add(track_id)
+                    collected_ids.append(track_id)
         
-        if not filtered_tracks:
+        if not collected_ids:
             logger.info(
                 f"Found 0 songs played within the last {source_lookback} days in history."
             )
@@ -155,16 +153,21 @@ def run(client, config, logger, source_data):
                 f"lookback_days={source_lookback}"
             )
             return []
-        
+
         # Provide feedback on how many were filtered out by age
-        filtered_count = len(history_tracks) - len(filtered_tracks)
-        logger.info(f"Fetched {len(filtered_tracks)} tracks from history within the last {source_lookback} days.")
-        logger.debug(f"Limit count: {len(history_tracks)}, Filtered count: {len(filtered_tracks)}, Difference: {filtered_count} removed.")
+        filtered_count = len(history_tracks) - len(collected_ids)
+        logger.info(f"Fetched {len(collected_ids)} track IDs from history within the last {source_lookback} days.")
+        logger.debug(f"Limit count: {len(history_tracks)}, Filtered count: {len(collected_ids)}, Difference: {filtered_count} removed.")
         logger.debug(
-            f"History source end: returning={len(filtered_tracks)}, removed_by_lookback={filtered_count}"
+            f"History source end: raw={len(history_tracks)}, filtered={len(collected_ids)}, removed_by_lookback={filtered_count}"
         )
-        
-        return filtered_tracks
+
+        logger.info(f"Fetching metadata for {len(collected_ids)} history track IDs...")
+        return fetch_enriched_tracks(client, config, logger, [{
+            'id': collected_ids,
+            'override_collection': collection,
+            'retention': source_retention,
+        }])
 
     except Exception as e:
         logger.error(f"History execution failed: {e}")

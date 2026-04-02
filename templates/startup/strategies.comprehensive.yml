@@ -102,12 +102,23 @@ playlists:
         id: ["91258", "897621962"]
       - type: "playlist"
         id: ["10064140302", "10064138682"]
+      - type: "track"
+        id: ["1008610492", "1008610493"]
       - type: "smarttracklist"
         name: ["discovery", "new-releases"]
     modifiers:
       - type: "dedupe"
       - type: "shuffle"
         order: "smart"
+    destination:
+      - type: "playlist"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
+
+  - name: "Specific Track IDs"
+    source:
+      - type: "track"
+        id: "1008610492"
     destination:
       - type: "playlist"
         id: "REPLACE_WITH_YOUR_ID"

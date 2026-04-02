@@ -19,6 +19,7 @@ STRATEGY_TOP_LEVEL_KEYS = {
 SOURCE_BASE_KEYS = {
     'type',
     'retention',
+    'override_collection',
     'modifiers',
     *IO_VALIDATION_KEYS,
 }
@@ -30,6 +31,7 @@ SOURCE_TYPE_KEYS = {
     'file': {'filename', 'dir', 'format', 'name'},
     'history': {'lookback', 'limit'},
     'playlist': {'id'},
+    'track': {'id'},
     'smarttracklist': {'name'},
 }
 

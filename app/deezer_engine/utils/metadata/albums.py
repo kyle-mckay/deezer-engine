@@ -5,20 +5,21 @@
 
 import json
 
+from utils.db.cache import mark_fully_populated_albums_as_cached
 from utils.db.connection import get_connection
-from utils.metadata.artists import flatten_artists
+from utils.metadata.artists import flatten_artists, _dedupe_entities
 
 
-def insert_shallow_album_stubs(album_list, logger=None):
+def insert_shallow_album_stubs(album_list, logger=None, skip_fully_populated=False):
 	"""Insert shallow album payloads for shallow metadata-collection."""
 	if logger:
-		logger.debug(f"Received {len(album_list) if album_list else 0} albums for shallow insert")
+		logger.debug(
+			f"Received {len(album_list) if album_list else 0} albums for shallow insert "
+			f"(skip_fully_populated={skip_fully_populated})."
+		)
 
 	if not album_list:
 		return
-
-	from utils.db.connection import get_connection
-	from utils.db.cache import mark_fully_populated_albums_as_cached
 
 	try:
 		with get_connection(logger) as conn:
@@ -66,10 +67,16 @@ def insert_shallow_album_stubs(album_list, logger=None):
 					]
 					cursor.executemany(album_query, album_rows)
 
+			if not skip_fully_populated:
+				if logger:
+					logger.debug("Marking fully populated albums as cached.")
+				mark_fully_populated_albums_as_cached(logger=logger, conn=conn)
+			elif logger:
+				logger.debug("Skipping album cache finalization (deferred).")
+
 			conn.commit()
 			if logger:
 				logger.debug(f"Shallow album insert complete: albums={len(albums_by_id)}")
-			mark_fully_populated_albums_as_cached(logger)
 	except Exception as e:
 		if logger:
 			logger.error(f"DB Error: Shallow album insert failed: {e}")
@@ -90,39 +97,30 @@ def _coerce_album(album):
 	return dict(album)
 
 
-def _dedupe_albums(albumlist):
-	deduped_albums = []
-	seen_album_ids = set()
-
-	for album in albumlist:
-		album_payload = _coerce_album(album)
-		album_id = album_payload.get("id")
-		if album_id is None:
-			deduped_albums.append(album_payload)
-			continue
-		if album_id in seen_album_ids:
-			continue
-		seen_album_ids.add(album_id)
-		deduped_albums.append(album_payload)
-
-	return deduped_albums
 
 
-def flatten_albums(albumlist, logger):
+
+def flatten_albums(albumlist, logger, skip_fully_populated=False, artistlist=None):
 	"""Flatten album payloads into dictionaries suitable for database writes."""
 	if albumlist is None:
 		logger.debug("Flattening 0 albums.")
 		return []
 
 	albums = albumlist if isinstance(albumlist, list) else [albumlist]
-	albums = _dedupe_albums(albums)
-	logger.debug(f"Flattening {len(albums)} albums.")
+	albums = _dedupe_entities(albums, _coerce_album, logger=logger, entity_label="albums")
+	logger.debug(f"Flattening {len(albums)} albums (skip_fully_populated={skip_fully_populated}).")
 
 	flattened_albums = []
-	artists = []
+	if artistlist:
+		logger.debug(f"Received {len(artistlist)} artists for passthrough alongside tracks.")
+		artists = artistlist if isinstance(artistlist, list) else [artistlist]
+	else:
+		artists = []
+
 	for album in albums:
 		try:
 			flattened = dict(album) if isinstance(album, dict) else _coerce_album(album)
+			flattened.pop("playlist", None)
 			artist = flattened.pop("artist", None)
 			if isinstance(artist, dict):
 				artists.append(artist)
@@ -146,8 +144,12 @@ def flatten_albums(albumlist, logger):
 		f"Flattened albums. Start count: {len(albums)}, end count: {len(flattened_albums)}."
 	)
 
-	flatten_artists(artists, logger)
-	insert_shallow_album_stubs(flattened_albums, logger)
+	flatten_artists(artists, logger, skip_fully_populated=skip_fully_populated)
+	insert_shallow_album_stubs(
+		flattened_albums,
+		logger,
+		skip_fully_populated=skip_fully_populated,
+	)
 	return flattened_albums
 
 
