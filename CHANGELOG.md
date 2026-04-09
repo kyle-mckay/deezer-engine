@@ -8,6 +8,10 @@
 - enhance: create dedicated track source (progress in #140) (#145) (@kylemmkay)
 - enhance: allow source id's to be singular or array/lists (closes #139) (#143) (@kylemmkay)
 
+### Fixes
+
+- fix: if undergoing shutdown event, dont sync to collections to prevent malformed results (closes #109) (#150) (@kylemmkay)
+
 ### Maintenance
 
 - maint: streamline genre collection process by re-using the same database connection (closes #144) (#148) (@kylemmkay)
