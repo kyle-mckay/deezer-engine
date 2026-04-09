@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from utils.config import get_global_value
 from utils.db.blocklist import blocklist_where_clause
 from utils.db.fetch import fetch_entities_by
-
+from utils.infrastructure.signals import shutdown_event
 from .connection import get_connection
 
 
@@ -284,6 +284,10 @@ def validate_sync_integrity(original_tracks, synced_tracks, logger):
 
 def sync_to_collections(tracklist, logger, collection_name=None):
 	"""Insert track IDs and collection mappings into database tables."""
+	if shutdown_event.is_set():
+		logger.debug("Shutdown event detected before DB sync. Aborting sync operation to prevent malformed collection.")
+		return
+
 	if not tracklist:
 		if collection_name:
 			try:
@@ -311,6 +315,7 @@ def sync_to_collections(tracklist, logger, collection_name=None):
 		unique_pairs = {
 			(str(track["id"]), track.get("collection", "unknown")) for track in tracklist
 		}
+		logger.debug("No collection_name provided; attempting to associate collection from track metadata.")
 
 	# Filter out track__ prefixed entries; these are resolved directly from tracks table
 	track_prefixed_pairs = {pair for pair in unique_pairs if pair[1].startswith("track__")}
