@@ -1,9 +1,10 @@
 # Changelog
 
-## v0.15.0 - 2026-04-02
+## v0.15.0 - 2026-04-09
 
 ### Enhancements
 
+- enhance: allow user to control whether full database enrichment occurs (closes #122) (#149) (@kylemmkay)
 - enhance: create dedicated track source (progress in #140) (#145) (@kylemmkay)
 - enhance: allow source id's to be singular or array/lists (closes #139) (#143) (@kylemmkay)
 
