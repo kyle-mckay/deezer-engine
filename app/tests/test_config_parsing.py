@@ -53,8 +53,12 @@ def test_run_before_cron_is_coerced_from_environment(monkeypatch):
     monkeypatch.setenv("DEEZER_RUN_BEFORE_CRON", "no")
     config = load_config_with_env_overrides(force_reload=True)
 
-    assert config["config"]["run_before_cron"] is False
-    assert get_global_value("run_before_cron", True) is False
+    assert config["config"]["run_before_cron"] is False, (
+        f"Expected run_before_cron to be False from env, got: {config['config']['run_before_cron']}"
+    )
+    assert get_global_value("run_before_cron", True) is False, (
+        f"Expected get_global_value('run_before_cron', True) to be False, got: {get_global_value('run_before_cron', True)}"
+    )
 
 
 def test_run_before_cron_can_come_from_config_file(monkeypatch, tmp_path):
@@ -63,8 +67,12 @@ def test_run_before_cron_can_come_from_config_file(monkeypatch, tmp_path):
     monkeypatch.setattr(parsing, "get_data_dir", lambda: _write_config(tmp_path, False))
     config = load_config_with_env_overrides(force_reload=True)
 
-    assert config["config"]["run_before_cron"] is False
-    assert get_global_value("run_before_cron", True) is False
+    assert config["config"]["run_before_cron"] is False, (
+        f"Expected run_before_cron to be False from config file, got: {config['config']['run_before_cron']}"
+    )
+    assert get_global_value("run_before_cron", True) is False, (
+        f"Expected get_global_value('run_before_cron', True) to be False, got: {get_global_value('run_before_cron', True)}"
+    )
 
 
 def test_run_before_cron_environment_overrides_config(monkeypatch, tmp_path):
@@ -74,8 +82,41 @@ def test_run_before_cron_environment_overrides_config(monkeypatch, tmp_path):
 
     config = load_config_with_env_overrides(force_reload=True)
 
-    assert config["config"]["run_before_cron"] is True
-    assert get_global_value("run_before_cron", False) is True
+    assert config["config"]["run_before_cron"] is True, (
+        f"Expected run_before_cron to be True from env override, got: {config['config']['run_before_cron']}"
+    )
+    assert get_global_value("run_before_cron", False) is True, (
+        f"Expected get_global_value('run_before_cron', False) to be True, got: {get_global_value('run_before_cron', False)}"
+    )
+
+
+def test_pull_metadata_is_coerced_from_environment(monkeypatch, tmp_path):
+    """Verifies env bool coercion for pull_metadata (for example, false -> False)."""
+    monkeypatch.setenv("DEEZER_PULL_METADATA", "false")
+    monkeypatch.setattr(parsing, "get_data_dir", lambda: _write_raw_config(tmp_path, {"config": {}}))
+
+    config = load_config_with_env_overrides(force_reload=True)
+
+    assert config["config"]["pull_metadata"] is False, (
+        f"Expected pull_metadata to be False from env, got: {config['config']['pull_metadata']}"
+    )
+    assert get_global_value("pull_metadata", True) is False, (
+        f"Expected get_global_value('pull_metadata', True) to be False, got: {get_global_value('pull_metadata', True)}"
+    )
+
+
+def test_pull_metadata_defaults_to_true_when_missing(monkeypatch, tmp_path):
+    """Ensures callers get default True when pull_metadata is not configured."""
+    monkeypatch.setattr(parsing, "get_data_dir", lambda: _write_raw_config(tmp_path, {"config": {}}))
+
+    config = load_config_with_env_overrides(force_reload=True)
+
+    assert "pull_metadata" not in config["config"], (
+        f"Expected pull_metadata to be missing from config, got: {config['config']}"
+    )
+    assert get_global_value("pull_metadata", True) is True, (
+        f"Expected get_global_value('pull_metadata', True) to be True, got: {get_global_value('pull_metadata', True)}"
+    )
 
 
 def test_int_config_key_is_coerced_from_environment(monkeypatch, tmp_path):
@@ -85,9 +126,15 @@ def test_int_config_key_is_coerced_from_environment(monkeypatch, tmp_path):
 
     config = load_config_with_env_overrides(force_reload=True)
 
-    assert config["config"]["chunk_size"] == 42
-    assert isinstance(config["config"]["chunk_size"], int)
-    assert get_global_value("chunk_size", 0) == 42
+    assert config["config"]["chunk_size"] == 42, (
+        f"Expected chunk_size to be 42 from env, got: {config['config']['chunk_size']}"
+    )
+    assert isinstance(config["config"]["chunk_size"], int), (
+        f"Expected chunk_size to be int, got: {type(config['config']['chunk_size'])}"
+    )
+    assert get_global_value("chunk_size", 0) == 42, (
+        f"Expected get_global_value('chunk_size', 0) to be 42, got: {get_global_value('chunk_size', 0)}"
+    )
 
 
 def test_invalid_int_env_value_falls_back_to_string(monkeypatch, tmp_path):
@@ -97,8 +144,12 @@ def test_invalid_int_env_value_falls_back_to_string(monkeypatch, tmp_path):
 
     config = load_config_with_env_overrides(force_reload=True)
 
-    assert config["config"]["chunk_size"] == "forty-two"
-    assert get_global_value("chunk_size", 0) == "forty-two"
+    assert config["config"]["chunk_size"] == "forty-two", (
+        f"Expected chunk_size to be 'forty-two' from env, got: {config['config']['chunk_size']}"
+    )
+    assert get_global_value("chunk_size", 0) == "forty-two", (
+        f"Expected get_global_value('chunk_size', 0) to be 'forty-two', got: {get_global_value('chunk_size', 0)}"
+    )
 
 
 @pytest.mark.parametrize(
@@ -119,7 +170,9 @@ def test_bool_env_coercion_variants(monkeypatch, tmp_path, raw_value, expected):
 
     config = load_config_with_env_overrides(force_reload=True)
 
-    assert config["config"]["run_before_cron"] is expected
+    assert config["config"]["run_before_cron"] is expected, (
+        f"Expected run_before_cron to be {expected} for env value '{raw_value}', got: {config['config']['run_before_cron']}"
+    )
 
 
 def test_missing_config_file_returns_empty_config(monkeypatch, tmp_path):
@@ -131,7 +184,9 @@ def test_missing_config_file_returns_empty_config(monkeypatch, tmp_path):
 
     config = load_config_with_env_overrides(force_reload=True)
 
-    assert config == {"config": {}}
+    assert config == {"config": {}}, (
+        f"Expected empty config dict for missing config file, got: {config}"
+    )
 
 
 def test_non_mapping_root_structure_is_ignored(monkeypatch, tmp_path, caplog, capsys):
@@ -142,9 +197,15 @@ def test_non_mapping_root_structure_is_ignored(monkeypatch, tmp_path, caplog, ca
         with caplog.at_level("WARNING", logger="DeezerEngine"):
             config = load_config_with_env_overrides(force_reload=True)
             warning_output = _warning_output(caplog, capsys)
-            assert config == {"config": {}}
-            assert get_global_value("run_before_cron", False) is False
-            assert "Top-level config.yml content must be an object" in warning_output
+            assert config == {"config": {}}, (
+                f"Expected empty config dict for non-mapping root, got: {config}"
+            )
+            assert get_global_value("run_before_cron", False) is False, (
+                f"Expected get_global_value('run_before_cron', False) to be False, got: {get_global_value('run_before_cron', False)}"
+            )
+            assert "Top-level config.yml content must be an object" in warning_output, (
+                f"Expected warning about top-level config root, got: {warning_output}"
+            )
     finally:
         reset_config_snapshot()
 

@@ -1,0 +1,48 @@
+playlists:
+  - name: "fixture_pull_76585"
+    source:
+      - type: "album"
+        id: "76585"
+    destination:
+      - type: "file"
+        name: "./app/tests/fixtures/album/76585.json"
+
+  - name: "fixture_pull_384514987"
+    source:
+      - type: "album"
+        id: "384514987"
+    destination:
+      - type: "file"
+        name: "./app/tests/fixtures/album/384514987.json"
+
+  - name: "fixture_pull_536294"
+    source:
+      - type: "album"
+        id: "536294"
+    destination:
+      - type: "file"
+        name: "./app/tests/fixtures/album/536294.json"
+
+  - name: "fixture_pull_84698"
+    source:
+      - type: "album"
+        id: "84698"
+    destination:
+      - type: "file"
+        name: "./app/tests/fixtures/album/84698.json"
+
+  - name: "fixture_pull_91258"
+    source:
+      - type: "album"
+        id: "91258"
+    destination:
+      - type: "file"
+        name: "./app/tests/fixtures/album/91258.json"
+
+  - name: "fixture_pull_102809"
+    source:
+      - type: "album"
+        id: "102809"
+    destination:
+      - type: "file"
+        name: "./app/tests/fixtures/album/102809.json"

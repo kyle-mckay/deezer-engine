@@ -13,3 +13,6 @@ config:
   validation_mode: "warn"  # Log a warning and continue on unexpected IO result
   #validation_mode: "fail"  # Treat unexpected IO result as critical error and stop strategy
 
+  # Offline/deterministic toggle
+  pull_metadata: false  # Skip full metadata enrichment and stats refresh pulls if doing OFFLINE IO validation
+

@@ -85,6 +85,7 @@ CONFIG_SECTION_KEYS = {
     'history_limit',
     'validation_mode',
     'run_before_cron',
+    'pull_metadata',
 }
 
 

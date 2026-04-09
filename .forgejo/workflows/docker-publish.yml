@@ -62,6 +62,7 @@ jobs:
       - name: Run Pytest in Source
         run: |
           echo "Running pytest in source..."
+          export TEST_MARKERS="not offline"
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             ./scripts/test.sh -s | tee pytest-source.log
           else

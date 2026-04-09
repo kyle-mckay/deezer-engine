@@ -54,34 +54,34 @@ def test_deezer_entities(client, entity, entity_id, object_len, name, artist, al
     """Checks track/album/artist/playlist fetches expose expected fields and core values."""
     if entity == 'track':
         c = client.get_track(entity_id)
-        assert c.title == name
-        assert c.artist.name == artist
-        assert c.album.title == album
-        assert c.duration == duration
+        assert c.title == name, f"Track title mismatch: expected '{name}', got '{c.title}'"
+        assert c.artist.name == artist, f"Track artist mismatch: expected '{artist}', got '{c.artist.name}'"
+        assert c.album.title == album, f"Track album mismatch: expected '{album}', got '{c.album.title}'"
+        assert c.duration == duration, f"Track duration mismatch: expected '{duration}', got '{c.duration}'"
         # Fail on extras
         validate_fields(c.as_dict(), TRACK_FIELDS, "full track", strict=True)
 
     elif entity == 'album':
         c = client.get_album(entity_id)
-        assert c.title == name
-        assert c.artist.name == artist
-        assert c.nb_tracks == object_len
+        assert c.title == name, f"Album title mismatch: expected '{name}', got '{c.title}'"
+        assert c.artist.name == artist, f"Album artist mismatch: expected '{artist}', got '{c.artist.name}'"
+        assert c.nb_tracks == object_len, f"Album nb_tracks mismatch: expected '{object_len}', got '{c.nb_tracks}'"
         
         tracks = c.get_tracks()
-        assert len(tracks) == object_len
+        assert len(tracks) == object_len, f"Album track count mismatch: expected '{object_len}', got '{len(tracks)}'"
         if tracks:
             # Warn on extras
             validate_fields(tracks[0].as_dict(), SUB_ENTITY_TRACK_MINIMUM, "album track", strict=False)
 
     elif entity == 'artist':
         c = client.get_artist(entity_id)
-        assert c.name == name
-        assert hasattr(c, 'nb_album')
+        assert c.name == name, f"Artist name mismatch: expected '{name}', got '{c.name}'"
+        assert hasattr(c, 'nb_album'), f"Artist object missing 'nb_album' attribute"
 
     elif entity == 'playlist':
         c = client.get_playlist(entity_id)
-        assert c.title == name
-        assert hasattr(c, 'tracks')
+        assert c.title == name, f"Playlist title mismatch: expected '{name}', got '{c.title}'"
+        assert hasattr(c, 'tracks'), f"Playlist object missing 'tracks' attribute"
         
         tracks = c.get_tracks()
         if tracks:

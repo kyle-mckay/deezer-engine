@@ -60,6 +60,7 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | `validation_mode` | `DEEZER_VALIDATION_MODE` | No | `warn` | Default validation mode for when used in conjunction with `i` / `o` keys: `fail` (stop strategy on validation failure) or `warn` (log warning, continue strategy). Can be overridden per component. |
 | `schedule` | `DEEZER_SCHEDULE` | No | `0 3 * * *` (cron mode) | Cron expression used when running in scheduled mode. If provided without an explicit command, default mode resolves to cron. |
 | `run_before_cron` | `DEEZER_RUN_BEFORE_CRON` | No | `true` | In cron mode, run one sync immediately at container startup before waiting for the next cron slot. Set to `false` to wait until the next scheduled time. |
+| `pull_metadata` | `DEEZER_PULL_METADATA` | No | `true` | If `true`, fetch full track metadata when needed. Set to `false` to skip extra lookups and run faster, but some advanced features may not work.|
 
 ### Logic Hierarchy
 

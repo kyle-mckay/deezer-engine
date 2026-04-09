@@ -19,4 +19,6 @@ def test_input_output_offline_total_counts(monkeypatch, preserve_runtime_state, 
     for key in TOTAL_COUNT_KEYS:
         expected = EXPECTED_COUNTS[key]
         actual = counts[key]
-        assert actual == expected, f"{key} expected {expected}, got {actual}"
+        assert actual == expected, (
+            f"Offline total count for '{key}' mismatch: expected {expected}, got {actual}"
+        )

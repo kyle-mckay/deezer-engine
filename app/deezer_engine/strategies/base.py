@@ -331,7 +331,9 @@ class StrategyController:
         Check if a component requires metadata and trigger enrichment when needed.
         """
         requires_it = self.check_requires_metadata(module_path, config_data)
-        if requires_it:
+        pull_metadata = get_global_value('pull_metadata', True)
+
+        if requires_it and pull_metadata:
             self.logger.debug(f"Component '{module_path}' requires metadata. Fetching before processing...")
             try:
                 update_unprocessed(self.client, self.logger)
@@ -339,3 +341,8 @@ class StrategyController:
             except Exception as e:
                 self.logger.error(f"Failed to enrich metadata before processing '{module_path}': {e}")
                 raise
+        elif requires_it:
+            self.logger.debug(
+                f"Component '{module_path}' requested metadata enrichment, but pull_metadata is disabled. "
+                "Continuing with shallow/cached data."
+            )

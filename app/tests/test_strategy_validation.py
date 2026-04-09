@@ -73,8 +73,12 @@ def test_strategy_missing_source_type_is_rejected(monkeypatch, tmp_path, validat
     with caplog.at_level("ERROR", logger="tests.strategy_validation"):
         loaded = load_strategies_with_env_overrides(validation_logger)
 
-    assert loaded == {"playlists": []}
-    assert "Missing 'type'" in caplog.text
+    assert loaded == {"playlists": []}, (
+        f"Expected no playlists to load when source type is missing, got: {loaded}"
+    )
+    assert "Missing 'type'" in caplog.text, (
+        f"Expected error log to mention missing 'type', got: {caplog.text}"
+    )
 
 
 def test_strategy_invalid_destination_shape_is_rejected(monkeypatch, tmp_path, validation_logger, caplog):
@@ -93,8 +97,12 @@ def test_strategy_invalid_destination_shape_is_rejected(monkeypatch, tmp_path, v
     with caplog.at_level("ERROR", logger="tests.strategy_validation"):
         loaded = load_strategies_with_env_overrides(validation_logger)
 
-    assert loaded == {"playlists": []}
-    assert "Missing or invalid list" in caplog.text
+    assert loaded == {"playlists": []}, (
+        f"Expected no playlists to load when destination is not a list, got: {loaded}"
+    )
+    assert "Missing or invalid list" in caplog.text, (
+        f"Expected error log to mention missing or invalid list, got: {caplog.text}"
+    )
 
 
 def test_duplicate_sources_warn_but_strategy_still_loads(monkeypatch, tmp_path, validation_logger, caplog):
@@ -114,8 +122,12 @@ def test_duplicate_sources_warn_but_strategy_still_loads(monkeypatch, tmp_path, 
     with caplog.at_level("WARNING", logger="tests.strategy_validation"):
         loaded = load_strategies_with_env_overrides(validation_logger)
 
-    assert len(loaded["playlists"]) == 1
-    assert "Exact duplicate source(s)" in caplog.text
+    assert len(loaded["playlists"]) == 1, (
+        f"Expected playlist to load with duplicate sources, got: {loaded}"
+    )
+    assert "Exact duplicate source(s)" in caplog.text, (
+        f"Expected warning about duplicate sources, got: {caplog.text}"
+    )
 
 
 def test_unknown_key_warning_includes_suggestion(monkeypatch, tmp_path, validation_logger, caplog):
@@ -135,9 +147,15 @@ def test_unknown_key_warning_includes_suggestion(monkeypatch, tmp_path, validati
     with caplog.at_level("WARNING", logger="tests.strategy_validation"):
         loaded = load_strategies_with_env_overrides(validation_logger)
 
-    assert len(loaded["playlists"]) == 1
-    assert "Unknown key(s)" in caplog.text
-    assert "did you mean 'order'" in caplog.text
+    assert len(loaded["playlists"]) == 1, (
+        f"Expected playlist to load with unknown key, got: {loaded}"
+    )
+    assert "Unknown key(s)" in caplog.text, (
+        f"Expected warning about unknown key(s), got: {caplog.text}"
+    )
+    assert "did you mean 'order'" in caplog.text, (
+        f"Expected suggestion for 'order' in warning, got: {caplog.text}"
+    )
 
 
 def test_nested_modifier_source_missing_type_fails(monkeypatch, tmp_path, validation_logger, caplog):
@@ -162,8 +180,12 @@ def test_nested_modifier_source_missing_type_fails(monkeypatch, tmp_path, valida
     with caplog.at_level("ERROR", logger="tests.strategy_validation"):
         loaded = load_strategies_with_env_overrides(validation_logger)
 
-    assert loaded == {"playlists": []}
-    assert "Missing 'type'" in caplog.text
+    assert loaded == {"playlists": []}, (
+        f"Expected no playlists to load when nested modifier source type is missing, got: {loaded}"
+    )
+    assert "Missing 'type'" in caplog.text, (
+        f"Expected error log to mention missing 'type' for nested modifier source, got: {caplog.text}"
+    )
 
 
 def test_all_known_types_can_load_without_unknown_key_warnings(monkeypatch, tmp_path, validation_logger, caplog):
@@ -389,6 +411,27 @@ def test_top_level_strategy_name_rejects_list(monkeypatch, tmp_path, validation_
 
     assert loaded == {"playlists": []}
     assert "Invalid top-level 'name' type 'list'" in caplog.text
+
+
+def test_root_playlist_key_typo_is_rejected(monkeypatch, tmp_path, validation_logger, caplog):
+    """Rejects misspelled root key 'playlist' and surfaces a clear error message."""
+    payload = {
+        "playlist": [
+            {
+                "name": "root-typo",
+                "source": [{"type": "favorites"}],
+                "destination": [{"type": "playlist", "id": "999"}],
+            }
+        ]
+    }
+    monkeypatch.setattr(strategy_validation, "get_data_dir", lambda: _write_strategies(tmp_path, payload))
+
+    with caplog.at_level("ERROR", logger="tests.strategy_validation"):
+        loaded = load_strategies_with_env_overrides(validation_logger)
+
+    assert loaded == {"playlists": []}
+    assert "Unknown root key(s)" in caplog.text
+    assert "did you mean 'playlists'" in caplog.text
 
 
 def test_random_top_level_strategy_typo_warns(monkeypatch, tmp_path, validation_logger, caplog):

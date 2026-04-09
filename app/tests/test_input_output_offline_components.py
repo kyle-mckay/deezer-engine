@@ -18,4 +18,6 @@ def test_input_output_offline_component_counts(monkeypatch, preserve_runtime_sta
     )
     actual = result["counts"][count_key]
 
-    assert actual == expected, f"{count_key} expected {expected}, got {actual}"
+    assert actual == expected, (
+        f"Offline component count for '{count_key}' mismatch: expected {expected}, got {actual}"
+    )

@@ -3,7 +3,7 @@ playlists:
   - name: "override_and_fail"
     source:
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "91258.json"
         o: 17 # # Intentional mismatch to trigger warn validation failure
     destination:
@@ -16,7 +16,7 @@ playlists:
   - name: "limit_positive"
     source:
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "91258.json"
         o: 18
     modifiers:
@@ -32,7 +32,7 @@ playlists:
   - name: "limit_large"
     source:
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "91258.json"
         o: 18
     modifiers:
@@ -48,7 +48,7 @@ playlists:
   - name: "limit_zero"
     source:
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "91258.json"
         o: 18
     modifiers:
@@ -66,27 +66,27 @@ playlists:
   - name: "filter_id_positive"
     source:
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "76585.json"
         o: 2
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "384514987.json"
         o: 12
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "536294.json"
         o: 12
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "84698.json"
         o: 11
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "91258.json"
         o: 18
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "102809.json"
         o: 13
     modifiers:
@@ -103,7 +103,7 @@ playlists:
   - name: "filter_title_contains"
     source:
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "91258.json"
         o: 18
     modifiers:
@@ -120,7 +120,7 @@ playlists:
   - name: "filter_empty"
     source:
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "91258.json"
         o: 18
     modifiers:
@@ -139,23 +139,23 @@ playlists:
   - name: "exclude_positive"
     source:
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "76585.json"
         o: 2
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "384514987.json"
         o: 12
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "536294.json"
         o: 12
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "84698.json"
         o: 11
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "91258.json"
         o: 18
       - type: "file"
@@ -166,7 +166,7 @@ playlists:
       - type: "exclude"
         source:
           - type: "file"
-            dir: "./tests/fixtures/album"
+            dir: "./app/tests/fixtures/album"
             filename: "91258.json"
         i: 68
         o: 50
@@ -179,11 +179,11 @@ playlists:
   - name: "dedupe_no_op"
     source:
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "102809.json"
         o: 13
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "536294.json"
         o: 12
     modifiers:
@@ -197,7 +197,7 @@ playlists:
   - name: "sort_by_id"
     source:
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "91258.json"
         o: 18
     modifiers:
@@ -215,27 +215,27 @@ playlists:
   - name: "chain_filter_limit"
     source:
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "76585.json"
         o: 2
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "384514987.json"
         o: 12
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "536294.json"
         o: 12
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "84698.json"
         o: 11
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "91258.json"
         o: 18
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "102809.json"
         o: 13
     modifiers:
@@ -256,7 +256,7 @@ playlists:
   - name: "nested_local_modifier"
     source:
       - type: "file"
-        dir: "./tests/fixtures/album"
+        dir: "./app/tests/fixtures/album"
         filename: "91258.json"
         o: 18
         modifiers:

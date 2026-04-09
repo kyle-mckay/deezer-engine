@@ -61,6 +61,7 @@ def _assert_strategy_message(result):
 	assert (
 		"Strategies file" in output
 		or "No strategies found" in output
+		or "Invalid config format: 'playlists' must be a list." in output
 	), "Strategy/config warning not found."
 
 
@@ -137,19 +138,33 @@ def test_backup_restore_runtime_files_isolates_repo_data_dir(backup_restore_runt
 	repo_config_before = repo_config_path.read_text(encoding="utf-8") if repo_config_path.exists() else None
 	repo_strategies_before = repo_strategies_path.read_text(encoding="utf-8") if repo_strategies_path.exists() else None
 
-	assert backup_restore_runtime_files["data_dir"] != REPO_ROOT / "data"
-	assert backup_restore_runtime_files["config_path"].parent == backup_restore_runtime_files["data_dir"]
-	assert backup_restore_runtime_files["strategies_path"].parent == backup_restore_runtime_files["data_dir"]
+	assert backup_restore_runtime_files["data_dir"] != REPO_ROOT / "data", (
+		f"Expected test data_dir {backup_restore_runtime_files['data_dir']} to differ from repo data dir {REPO_ROOT / 'data'}"
+	)
+	assert backup_restore_runtime_files["config_path"].parent == backup_restore_runtime_files["data_dir"], (
+		f"Config path parent {backup_restore_runtime_files['config_path'].parent} should be test data_dir {backup_restore_runtime_files['data_dir']}"
+	)
+	assert backup_restore_runtime_files["strategies_path"].parent == backup_restore_runtime_files["data_dir"], (
+		f"Strategies path parent {backup_restore_runtime_files['strategies_path'].parent} should be test data_dir {backup_restore_runtime_files['data_dir']}"
+	)
 
 	backup_restore_runtime_files["config_path"].write_text("config:\n  log_level: 'INFO'\n", encoding="utf-8")
 	backup_restore_runtime_files["strategies_path"].write_text("playlists:\n", encoding="utf-8")
 
 	if repo_config_before is None:
-		assert not repo_config_path.exists()
+		assert not repo_config_path.exists(), (
+			f"Repo config {repo_config_path} should not exist after test, but it does."
+		)
 	else:
-		assert repo_config_path.read_text(encoding="utf-8") == repo_config_before
+		assert repo_config_path.read_text(encoding="utf-8") == repo_config_before, (
+			f"Repo config {repo_config_path} was modified by test."
+		)
 
 	if repo_strategies_before is None:
-		assert not repo_strategies_path.exists()
+		assert not repo_strategies_path.exists(), (
+			f"Repo strategies {repo_strategies_path} should not exist after test, but it does."
+		)
 	else:
-		assert repo_strategies_path.read_text(encoding="utf-8") == repo_strategies_before
+		assert repo_strategies_path.read_text(encoding="utf-8") == repo_strategies_before, (
+			f"Repo strategies {repo_strategies_path} was modified by test."
+		)

@@ -18,3 +18,4 @@ def test_input_output_offline_runtime_outputs(monkeypatch, preserve_runtime_stat
     print_log_once(result)
     assert result["log_file_exists"], f"Expected run to write log file: {result['log_file']}"
     assert result["db_exists"], f"Expected test run to create a fresh {result['db_path']}"
+    assert "Fetching metadata for" not in result["log_text"], "Offline run unexpectedly triggered metadata pull logs"

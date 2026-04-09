@@ -55,19 +55,25 @@ class TestFlattenArtistsTerminal:
         with patch("utils.metadata.artists.insert_shallow_artist_stubs") as stub:
             flatten_artists([ARTIST_A], _LOGGER, skip_fully_populated=True)
         stub.assert_called_once()
-        assert any(a["id"] == 10 for a in stub.call_args.args[0])
+        assert any(a["id"] == 10 for a in stub.call_args.args[0]), (
+            f"Expected artist with id=10 in stub call args, got: {stub.call_args.args[0]}"
+        )
 
     def test_multiple_artists_all_forwarded(self):
         artists = [{"id": 1, "name": "A"}, {"id": 2, "name": "B"}, {"id": 3, "name": "C"}]
         with patch("utils.metadata.artists.insert_shallow_artist_stubs") as stub:
             flatten_artists(artists, _LOGGER, skip_fully_populated=True)
         ids = {a["id"] for a in stub.call_args.args[0]}
-        assert ids == {1, 2, 3}
+        assert ids == {1, 2, 3}, (
+            f"Expected all artist ids {{1,2,3}} in stub call args, got: {ids}"
+        )
 
     def test_skip_fully_populated_forwarded_to_stub(self):
         with patch("utils.metadata.artists.insert_shallow_artist_stubs") as stub:
             flatten_artists([ARTIST_A], _LOGGER, skip_fully_populated=True)
-        assert stub.call_args.kwargs["skip_fully_populated"] is True
+        assert stub.call_args.kwargs["skip_fully_populated"] is True, (
+            f"Expected skip_fully_populated=True in stub call kwargs, got: {stub.call_args.kwargs}"
+        )
 
     def test_playlist_and_album_keys_stripped_before_insert(self):
         """flatten_artists removes stray 'playlist' / 'album' keys before inserting."""
@@ -75,15 +81,15 @@ class TestFlattenArtistsTerminal:
         with patch("utils.metadata.artists.insert_shallow_artist_stubs") as stub:
             flatten_artists([noisy], _LOGGER, skip_fully_populated=True)
         inserted = stub.call_args.args[0][0]
-        assert "playlist" not in inserted
-        assert "album" not in inserted
-        assert inserted["id"] == 10
+        assert "playlist" not in inserted, f"'playlist' key should be stripped from inserted artist: {inserted}"
+        assert "album" not in inserted, f"'album' key should be stripped from inserted artist: {inserted}"
+        assert inserted["id"] == 10, f"Expected inserted artist id=10, got: {inserted['id']}"
 
     def test_none_artistlist_returns_empty_without_calling_stub(self):
         with patch("utils.metadata.artists.insert_shallow_artist_stubs") as stub:
             result = flatten_artists(None, _LOGGER, skip_fully_populated=True)
-        assert result == []
-        stub.assert_not_called()
+        assert result == [], f"Expected empty result for None artistlist, got: {result}"
+        stub.assert_not_called(), "Stub should not be called when artistlist is None"
 
 
 # ---------------------------------------------------------------------------

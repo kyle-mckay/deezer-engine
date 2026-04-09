@@ -236,6 +236,7 @@ def main():
         return
 
     total_strategies = len(strategies_config['playlists'])
+    pull_metadata = get_global_value('pull_metadata', True)
 
     for i, s_data in enumerate(strategies_config['playlists'],1):
         # Check for shutdown signal
@@ -262,7 +263,10 @@ def main():
         controller = StrategyController(client, config, logger, safe_name)
         
         # Update stale dynamic track data
-        refresh_stats(client, logger)
+        if pull_metadata:
+            refresh_stats(client, logger)
+        else:
+            logger.debug("pull_metadata=false: skipping stats refresh.")
 
         try:
             source_metadata = []
@@ -287,13 +291,16 @@ def main():
 
     # Final enrichment pass
     if not shutdown_event.is_set():
-        logger.info("Performing final metadata enrichment pass...")
-        try:
-            update_unprocessed(client, logger)
-            logger.debug("Final enrichment pass completed.")
-        except Exception as e:
-            logger.error(f"Final enrichment pass failed: {e}")
-            logger.debug("Final enrichment error details:", exc_info=True)
+        if pull_metadata:
+            logger.info("Performing final metadata enrichment pass...")
+            try:
+                update_unprocessed(client, logger)
+                logger.debug("Final enrichment pass completed.")
+            except Exception as e:
+                logger.error(f"Final enrichment pass failed: {e}")
+                logger.debug("Final enrichment error details:", exc_info=True)
+        else:
+            logger.info("pull_metadata=false: skipping final metadata enrichment pass.")
     else:
         logger.info("Shutdown signal active; deferring final enrichment to next run.")
 

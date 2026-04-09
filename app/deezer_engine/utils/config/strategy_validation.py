@@ -430,19 +430,34 @@ def load_strategies_with_env_overrides(logger):
     try:
         with open(strategies_path, 'r') as f:
             strategies = yaml.safe_load(f)
-            if strategies is None or strategies.get("playlists") is None:
-                logger.warning(f"Strategies file at {strategies_path} is empty or missing playlists.")
-                return {"playlists": []}
     except Exception as e:
         logger.error(f"Error loading YAML: {e}")
         return {"playlists": []}
 
-    if not isinstance(strategies, dict) or "playlists" not in strategies:
+    if strategies is None:
+        logger.warning(f"Strategies file at {strategies_path} is empty.")
+        return {"playlists": []}
+
+    if not isinstance(strategies, dict):
         logger.error("Invalid config format: Root element must be 'playlists' list.")
         logger.error("Should be: 'playlists:' not '- playlists:")
         return {"playlists": []}
 
+    root_allowed_keys = {"playlists"}
+    unknown_root_keys = get_unknown_keys(strategies, root_allowed_keys)
+    if "playlists" not in strategies:
+        logger.error("Invalid config format: Root element must include 'playlists' list.")
+        if unknown_root_keys:
+            formatted_keys = format_unknown_key_list(unknown_root_keys, root_allowed_keys)
+            logger.error(f"Unknown root key(s): {formatted_keys}.")
+        logger.error("Should be: 'playlists:' not '- playlists:")
+        return {"playlists": []}
+
     raw_playlists = strategies.get("playlists", [])
+    if not isinstance(raw_playlists, list):
+        logger.error("Invalid config format: 'playlists' must be a list.")
+        return {"playlists": []}
+
     logger.debug(f"Verifying {len(raw_playlists)} strategies...")
 
     valid_playlists = []

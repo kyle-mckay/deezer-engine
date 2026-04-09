@@ -24,6 +24,7 @@ config:
   file_retention: 168       # Export file cleanup horizon in hours
 
   # Metadata refresh policy.
+  pull_metadata: true       # Enable metadata enrichment and stats refresh pulls
   track_stats_refresh: 90   # Days before refreshing dynamic track metadata
   album_stats_refresh: 90   # Days before refreshing dynamic album metadata
 

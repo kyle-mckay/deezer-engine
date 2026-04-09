@@ -13,7 +13,7 @@ from utils.infrastructure.paths import get_data_dir
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = Path(__file__).resolve().parents[2]
-OFFLINE_FIXTURE_DIR = PROJECT_ROOT / "tests" / "fixtures" / "album"
+OFFLINE_FIXTURE_DIR = REPO_ROOT / "app" / "tests" / "fixtures" / "album"
 OFFLINE_STRATEGY_PATH = REPO_ROOT / "templates" / "validation" / "input_output" / "strategies.offline.yml"
 
 EXPECTED_COUNTS = {
@@ -46,6 +46,7 @@ COMPONENT_COUNT_CASES = [
 ]
 
 OFFLINE_SHARED_CACHE_KEY = "offline-shared"
+ONLINE_SHARED_CACHE_KEY = "online-shared"
 
 _OFFLINE_RUN_RESULTS = {}
 
@@ -118,7 +119,7 @@ def check_offline_album_fixtures():
 @pytest.fixture
 def preserve_runtime_state(monkeypatch, backup_restore_runtime_files):
     """Backs up runtime state, copies the offline strategy file into place, and restores on teardown."""
-    monkeypatch.chdir(PROJECT_ROOT)
+    monkeypatch.chdir(REPO_ROOT)
     reset_config_snapshot()
     _clear_deezer_logger_handlers()
 
@@ -135,7 +136,7 @@ def preserve_runtime_state(monkeypatch, backup_restore_runtime_files):
         _clear_deezer_logger_handlers()
 
 
-def run_input_output_once(monkeypatch, preserve_runtime_state, run_engine_main, cache_key):
+def run_input_output_once(monkeypatch, preserve_runtime_state, run_engine_main, cache_key, pull_metadata_enabled=False):
     """Runs the engine once for a given cache key and returns a dict of log/db/count results; caches per key."""
     if cache_key in _OFFLINE_RUN_RESULTS:
         return _OFFLINE_RUN_RESULTS[cache_key]
@@ -144,9 +145,10 @@ def run_input_output_once(monkeypatch, preserve_runtime_state, run_engine_main, 
     log_file = runtime_paths["log_file"]
     db_path = runtime_paths["db_path"]
 
-    monkeypatch.chdir(PROJECT_ROOT)
+    monkeypatch.chdir(REPO_ROOT)
     monkeypatch.setenv("DEEZER_LOG_LEVEL", "INFO")
     monkeypatch.setenv("DEEZER_WRITE_LOGS", "true")
+    monkeypatch.setenv("DEEZER_PULL_METADATA", "true" if pull_metadata_enabled else "false")
 
     if log_file.exists():
         log_file.unlink()

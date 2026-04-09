@@ -75,6 +75,11 @@ Run a focused module:
 - `test_input_output_offline_components.py` (`integration`, `offline`, `slow`)
   - Purpose: validates per-component I/O counts (source/modifier/destination/save).
 
+## Offline Metadata Pull Toggle
+
+- Offline I/O tests force `DEEZER_PULL_METADATA=false` so they only pull full tracks with sources that do not return the same as the current minimum shallow headers. This is limited to history, smarttracklist and file imports (if the import is not already complete).
+- Runtime default remains enabled (`pull_metadata=true`) unless overridden by config/env.
+
 - `test_logger_configuration.py` (`unit`)
   - Purpose: logger configuration behavior validation.
   - Notes: verifies logger handler reconciliation when re-initializing logger settings.

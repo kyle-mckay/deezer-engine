@@ -19,6 +19,10 @@ The pipeline supports explicit Input (`i`) and Output (`o`) assertions at every 
 > **Stable Sources for I/O Validation**
 > Use static sources like **albums** or **file imports** to ensure consistent track counts for your assertions. Avoid **SmartTracklists** or dynamic playlists, as their naturally fluctuating content will cause I/O validation to fail during routine updates.
 
+> [!TIP]
+> **Offline Determinism**
+> Set `config.pull_metadata: false` in your validation config to prevent metadata enrichment and stats refresh API pulls during assertion-focused runs.
+
 #### Validation Example
 
 This example demonstrates a strict validation of a "Top 10" filter from a specific album.

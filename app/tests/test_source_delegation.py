@@ -5,11 +5,30 @@ import pytest
 
 from strategies.sources import file as file_source
 from strategies.sources import history, smarttracklist
-from strategies.sources import artist, album
-from utils.infrastructure.signals import shutdown_event
 
 
 pytestmark = [pytest.mark.unit]
+
+
+def _complete_shallow_track(track_id, **overrides):
+    track = {
+        "id": str(track_id),
+        "readable": True,
+        "title": f"Track {track_id}",
+        "link": f"https://example.test/tracks/{track_id}",
+        "duration": 180,
+        "rank": 999,
+        "explicit_lyrics": False,
+        "explicit_content_lyrics": 0,
+        "explicit_content_cover": 0,
+        "md5_image": f"img-{track_id}",
+        "artist_id": f"artist-{track_id}",
+        "artist_name": f"Artist {track_id}",
+        "album_id": f"album-{track_id}",
+        "album_name": f"Album {track_id}",
+    }
+    track.update(overrides)
+    return track
 
 
 def test_smarttracklist_delegates_to_track_worker(monkeypatch):
@@ -100,6 +119,7 @@ def test_history_delegates_to_track_worker(monkeypatch):
 def test_file_delegates_to_track_worker(monkeypatch, tmp_path):
     logger = logging.getLogger("tests.source_delegation.file")
     delegated = {}
+    ingested = []
 
     monkeypatch.setattr(file_source, "get_collection_name", lambda *_args, **_kwargs: "file__merged")
     monkeypatch.setattr(
@@ -117,7 +137,13 @@ def test_file_delegates_to_track_worker(monkeypatch, tmp_path):
         delegated["source_data"] = source_data
         return [{"id": "401", "collection": source_data[0]["override_collection"]}]
 
+    def fake_ingest_shallow_tracks(tracklist, logger, skip_fully_populated=False):
+        del logger, skip_fully_populated
+        ingested.append(list(tracklist))
+        return list(tracklist)
+
     monkeypatch.setattr(file_source, "fetch_enriched_tracks", fake_fetch_enriched_tracks)
+    monkeypatch.setattr(file_source, "ingest_shallow_tracks", fake_ingest_shallow_tracks)
 
     result = file_source.run(
         client=object(),
@@ -134,53 +160,100 @@ def test_file_delegates_to_track_worker(monkeypatch, tmp_path):
         "id": ["401", "402", "403"],
         "override_collection": "file__merged",
     }]
+    assert ingested == [[{"id": "401", "collection": "file__merged"}]]
 
 
-def test_album_source_honors_shutdown_before_fetch(monkeypatch):
-    logger = logging.getLogger("tests.source_delegation.album_shutdown")
+def test_file_passes_complete_rows_through_shallow_ingestion_without_delegation(monkeypatch, tmp_path):
+    logger = logging.getLogger("tests.source_delegation.file_complete")
+    ingested = []
 
-    calls = {"get_album": 0}
+    monkeypatch.setattr(file_source, "get_collection_name", lambda *_args, **_kwargs: "file__merged")
+    monkeypatch.setattr(
+        file_source,
+        "read_from_json",
+        lambda _path, _logger: [
+            _complete_shallow_track(
+                "501",
+                collection="should_not_override",
+                date_cached="2026-04-02T00:00:00",
+                disk_number=7,
+            )
+        ],
+    )
 
-    class DummyClient:
-        def get_album(self, _album_id):
-            calls["get_album"] += 1
-            raise AssertionError("get_album should not be called when shutdown is active")
+    def fake_ingest_shallow_tracks(tracklist, logger, skip_fully_populated=False):
+        del logger, skip_fully_populated
+        ingested.append(list(tracklist))
+        return list(tracklist)
 
-    shutdown_event.set()
-    try:
-        result = album.run(
-            client=DummyClient(),
-            config={},
-            logger=logger,
-            source_data={"type": "album", "id": ["111", "222"]},
-        )
-    finally:
-        shutdown_event.clear()
+    monkeypatch.setattr(
+        file_source,
+        "fetch_enriched_tracks",
+        lambda *_args, **_kwargs: pytest.fail("fetch_enriched_tracks should not run for complete shallow rows"),
+    )
+    monkeypatch.setattr(file_source, "ingest_shallow_tracks", fake_ingest_shallow_tracks)
 
-    assert result == []
-    assert calls["get_album"] == 0
+    result = file_source.run(
+        client=object(),
+        config={},
+        logger=logger,
+        source_data={
+            "type": "file",
+            "filename": [str(tmp_path / "tracks.json")],
+        },
+    )
+
+    expected_track = _complete_shallow_track("501", collection="should_not_override")
+    assert ingested == [[expected_track]]
+    assert result == [expected_track]
 
 
-def test_artist_source_honors_shutdown_before_artist_lookup(monkeypatch):
-    logger = logging.getLogger("tests.source_delegation.artist_shutdown")
+def test_file_splits_complete_and_incomplete_rows(monkeypatch, tmp_path):
+    logger = logging.getLogger("tests.source_delegation.file_split")
+    delegated = {}
+    ingested = []
 
-    calls = {"get_artist": 0}
+    monkeypatch.setattr(file_source, "get_collection_name", lambda *_args, **_kwargs: "file__merged")
+    monkeypatch.setattr(
+        file_source,
+        "read_from_json",
+        lambda _path, _logger: [
+            _complete_shallow_track("601", date_cached="2026-04-02T00:00:00", disk_number=3),
+            {"id": "602"},
+        ],
+    )
 
-    class DummyClient:
-        def get_artist(self, _artist_id):
-            calls["get_artist"] += 1
-            raise AssertionError("get_artist should not be called when shutdown is active")
+    def fake_fetch_enriched_tracks(client, config, logger, source_data):
+        del client, config, logger
+        delegated["source_data"] = source_data
+        return [_complete_shallow_track("602", collection=source_data[0]["override_collection"], disk_number=9)]
 
-    shutdown_event.set()
-    try:
-        result = artist.run(
-            client=DummyClient(),
-            config={},
-            logger=logger,
-            source_data={"type": "artist", "id": ["333", "444"]},
-        )
-    finally:
-        shutdown_event.clear()
+    def fake_ingest_shallow_tracks(tracklist, logger, skip_fully_populated=False):
+        del logger, skip_fully_populated
+        ingested.append(list(tracklist))
+        return list(tracklist)
 
-    assert result == []
-    assert calls["get_artist"] == 0
+    monkeypatch.setattr(file_source, "fetch_enriched_tracks", fake_fetch_enriched_tracks)
+    monkeypatch.setattr(file_source, "ingest_shallow_tracks", fake_ingest_shallow_tracks)
+
+    result = file_source.run(
+        client=object(),
+        config={},
+        logger=logger,
+        source_data={
+            "type": "file",
+            "filename": [str(tmp_path / "tracks.json")],
+        },
+    )
+
+    expected_good_track = _complete_shallow_track("601", collection="file__merged")
+    expected_delegated_track = _complete_shallow_track("602", collection="file__merged", disk_number=9)
+    assert delegated["source_data"] == [{
+        "id": ["602"],
+        "override_collection": "file__merged",
+    }]
+    assert ingested == [
+        [expected_good_track],
+        [expected_delegated_track],
+    ]
+    assert result == [expected_good_track, expected_delegated_track]
