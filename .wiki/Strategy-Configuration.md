@@ -29,7 +29,7 @@ Every source entry supports these optional fields:
 
 * `retention`: (Int) Hours to cache data. `0` (default) means fetch live.
 * `override_collection`: (String) Optional explicit collection tag to apply to returned tracks.
-* `modifiers`: (List) **Local Modifiers** that apply *only* to this source before merging.
+* `modifiers`: (List) **Local Modifiers** that apply *only* to this source before merging. If the source block groups multiple IDs, names, or files, the modifier runs once against the combined tracks from that grouped block.
 
 ### Supported Types
 
@@ -207,16 +207,24 @@ Modifiers is an *optional* section that allows you to transform your track list 
 
 ### Global vs Local
 
-**Local Modifier**: Exclude all songs in your favorites if they also exist in the defined playlist.
+**Local Modifier**: Applies to all songs in the parent source `type`. If your source block has grouped sources the modifiers are applied to that block before the result is merged globally.
 
 ```yaml
     source:
       - type: "favorites"
         modifiers: 
+          # Applies only to the "favorites" source before merging with other sources
           - type: "exclude"
             source:
               - type: "playlist"
                 id: "PLAYLIST_ID"
+      - type: "playlist"
+        id: ["ID_1", "ID_2"]
+        modifiers:
+          # Applies combined tracks from both playlist IDs before merging with other sources
+          - type: "limit"
+            order: "top"
+            count: 5
 ```
 
 **Global**: Applies to the **all** tracks gathered.
@@ -402,7 +410,7 @@ playlists:
 
 ### High-Energy "Popular Only" Discovery
 
-This merges your Discovery mix with the "Inspired By" tracks, but uses a **Local Modifier** to filter out lower-ranked (less popular) songs from the discovery source before they even hit your main list.
+This merges your Discovery mix with the "Inspired By" tracks, but uses a **Local Modifier** to filter out lower-ranked (less popular) songs from the discovery source before they even hit your main list. If you later switch that discovery source to a grouped source block, the child modifier would run once on the combined tracks returned by that block.
 
 ```yaml
 playlists:

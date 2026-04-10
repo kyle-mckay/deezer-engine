@@ -10,6 +10,7 @@ from utils.api.auth import get_authenticated_session
 from utils.config import get_global_value
 from utils.collections import get_collection_name
 from strategies.sources.track import run as fetch_enriched_tracks
+from utils.metadata.orchestration import add_key_to_dicts
 
 # Headers returned from History:
 # History delegates to `track.py` with the extracted id's, so returned rows follow the Track payload shape.

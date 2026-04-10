@@ -30,7 +30,6 @@ from strategies.base import StrategyController
 from utils.db.connection import initialize_all
 from utils.collections import get_collection_name
 from utils.infrastructure.signals import shutdown_event
-from utils.collections import fetch_collection, is_collection_cached
 from utils.db.blocklist import release_expired_blocklisted_entities
 from utils.metadata.orchestration import update_unprocessed, refresh_stats
 from __version__ import __version__, __banner__
@@ -65,54 +64,143 @@ def print_startup():
     print("This is free software under the GNU GPL v3.0.")
     print("For more details, see https://codeberg.org/kylemmkay/deezer-engine")
 
+
+def _normalize_source_value_list(raw_value):
+    if isinstance(raw_value, list):
+        normalized_values = []
+        for item in raw_value:
+            if item is None:
+                continue
+
+            item_str = str(item).strip()
+            if item_str:
+                normalized_values.append(item_str)
+
+        return normalized_values
+
+    if raw_value is None:
+        return None
+
+    raw_value_str = str(raw_value).strip()
+    if not raw_value_str:
+        return []
+
+    return [raw_value_str]
+
+
+def _expand_source_inputs(src, logger):
+    for field_name in ("id", "filename", "name"):
+        normalized_values = _normalize_source_value_list(src.get(field_name))
+        if normalized_values is None:
+            continue
+
+        if len(normalized_values) <= 1:
+            if len(normalized_values) == 1 and isinstance(src.get(field_name), list):
+                normalized_source = dict(src)
+                normalized_source[field_name] = normalized_values[0]
+                return [normalized_source]
+            return [src]
+
+        logger.debug(
+            f"Expanding source type '{src.get('type')}' across {len(normalized_values)} '{field_name}' values."
+        )
+        expanded_sources = []
+        for value in normalized_values:
+            expanded_source = dict(src)
+            expanded_source[field_name] = value
+            expanded_sources.append(expanded_source)
+        return expanded_sources
+
+    return [src]
+
+
+def _get_scalar_source_collection_name(src, logger):
+    return get_collection_name(
+        logger,
+        src.get('type'),
+        src.get('name', src.get('filename', None)),
+        src.get('id', None),
+    )
+
+
+def _get_grouped_source_name(src, source_index):
+    source_type = str(src.get('type') or 'unknown').lower()
+    return f"{source_type}__grouped__{source_index}"
+
+
+def _validate_grouped_source_output(src, grouped_source, controller, logger):
+    expected_o = src.get('o')
+    if expected_o is None:
+        return
+
+    source_label = src.get('name', src.get('type'))
+    validation_mode = src.get('validation_mode', get_global_value('validation_mode', None))
+    actual_o = len(grouped_source.get('tracks', []))
+
+    logger.debug(f"Source '{source_label}' expects grouped output count: {expected_o}")
+    controller._validate_io('o', expected_o, actual_o, validation_mode, f"Source '{source_label}'")
+
 def process_sources(s_data, controller, config, client, logger, strategy_name):
     """
     Handles the Source Phase of the strategy.
-    Returns a list of tuples containing (source_name, source_specific_modifiers).
+    Returns one grouped source block per original source definition.
+    Cache resolution for each expanded source is delegated to controller.handle_source.
     """
     source_metadata = []
     sources = s_data.get('source', [])
     logger.debug(f"Strategy '{strategy_name}' has {len(sources)} sources defined.")
     
-    for src in sources:
+    for source_index, src in enumerate(sources):
         if shutdown_event.is_set():
             logger.debug("Shutdown acknowledged before next source. Skipping remaining sources.")
             break
 
-        logger.debug(f"Handling source type: {src.get('type')}")
-        source_type = src.get('type')
-        source_retention = src.get('retention',get_global_value('retention',0))
-        source_modifiers = src.get('modifiers', []) # Capture child modifiers
+        expanded_sources = _expand_source_inputs(src, logger)
+        grouped_source = {
+            'source': dict(src),
+            'expanded_sources': [],
+            'collection_names': [],
+            'group_name': _get_grouped_source_name(src, source_index),
+            'modifiers': src.get('modifiers', []),
+            'tracks': [],
+        }
 
-        source_name = get_collection_name(logger,source_type,src.get('name',src.get('filename',None)),src.get('id',None))
+        for expanded_src in expanded_sources:
+            logger.debug(f"Handling source type: {expanded_src.get('type')}")
+            source_name = _get_scalar_source_collection_name(expanded_src, logger)
+            grouped_source['expanded_sources'].append(dict(expanded_src))
+            grouped_source['collection_names'].append(source_name)
 
-        # Track the name and its specific modifiers
-        source_metadata.append((source_name, source_modifiers))
+            fetched_tracks = controller.handle_source(expanded_src, source_name) or []
 
-        # Get new tracklist if cache expired
-        if source_retention == 0 or not is_collection_cached(source_name, src, logger):
-            logger.debug(f"Cache expired or missing for {source_name}. Fetching from API.")
-            controller.handle_source(src,source_name)
-        else:
-            logger.debug(f"Using cached data for {source_name}.")
+            grouped_source['tracks'].extend(fetched_tracks)
+            logger.debug(f"Source '{source_name}': Total tracks collected so far: {len(grouped_source['tracks'])}")
 
-        if shutdown_event.is_set():
-            logger.debug("Shutdown passing through process_sources acknowledged. Skipping remaining strategies.")
-            break
+            if shutdown_event.is_set():
+                logger.debug("Shutdown passing through process_sources acknowledged. Skipping remaining strategies.")
+                break
+
+        _validate_grouped_source_output(src, grouped_source, controller, logger)
+        source_metadata.append(grouped_source)
     
     return source_metadata
 
 def process_modifiers(s_data, controller, source_metadata, logger, strategy_name):
     """Handles the Modifier Phase, including source-specific and global modifiers."""
     
-    # 1. Collect and apply source-specific modifiers individually
     all_processed_tracks = []
-    for source_name, child_modifiers in source_metadata:
+    last_modifier_context = None
+    for grouped_source in source_metadata:
         if shutdown_event.is_set():
             logger.debug("Shutdown acknowledged before source-specific modifiers. Skipping remaining modifier work.")
             break
-        fetched = fetch_collection(source_name, logger)
-        logger.debug(f"Fetched {len(fetched)} tracks from {source_name}")
+
+        source_name = grouped_source.get('group_name')
+        child_modifiers = grouped_source.get('modifiers', [])
+        fetched = list(grouped_source.get('tracks', []))
+        last_modifier_context = source_name
+        logger.debug(f"Fetched {len(fetched)} in-memory tracks from {source_name}")
+
         if child_modifiers:
             logger.debug(f"Applying {len(child_modifiers)} child modifiers to source '{source_name}'")
             for mod in child_modifiers:
@@ -133,7 +221,7 @@ def process_modifiers(s_data, controller, source_metadata, logger, strategy_name
                 logger.debug("Shutdown acknowledged before global modifiers. Skipping remaining modifiers.")
                 break
             logger.debug(f"Applying global modifier: {mod.get('type')}")
-            controller.handle_modifier(mod, None, source_name)
+            controller.handle_modifier(mod, None, last_modifier_context)
             if logger.isEnabledFor(logging.DEBUG):
                 logger.debug(f"Pipeline size after '{mod.get('type')}': {len(controller.pipeline)} tracks.")
 

@@ -2,12 +2,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import re
-import logging
-from utils.infrastructure.paths import get_cache_dir 
-from utils.collections import handle_cached_data, get_collection_name
+from utils.collections import get_collection_name
 from utils.config import get_global_value
 from utils.api.fetching import fetch_shallow_tracks
 from utils.infrastructure.signals import shutdown_event
+from utils.metadata.orchestration import add_key_to_dicts
 
 # Headers returned from Albums:
 # Returns: id, readable, title, title_short, title_version, link, isrc, duration,
@@ -60,12 +59,6 @@ def run(client, config, logger, source_data):
             logger.warning("Album source has no valid IDs after filtering invalid list entries.")
             return []
 
-        source_collection = get_collection_name(
-            logger,
-            "album",
-            id=normalized_album_ids if len(normalized_album_ids) > 1 else normalized_album_ids[0],
-        )
-
         collected_tracks = []
 
         for album_id in normalized_album_ids:
@@ -79,9 +72,7 @@ def run(client, config, logger, source_data):
             try:
                 album = client.get_album(album_id)
                 clean_name = get_sanitized_name(album.title)
-                cache_file = str(get_cache_dir() / f"album_{album_id}_{clean_name}.json")
-
-                logger.debug(f"Resolved Album: '{album.title}' | Cache Key: {clean_name}")
+                logger.debug(f"Resolved Album: '{album.title}' | Sanitized Key: {clean_name}")
 
                 if not is_artist:
                     logger.info(f"Fetching tracks for album: '{album.title}' (ID {album_id})...")
@@ -91,21 +82,11 @@ def run(client, config, logger, source_data):
                 logger.debug("Stack trace:", exc_info=True)
                 continue
 
-            # Keep per-album cache collections intact while allowing one merged source output.
-            collection_name = get_collection_name(logger, "album", id=album_id)
-
-            def fetch_album():
-                """Closure triggered only if cache is invalid or missing."""
-                logger.debug(f"Initiating live API fetch for album: {album.id}")
-                return fetch_shallow_tracks(album.get_tracks(), logger)
-
-            # Execution via Cache Manager (with database collection support)
-            tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_album, "album", collection_name=collection_name)
-
-            # Consolidated INFO: Single summary line
-            logger.debug(f"Loaded {len(tracks)} tracks from album '{album.title}'.")
-            if tracks:
-                collected_tracks.extend([{**track, 'collection': source_collection} for track in tracks])
+            collection_album = get_collection_name(logger, "album", id=album_id)
+            logger.debug(f"Initiating live API fetch for album: {album.id}")
+            album_tracks = fetch_shallow_tracks(album.get_tracks(), logger) or []
+            if album_tracks:
+                collected_tracks.extend(add_key_to_dicts(logger, album_tracks, 'collection', collection_album))
 
             if shutdown_event.is_set():
                 logger.debug("Shutdown acknowledged after album fetch. Returning partial album source results.")
@@ -114,8 +95,7 @@ def run(client, config, logger, source_data):
         # Data Samples for Debugging
         if collected_tracks:
             sample_ids = [t.get('id') for t in collected_tracks[:5]]
-            logger.debug(f"Sample Track IDs from source: {sample_ids}")
-
+            logger.debug(f"Sample Track IDs from source: {sample_ids}")                
         return collected_tracks
 
     except Exception as e:

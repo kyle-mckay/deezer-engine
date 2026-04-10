@@ -17,32 +17,32 @@ OFFLINE_FIXTURE_DIR = REPO_ROOT / "app" / "tests" / "fixtures" / "album"
 OFFLINE_STRATEGY_PATH = REPO_ROOT / "templates" / "validation" / "input_output" / "strategies.offline.yml"
 
 EXPECTED_COUNTS = {
-    "IOPASS": 71,
+    "IOPASS": 73,
     "IOWARN": 1,
     "WARN": 1,
     "IOERR": 1,
     "ERR": 2,
-    "IOPASS_SF": 29,
+    "IOPASS_SF": 30,
     "IOPASS_MF": 10,
     "IOPASS_ML": 12,
     "IOPASS_MS": 4,
     "IOPASS_ME": 2,
     "IOPASS_MD": 2,
-    "IOPASS_DF": 12,
-    "SAVE_DF": 12,
+    "IOPASS_DF": 13,
+    "SAVE_DF": 13,
 }
 
 TOTAL_COUNT_KEYS = ("IOPASS", "IOWARN", "WARN", "IOERR", "ERR")
 
 COMPONENT_COUNT_CASES = [
-    pytest.param("IOPASS_SF", "source-file", EXPECTED_COUNTS["IOPASS_SF"], id="source-file-29"),
+    pytest.param("IOPASS_SF", "source-file", EXPECTED_COUNTS["IOPASS_SF"], id="source-file-30"),
     pytest.param("IOPASS_MF", "modifier-filter", EXPECTED_COUNTS["IOPASS_MF"], id="modifier-filter-10"),
     pytest.param("IOPASS_ML", "modifier-limit", EXPECTED_COUNTS["IOPASS_ML"], id="modifier-limit-12"),
     pytest.param("IOPASS_MS", "modifier-sort", EXPECTED_COUNTS["IOPASS_MS"], id="modifier-sort-4"),
     pytest.param("IOPASS_ME", "modifier-exclude", EXPECTED_COUNTS["IOPASS_ME"], id="modifier-exclude-2"),
     pytest.param("IOPASS_MD", "modifier-dedupe", EXPECTED_COUNTS["IOPASS_MD"], id="modifier-dedupe-2"),
-    pytest.param("IOPASS_DF", "destination-file", EXPECTED_COUNTS["IOPASS_DF"], id="destination-file-12"),
-    pytest.param("SAVE_DF", "destination-file-save", EXPECTED_COUNTS["SAVE_DF"], id="destination-file-save-12"),
+    pytest.param("IOPASS_DF", "destination-file", EXPECTED_COUNTS["IOPASS_DF"], id="destination-file-13"),
+    pytest.param("SAVE_DF", "destination-file-save", EXPECTED_COUNTS["SAVE_DF"], id="destination-file-save-13"),
 ]
 
 OFFLINE_SHARED_CACHE_KEY = "offline-shared"

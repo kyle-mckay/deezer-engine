@@ -255,6 +255,17 @@ playlists:
         name: "./IO_Validation/nested-local-modifier.json"
         i: 7
 
+  - name: "grouped_source_output_total"
+    # When a source block groups multiple inputs, source o validates the combined total.
+    source:
+      - type: "album"
+        id: ["76585", "102809"]
+        o: 15
+    destination:
+      - type: "file"
+        name: "./IO_Validation/grouped-source-output-total.json"
+        i: 15
+
   - name: "chain_sort_limit_filter_duration"
     # Sort Nimrod (18) by ID, Limit (10), Filter duration > 150.
     # Verified: 6 tracks in top 10 IDs of Nimrod meet criteria.

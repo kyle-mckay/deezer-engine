@@ -4,13 +4,11 @@
 import re
 import time
 from datetime import timedelta
-import logging
-from utils.infrastructure.paths import get_cache_dir 
-from utils.api.fetching import get_tracks
-from utils.collections import handle_cached_data, get_collection_name
+from utils.collections import get_collection_name, sync_to_collections
 from utils.config import get_global_value
 from utils.infrastructure.signals import shutdown_event
 import strategies.sources.album as album_strategy 
+from utils.metadata.orchestration import add_key_to_dicts
 
 # Headers returned from Artists
 # Artist delegates to `album.py`, so returned rows follow the Album payload shape.
@@ -58,16 +56,11 @@ def run(client, config, logger, source_data):
             logger.warning("Artist source has no valid IDs after filtering invalid list entries.")
             return []
 
-        source_collection = get_collection_name(
-            logger,
-            "artist",
-            id=normalized_artist_ids if len(normalized_artist_ids) > 1 else normalized_artist_ids[0],
-        )
-
         logger.debug(f"Artist source start: artist_ids={normalized_artist_ids}, retention={retention_hrs}h")
 
         artist_tracks = []
         for artist_id in normalized_artist_ids:
+            collection_artist = get_collection_name(logger, "artist", id=artist_id)
             if shutdown_event.is_set():
                 logger.debug("Shutdown acknowledged before next artist lookup. Skipping remaining artists.")
                 break
@@ -127,7 +120,9 @@ def run(client, config, logger, source_data):
 
                 # Delegate to existing logic
                 tracks = album_strategy.run(client, config, logger, album_payload)
-                artist_tracks.extend(tracks)
+                # Manually sync album to collections 
+                sync_to_collections(tracks, logger, get_collection_name(logger, "album", id=album_obj.id))
+                artist_tracks.extend(add_key_to_dicts(logger,tracks,'collection', collection_artist))
 
                 if shutdown_event.is_set():
                     logger.debug(
@@ -142,20 +137,16 @@ def run(client, config, logger, source_data):
             logger.warning("Artist source returned no tracks after processing all valid IDs.")
             return []
 
-        tagged_tracks = [{**track, 'collection': source_collection} for track in artist_tracks]
-
-        # Consolidated INFO: Final result report
-
         # Data Samples
-        if tagged_tracks:
-            sample_ids = [t.get('id') for t in tagged_tracks[:5]]
+        if artist_tracks:
+            sample_ids = [t.get('id') for t in artist_tracks[:5]]
             logger.debug(f"Sample Track IDs from source: {sample_ids}")
 
         logger.debug(
-            f"Artist source end: artist_ids={normalized_artist_ids}, returned={len(tagged_tracks)}"
+            f"Artist source end: artist_ids={normalized_artist_ids}, returned={len(artist_tracks)}"
         )
 
-        return tagged_tracks
+        return artist_tracks
 
     except Exception as e:
         logger.error(f"Artist aggregation failed: {e}")

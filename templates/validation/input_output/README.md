@@ -53,7 +53,8 @@ playlists:
 
 #### Local vs. Global Assertion Logic
 
-Because **Local Modifiers** apply after a source is collected but before it is merged into the global stream, the source `o` value refers to the raw collection count.
+Because **Local Modifiers** apply after a source is collected but before it is merged into the global stream, the source `o` value refers to the raw source-stage total for that source block.
+When a source block groups multiple IDs, names, or filenames, the engine expands those inputs, combines the returned tracks, and validates `o` against the combined count for the whole block.
 
 ```yaml
     source:
@@ -72,4 +73,11 @@ Because **Local Modifiers** apply after a source is collected but before it is m
     destination:
       - type: "file"
         i: 7              # 5 (from local limit) + 2 = 7 total
+```
+
+```yaml
+    source:
+      - type: "album"
+        id: ["1234", "4432"]
+        o: 12             # Combined total across both expanded album inputs
 ```

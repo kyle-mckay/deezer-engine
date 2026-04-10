@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pytest
 
+from strategies.sources import album, favorites, playlist
 from strategies.sources import file as file_source
 from strategies.sources import history, smarttracklist
 
@@ -33,33 +34,33 @@ def _complete_shallow_track(track_id, **overrides):
 
 def test_smarttracklist_delegates_to_track_worker(monkeypatch):
     logger = logging.getLogger("tests.source_delegation.smarttracklist")
-    delegated = {}
+    delegated_calls = []
 
-    monkeypatch.setattr(smarttracklist, "get_cache_dir", lambda: Path("/tmp"))
     monkeypatch.setattr(
         smarttracklist,
         "get_collection_name",
-        lambda _logger, _source_type, name=None, **_kwargs: (
-            "smarttracklist__merged"
-            if isinstance(name, list)
-            else f"smarttracklist__{name}"
-        ),
-    )
-    monkeypatch.setattr(
-        smarttracklist,
-        "handle_cached_data",
-        lambda _cache_file, _retention, _logger, _fetch_fn, _cache_type, collection_name=None: [
-            {"id": "101", "collection": collection_name},
-            {"id": "102", "collection": collection_name},
-            {"id": "101", "collection": collection_name},
-        ],
+        lambda _logger, _source_type, name=None, **_kwargs: f"smarttracklist__{name}",
     )
 
+    def fake_fetch_smarttracklist_tracks(_arl, _logger, list_name, collection_name):
+        if list_name == "discovery":
+            return [
+                {"id": "101", "collection": collection_name},
+                {"id": "102", "collection": collection_name},
+                {"id": "101", "collection": collection_name},
+            ]
+
+        return [
+            {"id": "201", "collection": collection_name},
+            {"id": "202", "collection": collection_name},
+            {"id": "201", "collection": collection_name},
+        ]
+
+    monkeypatch.setattr(smarttracklist, "_fetch_smarttracklist_tracks", fake_fetch_smarttracklist_tracks)
+
     def fake_fetch_enriched_tracks(client, config, logger, source_data):
-        delegated["client"] = client
-        delegated["config"] = config
-        delegated["source_data"] = source_data
-        return [{"id": "101", "collection": source_data[0]["override_collection"]}]
+        delegated_calls.append(source_data[0])
+        return [{"id": source_data[0]["id"][0], "collection": source_data[0]["override_collection"]}]
 
     monkeypatch.setattr(smarttracklist, "fetch_enriched_tracks", fake_fetch_enriched_tracks)
 
@@ -70,12 +71,22 @@ def test_smarttracklist_delegates_to_track_worker(monkeypatch):
         source_data={"type": "smarttracklist", "name": ["discovery", "new-releases"], "retention": 6},
     )
 
-    assert result == [{"id": "101", "collection": "smarttracklist__merged"}]
-    assert delegated["source_data"] == [{
-        "id": ["101", "102"],
-        "override_collection": "smarttracklist__merged",
-        "retention": 6,
-    }]
+    assert result == [
+        {"id": "101", "collection": "smarttracklist__discovery"},
+        {"id": "201", "collection": "smarttracklist__new-releases"},
+    ]
+    assert delegated_calls == [
+        {
+            "id": ["101", "102"],
+            "override_collection": "smarttracklist__discovery",
+            "retention": 6,
+        },
+        {
+            "id": ["201", "202"],
+            "override_collection": "smarttracklist__new-releases",
+            "retention": 6,
+        },
+    ]
 
 
 def test_history_delegates_to_track_worker(monkeypatch):
@@ -116,12 +127,118 @@ def test_history_delegates_to_track_worker(monkeypatch):
     }]
 
 
+def test_favorites_returns_tracks_tagged_with_favorites_collection(monkeypatch):
+    """Favorites worker should tag its returned rows with the favorites collection."""
+    logger = logging.getLogger("tests.source_delegation.favorites")
+
+    class Client:
+        def get_user_tracks(self, user_id):
+            assert user_id == "user-123", f"Expected favorites worker to use configured user id, got: {user_id}"
+            return [object()]
+
+    monkeypatch.setattr(favorites, "get_collection_name", lambda *_args, **_kwargs: "favorites")
+    monkeypatch.setattr(
+        favorites,
+        "fetch_shallow_tracks",
+        lambda _tracks, _logger: [{"id": "801"}, {"id": "802"}],
+    )
+
+    result = favorites.run(
+        client=Client(),
+        config={"config": {"user_id": "user-123"}},
+        logger=logger,
+        source_data={"type": "favorites", "retention": 6},
+    )
+
+    assert result == [
+        {"id": "801", "collection": "favorites"},
+        {"id": "802", "collection": "favorites"},
+    ], f"Expected favorites worker to return rows keyed to the favorites collection, got: {result}"
+
+
+def test_playlist_returns_tracks_tagged_per_playlist_collection(monkeypatch):
+    """Playlist worker should return rows keyed with the playlist-specific collection name."""
+    logger = logging.getLogger("tests.source_delegation.playlist")
+
+    class PlaylistObject:
+        def __init__(self, playlist_id, title):
+            self.id = playlist_id
+            self.title = title
+
+        def get_tracks(self):
+            return [object()]
+
+    class Client:
+        def get_playlist(self, playlist_id):
+            return PlaylistObject(playlist_id, f"Playlist {playlist_id}")
+
+    monkeypatch.setattr(playlist, "get_collection_name", lambda _logger, _source_type, name=None, id=None: f"playlist__{id}")
+    monkeypatch.setattr(
+        playlist,
+        "fetch_shallow_tracks",
+        lambda _tracks, _logger: [{"id": "901"}, {"id": "902"}],
+    )
+
+    result = playlist.run(
+        client=Client(),
+        config={},
+        logger=logger,
+        source_data={"type": "playlist", "id": "555", "retention": 6},
+    )
+
+    assert result == [
+        {"id": "901", "collection": "playlist__555"},
+        {"id": "902", "collection": "playlist__555"},
+    ], f"Expected playlist worker to tag shallow rows with the playlist collection, got: {result}"
+
+
+def test_album_returns_tracks_tagged_per_album_collection(monkeypatch):
+    """Album worker should return rows keyed with the album-specific collection name."""
+    logger = logging.getLogger("tests.source_delegation.album")
+
+    class AlbumObject:
+        def __init__(self, album_id, title):
+            self.id = album_id
+            self.title = title
+
+        def get_tracks(self):
+            return [object()]
+
+    class Client:
+        def get_album(self, album_id):
+            return AlbumObject(album_id, f"Album {album_id}")
+
+    monkeypatch.setattr(album, "get_collection_name", lambda _logger, _source_type, name=None, id=None: f"album__{id}")
+    monkeypatch.setattr(
+        album,
+        "fetch_shallow_tracks",
+        lambda _tracks, _logger: [{"id": "1001"}, {"id": "1002"}],
+    )
+    monkeypatch.setattr(album, "shutdown_event", type("ShutdownEvent", (), {"is_set": staticmethod(lambda: False)})())
+
+    result = album.run(
+        client=Client(),
+        config={},
+        logger=logger,
+        source_data={"type": "album", "id": "777", "retention": 6},
+    )
+
+    assert result == [
+        {"id": "1001", "collection": "album__777"},
+        {"id": "1002", "collection": "album__777"},
+    ], f"Expected album worker to tag shallow rows with the album collection, got: {result}"
+
+
 def test_file_delegates_to_track_worker(monkeypatch, tmp_path):
     logger = logging.getLogger("tests.source_delegation.file")
-    delegated = {}
+    delegated_calls = []
     ingested = []
 
-    monkeypatch.setattr(file_source, "get_collection_name", lambda *_args, **_kwargs: "file__merged")
+    monkeypatch.setattr(
+        file_source,
+        "get_collection_name",
+        lambda _logger, _source_type, name=None, _id=None, **_kwargs: f"file__{Path(str(name)).name}",
+    )
     monkeypatch.setattr(
         file_source,
         "read_from_json",
@@ -134,8 +251,8 @@ def test_file_delegates_to_track_worker(monkeypatch, tmp_path):
     )
 
     def fake_fetch_enriched_tracks(client, config, logger, source_data):
-        delegated["source_data"] = source_data
-        return [{"id": "401", "collection": source_data[0]["override_collection"]}]
+        delegated_calls.append(source_data[0])
+        return [{"id": source_data[0]["id"][0], "collection": source_data[0]["override_collection"]}]
 
     def fake_ingest_shallow_tracks(tracklist, logger, skip_fully_populated=False):
         del logger, skip_fully_populated
@@ -155,19 +272,35 @@ def test_file_delegates_to_track_worker(monkeypatch, tmp_path):
         },
     )
 
-    assert result == [{"id": "401", "collection": "file__merged"}]
-    assert delegated["source_data"] == [{
-        "id": ["401", "402", "403"],
-        "override_collection": "file__merged",
-    }]
-    assert ingested == [[{"id": "401", "collection": "file__merged"}]]
+    assert result == [
+        {"id": "401", "collection": "file__tracks.json"},
+        {"id": "402", "collection": "file__tracks.csv"},
+    ]
+    assert delegated_calls == [
+        {
+            "id": ["401", "402"],
+            "override_collection": "file__tracks.json",
+        },
+        {
+            "id": ["402", "403"],
+            "override_collection": "file__tracks.csv",
+        },
+    ]
+    assert ingested == [
+        [{"id": "401", "collection": "file__tracks.json"}],
+        [{"id": "402", "collection": "file__tracks.csv"}],
+    ]
 
 
 def test_file_passes_complete_rows_through_shallow_ingestion_without_delegation(monkeypatch, tmp_path):
     logger = logging.getLogger("tests.source_delegation.file_complete")
     ingested = []
 
-    monkeypatch.setattr(file_source, "get_collection_name", lambda *_args, **_kwargs: "file__merged")
+    monkeypatch.setattr(
+        file_source,
+        "get_collection_name",
+        lambda _logger, _source_type, name=None, _id=None, **_kwargs: f"file__{Path(str(name)).name}",
+    )
     monkeypatch.setattr(
         file_source,
         "read_from_json",
@@ -213,7 +346,11 @@ def test_file_splits_complete_and_incomplete_rows(monkeypatch, tmp_path):
     delegated = {}
     ingested = []
 
-    monkeypatch.setattr(file_source, "get_collection_name", lambda *_args, **_kwargs: "file__merged")
+    monkeypatch.setattr(
+        file_source,
+        "get_collection_name",
+        lambda _logger, _source_type, name=None, _id=None, **_kwargs: f"file__{Path(str(name)).name}",
+    )
     monkeypatch.setattr(
         file_source,
         "read_from_json",
@@ -246,11 +383,11 @@ def test_file_splits_complete_and_incomplete_rows(monkeypatch, tmp_path):
         },
     )
 
-    expected_good_track = _complete_shallow_track("601", collection="file__merged")
-    expected_delegated_track = _complete_shallow_track("602", collection="file__merged", disk_number=9)
+    expected_good_track = _complete_shallow_track("601", collection="file__tracks.json")
+    expected_delegated_track = _complete_shallow_track("602", collection="file__tracks.json", disk_number=9)
     assert delegated["source_data"] == [{
         "id": ["602"],
-        "override_collection": "file__merged",
+        "override_collection": "file__tracks.json",
     }]
     assert ingested == [
         [expected_good_track],

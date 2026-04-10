@@ -1,15 +1,12 @@
 # SPDX-FileCopyrightText: 2026 kylemmkay
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import os
 import json
 import re
 import random
-import logging
 from datetime import datetime
 from utils.api.auth import get_authenticated_session
-from utils.infrastructure.paths import get_cache_dir
-from utils.collections import handle_cached_data, get_collection_name
+from utils.collections import get_collection_name
 from utils.config import get_global_value
 from strategies.sources.track import run as fetch_enriched_tracks
 
@@ -22,6 +19,79 @@ def requires_metadata(source_data=None):
     No requirements to pull beyond user ID and arl for authentication
     """
     return False
+
+
+def _fetch_smarttracklist_tracks(arl, logger, list_name, collection_name):
+    """Fetch shallow smarttracklist rows already tagged with the target collection."""
+    logger.debug(f"SmartTracklist live fetch start: name='{list_name}', collection='{collection_name}'")
+
+    warm_url = f"https://www.deezer.com/us/smarttracklist/{list_name}"
+    session, api_token = get_authenticated_session(arl, logger, warm_url)
+
+    if not session or not api_token:
+        logger.error(f"Auth failed for {list_name}: Session or API token missing.")
+        return []
+
+    page_response = session.get(warm_url)
+    page_text = page_response.text
+
+    real_id_match = re.search(r'"SMART_TRACKLIST":\{.*?"id":"([^"]+)"', page_text)
+    target_id = real_id_match.group(1) if real_id_match else list_name.replace('-', '_')
+    logger.debug(f"Resolved Internal ID for {list_name}: {target_id}")
+
+    fetch_strategies = [
+        ("deezer.pageSmartTracklist", {"smartTracklist_id": target_id, "tab": 0}),
+        ("song.getListData", {"sng_ids": [], "type": "smarttracklist", "id": target_id}),
+    ]
+
+    track_ids = []
+    selected_method = "none"
+    for method, payload in fetch_strategies:
+        cid = random.randint(100000000, 999999999)
+        gw_url = (
+            f"https://www.deezer.com/ajax/gw-light.php?method={method}&input=3&api_version=1.0"
+            f"&api_token={api_token}&cid={cid}"
+        )
+        try:
+            logger.debug(f"Attempting Gateway method: {method}")
+            response = session.post(gw_url, data=json.dumps(payload)).json()
+            items = response.get('results', {}).get('data', [])
+            if items:
+                track_ids = [str(item.get('SNG_ID') or item.get('id')) for item in items]
+                if track_ids:
+                    selected_method = method
+                    logger.debug(f"Success: {len(track_ids)} tracks found via {method}")
+                    break
+        except Exception as exc:
+            logger.debug(f"Method {method} failed: {exc}")
+            continue
+
+    if not track_ids:
+        logger.debug(f"AJAX methods failed for {list_name}. Falling back to Regex scrape.")
+        track_ids = re.findall(r'"SNG_ID":"?(\d+)"?', page_text)
+        if track_ids:
+            selected_method = "regex_fallback"
+
+    if not track_ids:
+        logger.error(f"Failed to find any tracks for '{list_name}' after trying all strategies.")
+        return []
+
+    unique_track_ids = list(dict.fromkeys(track_ids))
+    date_time = datetime.now().isoformat()
+    tracks = [
+        {
+            'id': str(track_id),
+            'collection': collection_name,
+            'date_cached': date_time,
+        }
+        for track_id in unique_track_ids
+    ]
+
+    logger.debug(f"Sample Track IDs from source: {unique_track_ids[:5]}")
+    logger.debug(
+        f"SmartTracklist live fetch end: method={selected_method}, unique_ids={len(unique_track_ids)}"
+    )
+    return tracks
 
 def run(client, config, logger, source_data):
     """
@@ -57,12 +127,6 @@ def run(client, config, logger, source_data):
             logger.warning("SmartTracklist source has no valid names after filtering invalid list entries.")
             return []
 
-        source_collection = get_collection_name(
-            logger,
-            "smarttracklist",
-            name=normalized_list_names if len(normalized_list_names) > 1 else normalized_list_names[0],
-        )
-        
         # Security: Mask ARL in debug logs
         masked_arl = f"{arl[:6]}...{arl[-6:]}" if arl else "None"
         logger.debug(f"Params: names='{normalized_list_names}', retention={retention_hrs}h, arl={masked_arl}")
@@ -70,87 +134,25 @@ def run(client, config, logger, source_data):
 
         all_results = []
         for list_name in normalized_list_names:
-            cache_file = str(get_cache_dir() / f"smart_{list_name}.json")
             logger.info(f"Fetching tracks for smarttracklist: '{list_name}'...")
-
-            # Keep per-list cache collections intact while allowing one merged source output.
             collection_name = get_collection_name(logger, "smarttracklist", name=list_name)
-
-            def fetch_smart_list():
-                """Internal logic for live retrieval when cache is invalid."""
-                logger.debug(f"Cache miss for smarttracklist '{list_name}'. Starting live retrieval...")
-
-                warm_url = f"https://www.deezer.com/us/smarttracklist/{list_name}"
-                logger.debug(f"SmartTracklist live fetch start: warm_url='{warm_url}'")
-                session, api_token = get_authenticated_session(arl, logger, warm_url)
-
-                if not session or not api_token:
-                    logger.error(f"Auth failed for {list_name}: Session or API token missing.")
-                    return []
-
-                # Logic Tracing: Scraping for internal IDs
-                page_response = session.get(warm_url)
-                page_text = page_response.text
-
-                real_id_match = re.search(r'"SMART_TRACKLIST":\{.*?"id":"([^"]+)"', page_text)
-                target_id = real_id_match.group(1) if real_id_match else list_name.replace('-', '_')
-                logger.debug(f"Resolved Internal ID for {list_name}: {target_id}")
-
-                fetch_strategies = [
-                    ("deezer.pageSmartTracklist", {"smartTracklist_id": target_id, "tab": 0}),
-                    ("song.getListData", {"sng_ids": [], "type": "smarttracklist", "id": target_id})
-                ]
-
-                track_ids = []
-                selected_method = "none"
-                for method, payload in fetch_strategies:
-                    cid = random.randint(100000000, 999999999)
-                    gw_url = f"https://www.deezer.com/ajax/gw-light.php?method={method}&input=3&api_version=1.0&api_token={api_token}&cid={cid}"
-                    try:
-                        logger.debug(f"Attempting Gateway method: {method}")
-                        r = session.post(gw_url, data=json.dumps(payload)).json()
-                        items = r.get('results', {}).get('data', [])
-                        if items:
-                            track_ids = [str(i.get('SNG_ID') or i.get('id')) for i in items]
-                            if track_ids:
-                                selected_method = method
-                                logger.debug(f"Success: {len(track_ids)} tracks found via {method}")
-                                break
-                    except Exception as e:
-                        logger.debug(f"Method {method} failed: {e}")
-                        continue
-
-                # FAILSAFE: Direct HTML Scrape
-                if not track_ids:
-                    logger.debug(f"AJAX methods failed for {list_name}. Falling back to Regex scrape.")
-                    track_ids = re.findall(r'"SNG_ID":"?(\d+)"?', page_text)
-                    if track_ids:
-                        selected_method = "regex_fallback"
-
-                if not track_ids:
-                    logger.error(f"Failed to find any tracks for '{list_name}' after trying all strategies.")
-                    return []
-
-                # Deduplicate and format
-                track_ids = list(dict.fromkeys(track_ids))
-                tracks = []
-                date_time = datetime.now().isoformat()
-
-                for tid in track_ids:
-                    tracks.append({
-                        'id': str(tid),
-                        'collection': collection_name,
-                        'date_cached': date_time
-                    })
-
-                logger.debug(f"Sample Track IDs from source: {track_ids[:5]}")
-                logger.debug(
-                    f"SmartTracklist live fetch end: method={selected_method}, unique_ids={len(track_ids)}"
+            shallow_tracks = _fetch_smarttracklist_tracks(arl, logger, list_name, collection_name)
+            collected_ids = list(
+                dict.fromkeys(
+                    str(track.get('id')).strip()
+                    for track in shallow_tracks
+                    if track.get('id') is not None and str(track.get('id')).strip()
                 )
-                return tracks
+            )
+            if not collected_ids:
+                logger.debug(f"No track IDs resolved for smarttracklist '{list_name}'. Skipping metadata delegation.")
+                continue
 
-            # Execute via Cache Manager (with database collection support)
-            results = handle_cached_data(cache_file, retention_hrs, logger, fetch_smart_list, "smarttracklist", collection_name=collection_name)
+            results = fetch_enriched_tracks(client, config, logger, [{
+                'id': collected_ids,
+                'override_collection': collection_name,
+                'retention': retention_hrs,
+            }]) or []
             if results:
                 all_results.extend(results)
 
@@ -160,14 +162,7 @@ def run(client, config, logger, source_data):
 
         if not all_results:
             return []
-
-        collected_ids = list(dict.fromkeys(str(t['id']) for t in all_results))
-        logger.info(f"Fetching metadata for {len(collected_ids)} SmartTracklist track IDs...")
-        return fetch_enriched_tracks(client, config, logger, [{
-            'id': collected_ids,
-            'override_collection': source_collection,
-            'retention': retention_hrs,
-        }])
+        return all_results
 
     except Exception as e:
         logger.error(f"SmartTracklist execution failed for '{list_name}': {e}")

@@ -272,6 +272,18 @@ playlists:
       - type: "file"
         name: "./pytest/input_output/nested-local-modifier.json"
         i: 7
+
+  - name: "grouped_source_output_total"
+    source:
+      - type: "file"
+        dir: "./app/tests/fixtures/album"
+        filename: ["76585.json", "102809.json"]
+        o: 15
+    destination:
+      - type: "file"
+        name: "./pytest/input_output/grouped-source-output-total.json"
+        i: 15
+
   - name: "chain_sort_limit_filter_duration"
     source:
       - type: "file"

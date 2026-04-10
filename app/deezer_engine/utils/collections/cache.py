@@ -25,6 +25,7 @@ def handle_cached_data(
 
 	`cache_file` is retained for backwards-compatible signatures but is not used.
 	"""
+	logger.warning("handle_cached_data: cache_file parameter is deprecated and ignored. Collections DB is now the single source of truth for caching.")
 	logger.debug(
 		f"Starting cache handling for context='{context}', retention_hrs={retention_hrs}, "
 		f"collection_name='{collection_name}', fallback_on_error={fallback_on_error}"

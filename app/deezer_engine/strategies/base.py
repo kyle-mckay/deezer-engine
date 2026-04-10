@@ -21,7 +21,7 @@ import logging
 from pathlib import Path
 from utils.infrastructure.paths import get_data_dir
 from utils.config import get_global_value
-from utils.collections import sync_to_collections, is_collection_cached
+from utils.collections import sync_to_collections, is_collection_cached, fetch_collection
 from utils.metadata.tracks import insert_shallow_track_stubs
 from utils.metadata.orchestration import update_unprocessed
 from utils.api.fetching import fetch_shallow_tracks 
@@ -106,13 +106,11 @@ class StrategyController:
             yield data_list[i:i + n]
 
     def handle_source(self, source_data, source_name = None):
-        """Dynamically loads a source worker and appends its results to the strategy's tmp file."""
+        """Dynamically loads a source worker and returns its tracklist."""
         src_type = source_data.get('type')
         # Use 'name' if available (e.g. 'discovery'), otherwise fallback to type
         src_label = source_data.get('name', src_type) 
-        src_retention = source_data.get('retention',get_global_value('retention',0))
         module_path = f"strategies.sources.{src_type}"
-        
         # Check if this source requires metadata and enrich if needed
         self._ensure_metadata_enriched_for_component(module_path, source_data)
         self.logger.debug(f"Targeting source module: {module_path}")
@@ -121,24 +119,17 @@ class StrategyController:
             # Run the worker logic
             self.logger.debug(f"Executing {src_type}.run()")
             # Get new tracklist if cache expired
-            if src_retention == 0 or not is_collection_cached(source_name, self.config, self.logger):
+            if not is_collection_cached(source_name, source_data, self.logger):
                 self.logger.debug(f"Cache expired or missing for {source_name}. Fetching from API.")
                 new_tracks = module.run(self.client, self.config, self.logger, source_data)
-            else:
-                self.logger.debug(f"Using cached data for {source_name}.")
-                new_tracks = []
-            # Log tracks and their source
-            if new_tracks:
                 self.logger.debug(f"Fetched {len(new_tracks)} tracks from source '{src_label}'. Sample: {new_tracks[0] if new_tracks else None}")
                 self.logger.debug(f"Syncing to local collection database.")
-                sync_to_collections(new_tracks, self.logger)
+                sync_to_collections(new_tracks, self.logger, source_name)
+            else:
+                self.logger.debug(f"Using cached data for {source_name}.")
+                new_tracks = fetch_collection(source_name, self.logger)
                 self.logger.debug(f"Source '{src_label}': Found {len(new_tracks)} tracks.")
-            # IO Validation (output)
-            expected_o = source_data.get('o')
-            if expected_o is not None:
-                self.logger.debug(f"Source '{src_label}' expects output count: {expected_o}")
-                validation_mode = source_data.get('validation_mode',get_global_value('validation_mode', None))
-                self._validate_io('o', expected_o, len(new_tracks), validation_mode, f"Source '{src_label}'")
+            return new_tracks
         except Exception as e:
             self.logger.error(f"Critical failure processing source '{src_label}': {e}")
             raise

@@ -2,11 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import re
-import logging
-from utils.infrastructure.paths import get_cache_dir 
-from utils.collections import handle_cached_data, get_collection_name
+from utils.collections import get_collection_name
 from utils.config import get_global_value
 from utils.api.fetching import fetch_shallow_tracks
+from utils.metadata.orchestration import add_key_to_dicts
 
 # Headers returned from Playlists:
 # Returns: id, readable, title, title_short, title_version, link, isrc,
@@ -28,15 +27,12 @@ def get_sanitized_name(title):
 
 def run(client, config, logger, source_data):
     """
-    Fetches tracks from a specific Deezer playlist with local caching.
+    Fetches tracks from one or more Deezer playlists.
     """
     try:
-        # Configuration extraction logic
-        retention_hrs = 0
         if isinstance(source_data, dict):
             source_data = [source_data]
         id_value = source_data[0].get('id')
-        retention_hrs = source_data[0].get('retention', get_global_value('retention', default=0))
 
         if id_value is None:
             logger.error("Source type 'playlist' failed: missing 'id' in configuration.")
@@ -60,12 +56,6 @@ def run(client, config, logger, source_data):
             logger.warning("Playlist source has no valid IDs after filtering invalid list entries.")
             return []
 
-        source_collection = get_collection_name(
-            logger,
-            "playlist",
-            id=normalized_playlist_ids if len(normalized_playlist_ids) > 1 else normalized_playlist_ids[0],
-        )
-
         collected_tracks = []
 
         for playlist_id in normalized_playlist_ids:
@@ -75,34 +65,26 @@ def run(client, config, logger, source_data):
             try:
                 playlist = client.get_playlist(playlist_id)
                 clean_name = get_sanitized_name(playlist.title)
-                cache_file = str(get_cache_dir() / f"playlist_{playlist_id}_{clean_name}.json")
-
-                logger.debug(f"Sanitized playlist name: '{clean_name}' | Cache path: {cache_file}")
+                logger.debug(f"Sanitized playlist name: '{clean_name}'")
             except Exception as e:
                 logger.error(f"Failed to retrieve playlist metadata: {e}")
                 logger.debug("Stack trace:", exc_info=True)
                 continue
 
             logger.info(f"Fetching tracks for playlist: '{playlist.title}' (ID {playlist_id})...")
-
-            # Keep per-playlist cache collections intact while allowing one merged source output.
             collection_name = get_collection_name(logger, "playlist", id=playlist_id)
-
-            def fetch_playlist():
-                # This logic is triggered only if cache is invalid
-                logger.debug(f"Cache miss or expired. Initiating live fetch for '{playlist.title}'")
-                return fetch_shallow_tracks(playlist.get_tracks(), logger)
-
-            # Process data (with database collection support)
-            tracks = handle_cached_data(cache_file, retention_hrs, logger, fetch_playlist, "playlist", collection_name=collection_name)
+            logger.debug(f"Initiating live fetch for '{playlist.title}'")
+            tracks = fetch_shallow_tracks(playlist.get_tracks(), logger) or []
             if tracks:
-                collected_tracks.extend([{**track, 'collection': source_collection} for track in tracks])
+                collected_tracks.extend(add_key_to_dicts(logger, tracks, 'collection', collection_name))
 
         if collected_tracks:
             sample_ids = [t.get('id') for t in collected_tracks[:5]]
             logger.debug(f"Sample Track IDs from source: {sample_ids}")
+            return collected_tracks
 
-        return collected_tracks
+        logger.warning("Playlist source returned no tracks after processing all valid IDs.")
+        return []
 
     except Exception as e:
         logger.error(f"Source execution failed: {e}")

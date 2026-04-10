@@ -7,6 +7,7 @@ from strategies.sources.track import run as fetch_enriched_tracks
 from utils.collections import get_collection_name
 from utils.infrastructure.files import read_from_csv, read_from_json
 from utils.metadata.tracks import TRACK_HEADERS_AVAILABLE_IN_ALL_FETCH_TYPES, ingest_shallow_tracks
+from utils.metadata.orchestration import add_key_to_dicts
 
 # Headers returned from files:
 # File source returns imported rows as-is (all columns preserved).
@@ -109,15 +110,9 @@ def run(client, config, logger, source_data):
             logger.warning("File source has no valid filenames after filtering invalid list entries.")
             return []
 
-        collection = get_collection_name(
-            logger,
-            source_type,
-            normalized_file_names if len(normalized_file_names) > 1 else normalized_file_names[0],
-            None,
-        )
-
-        imported_rows = []
+        clean_tracks = []
         for filename in normalized_file_names:
+            collection = get_collection_name(logger, source_type, filename, None)
             full_path = _resolve_input_path(source_dir, filename)
             logger.debug(f"Full path: {full_path}")
             extention = Path(filename).suffix.lower().removeprefix('.')
@@ -136,6 +131,7 @@ def run(client, config, logger, source_data):
                 logger.warning(f"No data loaded from file '{full_path}'. Skipping.")
                 continue
 
+            imported_rows = []
             for row in imported:
                 if not isinstance(row, dict):
                     logger.warning(f"File source row is not an object in '{full_path}'. Skipping row.")
@@ -143,66 +139,68 @@ def run(client, config, logger, source_data):
 
                 imported_rows.append(_sanitize_imported_row(row, collection))
 
-        if not imported_rows:
+            if not imported_rows:
+                continue
+
+            good_tracks = []
+            bad_tracks = []
+            for row in imported_rows:
+                if _has_minimum_shallow_headers(row):
+                    good_tracks.append(row)
+                else:
+                    bad_tracks.append(row)
+
+            logger.debug(
+                f"File source classified rows for '{filename}': total={len(imported_rows)}, good={len(good_tracks)}, bad={len(bad_tracks)}"
+            )
+
+            if good_tracks:
+                clean_tracks.extend(ingest_shallow_tracks(good_tracks, logger))
+
+            delegated_ids = []
+            seen_ids = set()
+            unresolved_rows = 0
+            for row in bad_tracks:
+                track_id_raw = row.get('id')
+                if track_id_raw is None:
+                    unresolved_rows += 1
+                    logger.warning("File source row is missing 'id' and cannot be enriched. Skipping row.")
+                    continue
+
+                track_id = str(track_id_raw).strip()
+                if not track_id:
+                    unresolved_rows += 1
+                    logger.warning("File source row has empty 'id' and cannot be enriched. Skipping row.")
+                    continue
+
+                if track_id not in seen_ids:
+                    seen_ids.add(track_id)
+                    delegated_ids.append(track_id)
+
+            if delegated_ids:
+                logger.info(f"Fetching metadata for {len(delegated_ids)} file track IDs...")
+                delegated_tracks = fetch_enriched_tracks(client, config, logger, [{
+                    'id': delegated_ids,
+                    'override_collection': collection,
+                }]) or []
+                clean_tracks.extend(ingest_shallow_tracks(delegated_tracks, logger))
+
+                resolved_ids = {
+                    str(track.get('id')).strip()
+                    for track in delegated_tracks
+                    if track.get('id') is not None and str(track.get('id')).strip()
+                }
+                unresolved_ids = [track_id for track_id in delegated_ids if track_id not in resolved_ids]
+                if unresolved_ids:
+                    logger.warning(
+                        f"File source could not enrich {len(unresolved_ids)} delegated IDs. Sample: {unresolved_ids[:5]}"
+                    )
+
+            if unresolved_rows:
+                logger.debug(f"File source skipped {unresolved_rows} bad rows without usable IDs.")
+
+        if not clean_tracks:
             return []
-
-        good_tracks = []
-        bad_tracks = []
-        for row in imported_rows:
-            if _has_minimum_shallow_headers(row):
-                good_tracks.append(row)
-            else:
-                bad_tracks.append(row)
-
-        logger.debug(
-            f"File source classified rows: total={len(imported_rows)}, good={len(good_tracks)}, bad={len(bad_tracks)}"
-        )
-
-        clean_tracks = []
-        if good_tracks:
-            clean_tracks.extend(ingest_shallow_tracks(good_tracks, logger))
-
-        delegated_ids = []
-        seen_ids = set()
-        unresolved_rows = 0
-        for row in bad_tracks:
-            track_id_raw = row.get('id')
-            if track_id_raw is None:
-                unresolved_rows += 1
-                logger.warning("File source row is missing 'id' and cannot be enriched. Skipping row.")
-                continue
-
-            track_id = str(track_id_raw).strip()
-            if not track_id:
-                unresolved_rows += 1
-                logger.warning("File source row has empty 'id' and cannot be enriched. Skipping row.")
-                continue
-
-            if track_id not in seen_ids:
-                seen_ids.add(track_id)
-                delegated_ids.append(track_id)
-
-        if delegated_ids:
-            logger.info(f"Fetching metadata for {len(delegated_ids)} file track IDs...")
-            delegated_tracks = fetch_enriched_tracks(client, config, logger, [{
-                'id': delegated_ids,
-                'override_collection': collection,
-            }]) or []
-            clean_tracks.extend(ingest_shallow_tracks(delegated_tracks, logger))
-
-            resolved_ids = {
-                str(track.get('id')).strip()
-                for track in delegated_tracks
-                if track.get('id') is not None and str(track.get('id')).strip()
-            }
-            unresolved_ids = [track_id for track_id in delegated_ids if track_id not in resolved_ids]
-            if unresolved_ids:
-                logger.warning(
-                    f"File source could not enrich {len(unresolved_ids)} delegated IDs. Sample: {unresolved_ids[:5]}"
-                )
-
-        if unresolved_rows:
-            logger.debug(f"File source skipped {unresolved_rows} bad rows without usable IDs.")
 
         return clean_tracks
 

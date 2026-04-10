@@ -21,6 +21,21 @@ from utils.metadata.queries import (
 from utils.metadata.sync import sync_missing_albums_to_table, sync_missing_artists_to_table
 from utils.metadata.tracks import update_track_metadata, update_tracks_partial_batch
 
+def add_key_to_dicts(logger, dicts, key, value):
+    """Adds or overwrites a key-value pair to a list of dictionaries."""
+    if not isinstance(dicts, list):
+        logger.error(f"Expected a list of dictionaries, got {type(dicts)}. Skipping addition of key '{key}': {value}.")
+        return dicts
+    else:
+        logger.debug(f"Adding key '{key}': {value} to {len(dicts)} records.")
+        
+    for d in dicts:
+        if isinstance(d, dict):
+            d[key] = value
+        else:
+            logger.warning(f"Expected dictionary in list, got {type(d)}. Skipping entry.")
+
+    return dicts
 
 def update_unprocessed(client, logger):
     """Identify and process tracks/albums that need metadata and genre mapping."""
