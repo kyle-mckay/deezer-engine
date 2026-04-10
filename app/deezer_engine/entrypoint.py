@@ -388,7 +388,7 @@ def main():
                 logger.error(f"Final enrichment pass failed: {e}")
                 logger.debug("Final enrichment error details:", exc_info=True)
         else:
-            logger.info("pull_metadata=false: skipping final metadata enrichment pass.")
+            logger.debug("pull_metadata=false: skipping final metadata enrichment pass.")
     else:
         logger.info("Shutdown signal active; deferring final enrichment to next run.")
 
