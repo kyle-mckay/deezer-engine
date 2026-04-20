@@ -6,6 +6,9 @@ set -e
 
 export PYTHONPATH="/deezer_engine/app${PYTHONPATH:+:$PYTHONPATH}"
 
+# Ensure data directories exist at runtime if volume mounting
+mkdir -p /deezer_engine/data/logs /deezer_engine/data/cache /deezer_engine/data/tmp
+
 case "$1" in
     shell)
         exec /bin/bash -i
