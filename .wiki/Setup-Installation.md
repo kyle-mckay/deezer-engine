@@ -214,4 +214,4 @@ cd app
 python3 -m deezer_engine pytest -v -s tests/test_main_entrypoint.py
 ```
 
-**Next Step:** Once installed, head over to the [Strategy Configuration](https://www.google.com/search?q=Strategy-Configuration) page to define your first smart playlist.
+**Next Step:** Once installed, head over to [Strategy Configuration](./Strategy-Configuration) to define your first playlist.
