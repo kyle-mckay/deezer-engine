@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.15.0 - 2026-04-10
+## v0.15.0 - 2026-04-20
 
 ### Enhancements
 
@@ -10,6 +10,7 @@
 
 ### Fixes
 
+- fix: entrypoint creates dir to support volume mapping (#159) (@kylemmkay)
 - fix: normalize collection enrichment behaviour (closes #151) (closes #153) (#152) (@kylemmkay)
 - fix: if undergoing shutdown event, dont sync to collections to prevent malformed results (closes #109) (#150) (@kylemmkay)
 
