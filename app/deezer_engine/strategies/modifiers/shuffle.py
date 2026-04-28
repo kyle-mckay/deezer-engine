@@ -9,12 +9,9 @@ from utils.metadata.orchestration import update_unprocessed
 
 def requires_metadata(mod_data=None):
     """
-    Returns True if smart shuffle is requested, otherwise False.
+    Returns False as all shuffle types can use existing metadata.
     """
-    if not mod_data:
-        return False
-    shuffle_type = mod_data.get('order', 'random').lower()
-    return shuffle_type == 'smart'
+    return False
 
 def smart_shuffle(logger, current_tracks, client=None):
     logger.debug(f"Initiating smart shuffle for {len(current_tracks)} tracks.")
