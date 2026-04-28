@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.15.1 - 2026-04-28
+
+### Maintenance
+
+- chore: smart shuffle no longer triggers refresh after introducing shallow collection (closes #136) (#160) (@kylemmkay)
+
 ## v0.15.0 - 2026-04-20
 
 ### Enhancements
