@@ -18,8 +18,8 @@ def smart_shuffle(logger, current_tracks, client=None):
     # Group tracks by artist
     by_artist = defaultdict(list)
     for track in current_tracks:
-        artist_name = track.get('artist', 'Unknown Artist')
-        by_artist[artist_name].append(track)
+        artist_key = track.get('artist_id') or track.get('artist_name', 'Unknown Artist')
+        by_artist[artist_key].append(track)
     
     logger.debug(f"Grouped tracks into {len(by_artist)} unique artist buckets.")
     
