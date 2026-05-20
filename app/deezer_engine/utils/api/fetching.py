@@ -13,46 +13,9 @@ from utils.config import get_global_value
 from utils.infrastructure.signals import shutdown_event
 
 
-def _get_artist(client, entity_id, logger):
-    logger.debug(f"Fetching artist with ID {entity_id}")
-    return client.get_artist(entity_id)
-
-
 def get_artist_albums(client, entity_id, logger):
     logger.debug(f"Fetching albums for artist with ID {entity_id}")
     return client.get_artist(entity_id).get_albums()
-
-
-def _get_album(client, entity_id, logger):
-    logger.debug(f"Fetching album with ID {entity_id}")
-    return client.get_album(entity_id)
-
-
-def _get_album_tracks(client, entity_id, logger):
-    logger.debug(f"Fetching tracks for album with ID {entity_id}")
-    return client.get_album(entity_id).get_tracks()
-
-
-def _get_artist_albums(client, entity_id, logger):
-    logger.debug(f"Fetching artist with ID {entity_id}")
-    return client.get_artist(entity_id).get_albums()
-
-
-def _get_playlist_tracks(client, entity_id, logger):
-    logger.debug(f"Fetching playlist with ID {entity_id}")
-    playlist = client.get_playlist(entity_id)
-    logger.debug(f"Playlist '{playlist.title}' is accessible publicly. Returning tracks.")
-    return playlist.get_tracks()
-
-
-def _get_favorites(client, logger):
-    logger.debug("Fetching user's favorite tracks.")
-    uid = get_global_value("user_id")
-    if not uid:
-        logger.error("User ID is not set in global config. Cannot fetch favorites.")
-        raise ValueError("User ID is required to fetch favorites.")
-
-    return client.get_user(uid).get_tracks()
 
 
 def fetch_shallow_tracks(paginated_tracks, logger):
@@ -289,491 +252,215 @@ def _apply_rate_limit_post_fetch(
     return start_time, False
 
 
-def get_tracks(client, logger, source_type, identifier, cache_file=None, track_ids=None):
-    """Transforms Deezer API objects into a list of dictionaries with rate-limiting protection."""
-    from utils.collections import sync_to_collections
+def fetch_track_metadata_batch(client, logger, track_ids):
+    """Fetch full track metadata for a list of IDs and persist to DB with rate-limiting protection."""
     from utils.db.blocklist import mark_track_metadata_fetch_failed
-    from utils.metadata.tracks import flatten_tracks, update_track_metadata, update_tracks_partial_batch
-
-    logger.debug(f"Getting tracks for type '{source_type}' with ID '{identifier}'")
-
-    display_name = identifier
-    item_id = identifier
-
-    if isinstance(identifier, str) and (identifier.startswith("playlist__") or identifier.startswith("album__")):
-        parts = identifier.split("__")
-        if len(parts) >= 3:
-            item_type = parts[0]
-            display_name = parts[1].replace("_", " ")
-            item_id = parts[2]
-            logger.debug(f"Parsed {item_type} identifier: Name='{display_name}', ID='{item_id}'")
+    from utils.metadata.tracks import flatten_tracks, update_track_metadata
 
     tracks = []
-    iterable = track_ids if track_ids is not None else client
-
     date_time = datetime.now().isoformat()
-    if source_type == "favorites":
-        collection = source_type
-    elif source_type != "database":
-        collection = f"{item_type}__{item_id}"
-
     chunk_size = get_global_value("chunk_size", 50)
     cached_tracks = []
 
-    total_len = len(iterable) if hasattr(iterable, "__len__") else "unknown"
+    total_len = len(track_ids) if hasattr(track_ids, "__len__") else "unknown"
     start_log_time = time.time()
     last_log_time = start_log_time
     log_interval = get_global_value("log_interval", 120)
-
     rate_limit = get_global_value("rate_limit", 60)
     api_batch_size = get_global_value("api_batch_size", 50)
+    prefetched_required_keys = ("title", "isrc", "track_token", "artist", "album", "artist_id", "album_id")
 
-    def persist_tracks_for_cooldown(phase_label):
+    def persist_batch(phase_label):
         nonlocal tracks, cached_tracks
         if not tracks:
             return
-
-        if source_type == "database":
-            if identifier == "tracks":
-                cached_tracks, tracks = persist_track_metadata_raw_batch(
-                    tracks,
-                    cached_tracks,
-                    logger,
-                    phase_label,
-                    flatten_tracks,
-                    update_track_metadata,
-                    date_time,
-                )
-            elif identifier == "stats":
-                cached_tracks, tracks = _persist_stats_batch(
-                    tracks,
-                    cached_tracks,
-                    logger,
-                    phase_label,
-                    update_tracks_partial_batch,
-                    "track",
-                )
-            return
-
-        pending_count = len(tracks)
-        cached_tracks.extend(tracks)
-        tracks = []
-        logger.debug(
-            f"{phase_label}: Syncing cumulative source snapshot of {len(cached_tracks)} tracks "
-            f"({pending_count} newly fetched) for collection '{collection}'."
-        )
-        sync_to_collections(cached_tracks, logger, collection_name=collection)
-
-    def flush_pending_tracks_on_shutdown():
-        nonlocal tracks
-        if source_type == "database" and identifier == "tracks":
-            persist_tracks_for_cooldown("Shutdown Flush")
-            return
-
-        tracks = _flush_pending_database_batches_on_shutdown(
-            tracks,
-            logger,
-            "track",
-            should_flush_metadata=False,
-            should_flush_stats=(source_type == "database" and identifier == "stats"),
-            update_metadata_batch=None,
-            update_stats_batch=update_tracks_partial_batch,
+        cached_tracks, tracks = persist_track_metadata_raw_batch(
+            tracks, cached_tracks, logger, phase_label, flatten_tracks, update_track_metadata, date_time,
         )
 
     start_time = time.time()
     api_request_count = 0
 
-    for i, track in enumerate(iterable, 1):
+    for i, track in enumerate(track_ids, 1):
         try:
             if shutdown_event.is_set():
-                flush_pending_tracks_on_shutdown()
-                logger.debug("Shutdown acknowledged mid-track collection. Returning partial results.")
-                if source_type == "database":
-                    return []
-                return cached_tracks + tracks
+                persist_batch("Shutdown Flush")
+                logger.debug("Shutdown acknowledged mid-track enrichment. Returning partial results.")
+                return []
 
-            log_prefix = f"Database '{identifier}'" if source_type == "database" else f"'{source_type}'"
             last_log_time = log_enrichment_progress(
-                logger,
-                log_prefix,
-                i,
-                total_len,
-                last_log_time,
-                start_log_time,
-                log_interval,
+                logger, "Database 'tracks'", i, total_len, last_log_time, start_log_time, log_interval,
             )
 
-            if source_type == "database" and (identifier == "tracks" or identifier == "stats"):
-                if identifier == "tracks":
-                    prefetched_required_keys = (
-                        "title",
-                        "isrc",
-                        "track_token",
-                        "artist",
-                        "album",
-                        "artist_id",
-                        "album_id",
-                    )
-                else:
-                    prefetched_required_keys = (
-                        "readable",
-                        "unseen",
-                        "rank",
-                        "bpm",
-                        "gain",
-                        "available_countries",
-                        "contributors",
-                    )
+            d, t_id = _extract_prefetched_payload(track, prefetched_required_keys)
+            if not t_id:
+                logger.debug(f"Track payload missing id at index {i}. Skipping.")
+                continue
 
-                d, t_id = _extract_prefetched_payload(track, prefetched_required_keys)
-                used_prefetched_payload = d is not None
-
-                if not t_id:
-                    logger.debug(f"Track payload missing id at index {i}. Skipping.")
+            did_api_fetch = False
+            if d is None:
+                did_api_fetch = True
+                api_request_count += 1
+                track_obj = fetch_with_retry(
+                    client.get_track, t_id, "track", logger, mark_failed_fetch=mark_track_metadata_fetch_failed,
+                )
+                if not track_obj:
                     continue
-
-                did_api_fetch = False
-                if not used_prefetched_payload:
-                    did_api_fetch = True
-                    api_request_count += 1
-
-                    track_obj = fetch_with_retry(
-                        client.get_track,
-                        t_id,
-                        "track",
-                        logger,
-                        mark_failed_fetch=mark_track_metadata_fetch_failed,
-                    )
-                    if not track_obj:
-                        continue
-
-                    d = track_obj.as_dict()
-                else:
-                    logger.debug(f"Using prefetched track payload for track {t_id}; skipping per-track API fetch.")
-
-                if identifier == "tracks":
-                    tracks.append(d)
-                else:
-                    tracks.append(
-                        {
-                            "id": str(d.get("id") if d.get("id") is not None else t_id),
-                            "readable": d.get("readable"),
-                            "unseen": d.get("unseen", False),
-                            "rank": d.get("rank", 0),
-                            "bpm": d.get("bpm", 0),
-                            "gain": d.get("gain", 0),
-                            "available_countries": _normalize_json_field(d.get("available_countries", [])),
-                            "contributors": _normalize_json_field(d.get("contributors", [])),
-                            "date_cached": date_time,
-                        }
-                    )
+                d = track_obj.as_dict()
             else:
-                if isinstance(track, dict):
-                    track_id = track.get("id")
-                elif hasattr(track, "id"):
-                    track_id = track.id
-                else:
-                    track_id = track.as_dict().get("id")
+                logger.debug(f"Using prefetched track payload for track {t_id}; skipping per-track API fetch.")
 
-                if track_id is None:
-                    logger.debug(f"Source track payload missing id at index {i}. Skipping.")
-                    continue
-
-                tracks.append({"id": str(track_id), "collection": collection, "date_cached": date_time})
-
+            tracks.append(d)
             logger.debug(f"Processed track {track}: {i}/{total_len}")
 
-            if source_type == "database" and identifier == "tracks" and i % chunk_size == 0:
-                cached_tracks, tracks = persist_track_metadata_raw_batch(
-                    tracks,
-                    cached_tracks,
-                    logger,
-                    "Database Checkpoint",
-                    flatten_tracks,
-                    update_track_metadata,
-                    date_time,
-                )
+            if i % chunk_size == 0:
+                persist_batch("Database Checkpoint")
 
-            if source_type == "database" and identifier in ("tracks", "stats"):
-                start_time, cooldown_interrupted = _apply_rate_limit_post_fetch(
-                    logger,
-                    did_api_fetch,
-                    start_time,
-                    api_request_count,
-                    api_batch_size,
-                    rate_limit,
-                    "requests",
-                    flush_on_interrupt=flush_pending_tracks_on_shutdown,
-                    interrupted_message="Shutdown acknowledged during track cooldown. Returning partial results.",
-                    log_no_cooldown=True,
-                    cooldown_task=lambda: persist_tracks_for_cooldown("Cooldown Checkpoint"),
-                )
-                if cooldown_interrupted:
-                    if source_type == "database":
-                        return []
-                    return tracks
+            start_time, cooldown_interrupted = _apply_rate_limit_post_fetch(
+                logger,
+                did_api_fetch,
+                start_time,
+                api_request_count,
+                api_batch_size,
+                rate_limit,
+                "requests",
+                flush_on_interrupt=lambda: persist_batch("Shutdown Flush"),
+                interrupted_message="Shutdown acknowledged during track cooldown. Returning partial results.",
+                log_no_cooldown=True,
+                cooldown_task=lambda: persist_batch("Cooldown Checkpoint"),
+            )
+            if cooldown_interrupted:
+                return []
 
         except Exception as e:
             logger.debug(f"Non-critical loop error at index {i} (Track {track}): {e}")
             time.sleep(1)
             continue
 
-    if source_type == "database" and identifier == "tracks" and tracks:
-        cached_tracks, tracks = persist_track_metadata_raw_batch(
-            tracks,
-            cached_tracks,
-            logger,
-            "Database Cleanup",
-            flatten_tracks,
-            update_track_metadata,
-            date_time,
-        )
-        tracks = cached_tracks
-    elif source_type == "database" and identifier == "tracks":
-        tracks = cached_tracks
+    if tracks:
+        persist_batch("Database Cleanup")
 
-    if source_type == "database" and identifier == "stats" and cached_tracks:
-        tracks = cached_tracks + tracks
-
-    if source_type != "database" and cached_tracks:
-        tracks = cached_tracks + tracks
-
-    logger.debug(f"Successfully transformed {len(tracks)} tracks.")
-    return tracks
+    logger.debug(f"Successfully enriched {len(cached_tracks)} tracks.")
+    return cached_tracks
 
 
-def get_albums(client, logger, identifier, album_ids=None):
-    """Fetches album metadata from Deezer API with rate-limiting protection."""
+def fetch_album_metadata_batch(client, logger, album_ids, ingest_tracks=False):
+    """Fetch full album metadata for a list of IDs and persist to DB.
+
+    When ingest_tracks=True (album/artist sources): shallow-ingests embedded tracks before
+    persisting album metadata so genre mapping fires against already-present track rows.
+    Returns ingested track dicts with collection field set.
+
+    When ingest_tracks=False (enrichment cycle): skips track ingestion to avoid injecting
+    sibling tracks that were never part of a user source. Returns empty list.
+    """
     from utils.db.blocklist import mark_album_metadata_fetch_failed
-    from utils.metadata.albums import update_album_metadata, update_albums_partial_batch
+    from utils.metadata.albums import flatten_albums, update_album_metadata
     from utils.metadata.genres import populate_album_genres
+    if ingest_tracks:
+        from utils.metadata.tracks import ingest_shallow_tracks
 
-    albums = []
-    cached_albums = []
+    album_dicts = []
+    batch_tracks = []
+    all_ingested = []
     date_time = datetime.now().isoformat()
     chunk_size = get_global_value("chunk_size", 50)
 
     if not album_ids:
         logger.warning("No album IDs provided for enrichment.")
-        return albums
+        return all_ingested
 
     rate_limit = get_global_value("rate_limit", 60)
     api_batch_size = get_global_value("api_batch_size", 50)
-
     total_albums = len(album_ids) if hasattr(album_ids, "__len__") else "unknown"
     start_log_time = time.time()
     last_log_time = start_log_time
     log_interval = get_global_value("log_interval", 120)
-
-    def persist_albums_for_cooldown(phase_label):
-        nonlocal albums, cached_albums
-        if not albums:
-            return
-
-        if identifier == "database":
-            cached_albums, albums = persist_album_batch(
-                albums,
-                cached_albums,
-                logger,
-                phase_label,
-                update_album_metadata,
-                populate_album_genres,
-            )
-            return
-
-        if identifier == "stats":
-            cached_albums, albums = _persist_stats_batch(
-                albums,
-                cached_albums,
-                logger,
-                phase_label,
-                update_albums_partial_batch,
-                "album",
-            )
-
-    def flush_pending_albums_on_shutdown():
-        nonlocal albums
-        albums = _flush_pending_database_batches_on_shutdown(
-            albums,
-            logger,
-            "album",
-            should_flush_metadata=(identifier == "database"),
-            should_flush_stats=(identifier == "stats"),
-            update_metadata_batch=update_album_metadata,
-            update_stats_batch=update_albums_partial_batch,
-        )
-
-    start_time = time.time()
     api_request_count = 0
 
-    try:
-        for i, album_ref in enumerate(album_ids, 1):
-            try:
-                if shutdown_event.is_set():
-                    flush_pending_albums_on_shutdown()
-                    logger.debug("Shutdown acknowledged mid-album collection. Returning partial results.")
-                    if identifier in ("database", "stats"):
-                        return []
-                    return cached_albums + albums
+    def persist_batch(phase_label):
+        nonlocal album_dicts, batch_tracks, all_ingested
+        if not album_dicts:
+            return
+        if phase_label == "Database Checkpoint":
+            logger.debug(f"{phase_label}: Persisting chunk of {len(album_dicts)} albums.")
+        else:
+            logger.debug(f"{phase_label}: Persisting remaining {len(album_dicts)} albums.")
+        # Ingest tracks first so populate_album_genres finds them in the DB.
+        if ingest_tracks and batch_tracks:
+            ingested = ingest_shallow_tracks(batch_tracks, logger, skip_fully_populated=True)
+            all_ingested.extend(ingested)
+            batch_tracks = []
+        # flatten_albums normalizes artist/genres/contributors and inserts stubs for new rows.
+        # update_album_metadata force-updates all fields, covering both new rows and stale refreshes
+        # where insert_shallow_album_stubs's COALESCE guard would otherwise skip existing records.
+        flattened = flatten_albums(album_dicts, logger, skip_fully_populated=True)
+        update_album_metadata(flattened, logger)
+        populate_album_genres(flattened, logger)
+        album_dicts = []
 
-                last_log_time = log_enrichment_progress(
-                    logger,
-                    f"Album '{identifier}'",
-                    i,
-                    total_albums,
-                    last_log_time,
-                    start_log_time,
-                    log_interval,
-                )
+    start_time = time.time()
 
-                if identifier == "database":
-                    prefetched_required_keys = (
-                        "title",
-                        "upc",
-                        "cover",
-                        "genres",
-                        "artist",
-                        "artist_id",
-                    )
-                else:
-                    prefetched_required_keys = ("fans", "available")
+    for i, album_id in enumerate(album_ids, 1):
+        try:
+            if shutdown_event.is_set():
+                persist_batch("Shutdown Flush")
+                logger.debug("Shutdown acknowledged mid-album enrichment. Returning partial results.")
+                return all_ingested
 
-                d, requested_album_id = _extract_prefetched_payload(album_ref, prefetched_required_keys)
-                used_prefetched_payload = d is not None
+            last_log_time = log_enrichment_progress(
+                logger, "Album metadata", i, total_albums, last_log_time, start_log_time, log_interval,
+            )
 
-                if not requested_album_id:
-                    logger.debug(f"Album payload missing id at index {i}. Skipping.")
-                    continue
-
-                did_api_fetch = False
-                if not used_prefetched_payload:
-                    did_api_fetch = True
-                    api_request_count += 1
-
-                    album_obj = fetch_with_retry(
-                        client.get_album,
-                        requested_album_id,
-                        "album",
-                        logger,
-                        mark_failed_fetch=mark_album_metadata_fetch_failed,
-                    )
-                    if not album_obj:
-                        continue
-
-                    d = album_obj.as_dict()
-                else:
-                    logger.debug(
-                        f"Using prefetched album payload for album {requested_album_id}; skipping per-album API fetch."
-                    )
-
-                if not used_prefetched_payload and d.get("id") != requested_album_id:
-                    logger.debug(
-                        f"API redirect: Requested album {requested_album_id}, but API returned {d.get('id')}. Using requested ID to match database stub."
-                    )
-
-                artist_blob = d.get("artist") if isinstance(d.get("artist"), dict) else {}
-                artist_id = d.get("artist_id") if d.get("artist_id") is not None else artist_blob.get("id")
-                artist_name = d.get("artist_name") if d.get("artist_name") is not None else artist_blob.get("name")
-
-                if identifier == "database":
-                    albums.append(
-                        {
-                            "id": requested_album_id,
-                            "title": d.get("title"),
-                            "upc": d.get("upc"),
-                            "link": d.get("link"),
-                            "share": d.get("share"),
-                            "cover": d.get("cover"),
-                            "cover_small": d.get("cover_small"),
-                            "cover_medium": d.get("cover_medium"),
-                            "cover_big": d.get("cover_big"),
-                            "cover_xl": d.get("cover_xl"),
-                            "md5_image": d.get("md5_image"),
-                            "label": d.get("label"),
-                            "nb_tracks": d.get("nb_tracks"),
-                            "duration": d.get("duration", 0),
-                            "fans": d.get("fans", 0),
-                            "release_date": d.get("release_date"),
-                            "record_type": d.get("record_type"),
-                            "available": d.get("available", True),
-                            "tracklist": d.get("tracklist"),
-                            "explicit_lyrics": d.get("explicit_lyrics", False),
-                            "explicit_content_lyrics": d.get("explicit_content_lyrics", 0),
-                            "explicit_content_cover": d.get("explicit_content_cover", 0),
-                            "contributors": _normalize_json_field(d.get("contributors", [])),
-                            "genres": _normalize_json_field(d.get("genres", [])),
-                            "artist_id": artist_id,
-                            "artist_name": artist_name,
-                            "date_cached": date_time,
-                        }
-                    )
-                else:
-                    albums.append(
-                        {
-                            "id": requested_album_id,
-                            "fans": d.get("fans", 0),
-                            "available": d.get("available", True),
-                            "date_cached": date_time,
-                        }
-                    )
-
-                logger.debug(f"Processed album {requested_album_id}: {i}/{total_albums}")
-
-                if identifier == "database" and i % chunk_size == 0:
-                    cached_albums, albums = persist_album_batch(
-                        albums,
-                        cached_albums,
-                        logger,
-                        "Database Checkpoint",
-                        update_album_metadata,
-                        populate_album_genres,
-                    )
-                    if shutdown_event.is_set():
-                        flush_pending_albums_on_shutdown()
-                        return []
-
-                start_time, cooldown_interrupted = _apply_rate_limit_post_fetch(
-                    logger,
-                    did_api_fetch,
-                    start_time,
-                    api_request_count,
-                    api_batch_size,
-                    rate_limit,
-                    "album requests",
-                    flush_on_interrupt=flush_pending_albums_on_shutdown,
-                    interrupted_message="Shutdown acknowledged during album cooldown. Returning partial results.",
-                    cooldown_task=lambda: persist_albums_for_cooldown("Cooldown Checkpoint"),
-                )
-                if cooldown_interrupted:
-                    if identifier in ("database", "stats"):
-                        return []
-                    return albums
-
-            except Exception as e:
-                logger.debug(f"Non-critical loop error at index {i} (Album {album_ref}): {e}")
-                time.sleep(1)
+            album_obj = fetch_with_retry(
+                client.get_album, album_id, "album", logger,
+                mark_failed_fetch=mark_album_metadata_fetch_failed,
+            )
+            if not album_obj:
                 continue
 
-        if identifier == "database" and albums:
-            cached_albums, albums = persist_album_batch(
-                albums,
-                cached_albums,
-                logger,
-                "Database Cleanup",
-                update_album_metadata,
-                populate_album_genres,
+            api_request_count += 1
+            d = album_obj.as_dict()
+            tracks_blob = d.pop("tracks", []) or []
+            d["date_cached"] = date_time
+
+            if d.get("id") != album_id:
+                logger.debug(
+                    f"API redirect: Requested album {album_id}, but API returned {d.get('id')}. Using requested ID."
+                )
+                d["id"] = album_id
+
+            album_dicts.append(d)
+
+            if ingest_tracks:
+                collection = f"album__{album_id}"
+                for track in tracks_blob:
+                    if isinstance(track, dict):
+                        track["collection"] = collection
+                batch_tracks.extend(tracks_blob)
+
+            logger.debug(f"Processed album {album_id}: {i}/{total_albums}")
+
+            if i % chunk_size == 0:
+                persist_batch("Database Checkpoint")
+
+            start_time, cooldown_interrupted = _apply_rate_limit_post_fetch(
+                logger, True, start_time, api_request_count, api_batch_size, rate_limit,
+                "album requests",
+                flush_on_interrupt=lambda: persist_batch("Shutdown Flush"),
+                interrupted_message="Shutdown acknowledged during album cooldown. Returning partial results.",
+                cooldown_task=lambda: persist_batch("Cooldown Checkpoint"),
             )
-            albums = cached_albums
-        elif identifier == "database":
-            albums = cached_albums
+            if cooldown_interrupted:
+                return all_ingested
 
-        if identifier == "stats" and cached_albums:
-            albums = cached_albums + albums
+        except Exception as e:
+            logger.debug(f"Non-critical loop error at index {i} (Album {album_id}): {e}")
+            time.sleep(1)
+            continue
 
-        logger.debug(f"Successfully transformed {len(albums)} albums.")
+    if album_dicts:
+        persist_batch("Database Cleanup")
 
-    except Exception as e:
-        logger.error(f"Critical error in get_albums: {e}")
-        raise
-
-    return albums
+    logger.debug(f"Returning {len(all_ingested)} ingested tracks from {total_albums} albums.")
+    return all_ingested

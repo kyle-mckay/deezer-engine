@@ -2,10 +2,10 @@
 # For a minimal first-run file, use app/strategies.yml.template.
 # Full source, modifier, and destination reference: https://codeberg.org/kylemmkay/deezer-engine/wiki/Strategy-Configuration
 playlists:
-  - name: "Taylor Swift: The Timeline"
+  - name: "EDEN: The Timeline"
     source:
       - type: "artist"
-        id: "12246" # Taylor Swift
+        id: "14450" # EDEN
     modifiers:
       - type: "sort"
         field: "release_date"

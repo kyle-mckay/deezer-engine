@@ -482,10 +482,10 @@ This strategy pulls every track from a specific artist's career and organizes th
 
 ```yaml
 playlists:
-  - name: "Taylor Swift: The Timeline"
+  - name: "EDEN: The Timeline"
     source:
       - type: "artist"
-        id: "12246" # Taylor Swift
+        id: "14450" # EDEN
     modifiers:
       - type: "sort"
         field: "release_date"

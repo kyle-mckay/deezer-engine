@@ -3,9 +3,8 @@
 
 """Metadata orchestration helpers."""
 
-from utils.api.fetching import get_albums, get_tracks
+from utils.api.fetching import fetch_album_metadata_batch, fetch_track_metadata_batch
 from utils.infrastructure.signals import shutdown_event
-from utils.metadata.albums import update_album_metadata, update_albums_partial_batch
 from utils.metadata.genres import (
     populate_track_genres,
     reset_album_genres_by_track_ids,
@@ -19,7 +18,6 @@ from utils.metadata.queries import (
     get_unprocessed_track_ids,
 )
 from utils.metadata.sync import sync_missing_albums_to_table, sync_missing_artists_to_table
-from utils.metadata.tracks import update_track_metadata, update_tracks_partial_batch
 
 def add_key_to_dicts(logger, dicts, key, value):
     """Adds or overwrites a key-value pair to a list of dictionaries."""
@@ -42,9 +40,7 @@ def update_unprocessed(client, logger):
     unprocessed = get_unprocessed_track_ids(logger)
     if unprocessed:
         logger.info(f"Fetching metadata for {len(unprocessed)} new tracks...")
-        unprocessed = get_tracks(client, logger, "database", "tracks", "null", unprocessed)
-        logger.debug(f"Metadata fetched, updating database with {len(unprocessed)} records.")
-        update_track_metadata(unprocessed, logger)
+        fetch_track_metadata_batch(client, logger, unprocessed)
 
     if shutdown_event.is_set():
         if logger:
@@ -63,9 +59,7 @@ def update_unprocessed(client, logger):
 
     if unprocessed_album:
         logger.info(f"Fetching metadata for {len(unprocessed_album)} new albums...")
-        unprocessed_album = get_albums(client, logger, identifier="database", album_ids=unprocessed_album)
-        logger.debug(f"Metadata fetched, updating database with {len(unprocessed_album)} records.")
-        update_album_metadata(unprocessed_album, logger)
+        fetch_album_metadata_batch(client, logger, unprocessed_album)
 
     if shutdown_event.is_set():
         if logger:
@@ -121,14 +115,9 @@ def refresh_stats(client, logger):
     refresh_track_ids = get_expired_track_ids(logger)
     if refresh_track_ids:
         logger.info(f"Refreshing stats for {len(refresh_track_ids)} existing tracks...")
-        refresh_tracks = get_tracks(client, logger, "database", "stats", "null", refresh_track_ids)
-        logger.debug("Stats fetched, updating database.")
-        update_tracks_partial_batch(refresh_tracks)
+        fetch_track_metadata_batch(client, logger, refresh_track_ids)
 
     expired_albums = get_expired_album_ids(logger)
     if expired_albums:
         logger.info(f"Refreshing stats for {len(expired_albums)} existing albums...")
-        album_stats = get_albums(client, logger, identifier="stats", album_ids=expired_albums)
-        logger.debug("Album stats fetched, updating database.")
-        if album_stats:
-            update_albums_partial_batch(album_stats, logger)
+        fetch_album_metadata_batch(client, logger, expired_albums)

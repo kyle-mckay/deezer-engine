@@ -4,7 +4,7 @@
 from datetime import datetime, timedelta
 
 from utils.config import get_global_value
-from utils.api.fetching import get_tracks
+from utils.api.fetching import fetch_track_metadata_batch
 from utils.db.fetch import fetch_entities_by
 from utils.metadata.orchestration import add_key_to_dicts
 
@@ -106,13 +106,7 @@ def run(client, config, logger, source_data):
             if not override_collection:
                 # Only show the info if we're fetching as a track source not using as a wrapper around another collection type (e.g. smarttracklist) that would have its own logging.
                 logger.info(f"Fetching metadata for {len(ids_to_fetch)} requested track IDs...")
-            fetched_tracks = get_tracks(
-                client,
-                logger,
-                'database',
-                'tracks',
-                track_ids=ids_to_fetch,
-            )
+            fetched_tracks = fetch_track_metadata_batch(client, logger, ids_to_fetch)
             fetched_by_id = {
                 str(track.get('id')): track for track in fetched_tracks if track.get('id') is not None
             }

@@ -4,7 +4,7 @@
 """API utility package exports."""
 
 from .auth import get_authenticated_client, get_authenticated_session
-from .fetching import get_albums, get_artist_albums, get_tracks, persist_album_batch, persist_track_batch
+from .fetching import fetch_album_metadata_batch, fetch_track_metadata_batch, get_artist_albums, persist_album_batch, persist_track_batch
 from .rate_limit import apply_rate_limit_checkpoint, cooldown_wait_with_tasks
 from .retry import (
 	NON_BLOCKLIST_ERROR_CODES,
@@ -21,12 +21,12 @@ __all__ = [
 	"apply_rate_limit_checkpoint",
 	"cooldown_wait_with_tasks",
 	"extract_error_code",
+	"fetch_album_metadata_batch",
+	"fetch_track_metadata_batch",
 	"fetch_with_retry",
-	"get_albums",
 	"get_artist_albums",
 	"get_authenticated_client",
 	"get_authenticated_session",
-	"get_tracks",
 	"log_enrichment_progress",
 	"persist_album_batch",
 	"persist_track_batch",

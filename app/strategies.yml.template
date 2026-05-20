@@ -4,7 +4,7 @@ playlists:
   - name: "Artist Timeline"
     source:
       - type: "artist"
-        id: "12246" # Example: Taylor Swift
+        id: "14450" # Example: EDEN
     modifiers:
       - type: "sort"
         field: "release_date"

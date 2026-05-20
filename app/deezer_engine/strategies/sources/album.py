@@ -1,41 +1,23 @@
 # SPDX-FileCopyrightText: 2026 kylemmkay
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import re
-from utils.collections import get_collection_name
-from utils.config import get_global_value
-from utils.api.fetching import fetch_shallow_tracks
-from utils.infrastructure.signals import shutdown_event
-from utils.metadata.orchestration import add_key_to_dicts
+from utils.api.fetching import fetch_album_metadata_batch
 
-# Headers returned from Albums:
-# Returns: id, readable, title, title_short, title_version, link, isrc, duration,
-# track_position, disk_number, rank, explicit_lyrics, explicit_content_lyrics,
-# explicit_content_cover, preview, md5_image, artist, album, type.
-# Not returned: share, release_date, bpm, gain, available_countries,
-# contributors, track_token, time_add, playlist.
 
 def requires_metadata(source_data=None):
-    """
-    Album source only requires entity ID to fetch tracks
-    """
     return False
 
-def get_sanitized_name(title):
-    # Internal logic tracing for string manipulation
-    return re.sub(r'[^\w\s-]', '', title).strip().replace(' ', '_')
 
 def run(client, config, logger, source_data):
     """
-    Fetches tracks from a specific Deezer album with local caching.
+    Fetches tracks from a Deezer album, persisting full album metadata as a side effect.
     """
     try:
         if isinstance(source_data, dict):
             source_data = [source_data]
-        # Extract configuration
-        retention_hrs = source_data[0].get('retention', get_global_value('retention', default=0))
+
         id_value = source_data[0].get('id')
-        is_artist = source_data[0].get('source',None)
+        is_artist = source_data[0].get('source', None)
 
         if id_value is None:
             logger.error("Source type 'album' failed: missing 'id' in configuration.")
@@ -59,43 +41,16 @@ def run(client, config, logger, source_data):
             logger.warning("Album source has no valid IDs after filtering invalid list entries.")
             return []
 
-        collected_tracks = []
+        if not is_artist:
+            logger.info(f"Fetching tracks for {len(normalized_album_ids)} album(s)...")
 
-        for album_id in normalized_album_ids:
-            if shutdown_event.is_set():
-                logger.debug("Shutdown acknowledged before next album fetch. Skipping remaining albums.")
-                break
+        collected_tracks = fetch_album_metadata_batch(client, logger, normalized_album_ids, ingest_tracks=True)
+        if not collected_tracks:
+            return []
 
-            # Logic Tracing: Metadata retrieval
-            logger.debug(f"Targeting Album ID: {album_id} | Retention: {retention_hrs}h")
-
-            try:
-                album = client.get_album(album_id)
-                clean_name = get_sanitized_name(album.title)
-                logger.debug(f"Resolved Album: '{album.title}' | Sanitized Key: {clean_name}")
-
-                if not is_artist:
-                    logger.info(f"Fetching tracks for album: '{album.title}' (ID {album_id})...")
-
-            except Exception as e:
-                logger.error(f"Error fetching album metadata for {album_id}: {e}")
-                logger.debug("Stack trace:", exc_info=True)
-                continue
-
-            collection_album = get_collection_name(logger, "album", id=album_id)
-            logger.debug(f"Initiating live API fetch for album: {album.id}")
-            album_tracks = fetch_shallow_tracks(album.get_tracks(), logger) or []
-            if album_tracks:
-                collected_tracks.extend(add_key_to_dicts(logger, album_tracks, 'collection', collection_album))
-
-            if shutdown_event.is_set():
-                logger.debug("Shutdown acknowledged after album fetch. Returning partial album source results.")
-                break
-
-        # Data Samples for Debugging
         if collected_tracks:
             sample_ids = [t.get('id') for t in collected_tracks[:5]]
-            logger.debug(f"Sample Track IDs from source: {sample_ids}")                
+            logger.debug(f"Sample Track IDs from source: {sample_ids}")
         return collected_tracks
 
     except Exception as e:

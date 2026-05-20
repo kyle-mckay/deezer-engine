@@ -196,37 +196,25 @@ def test_album_returns_tracks_tagged_per_album_collection(monkeypatch):
     """Album worker should return rows keyed with the album-specific collection name."""
     logger = logging.getLogger("tests.source_delegation.album")
 
-    class AlbumObject:
-        def __init__(self, album_id, title):
-            self.id = album_id
-            self.title = title
-
-        def get_tracks(self):
-            return [object()]
-
-    class Client:
-        def get_album(self, album_id):
-            return AlbumObject(album_id, f"Album {album_id}")
-
-    monkeypatch.setattr(album, "get_collection_name", lambda _logger, _source_type, name=None, id=None: f"album__{id}")
-    monkeypatch.setattr(
-        album,
-        "fetch_shallow_tracks",
-        lambda _tracks, _logger: [{"id": "1001"}, {"id": "1002"}],
-    )
-    monkeypatch.setattr(album, "shutdown_event", type("ShutdownEvent", (), {"is_set": staticmethod(lambda: False)})())
-
-    result = album.run(
-        client=Client(),
-        config={},
-        logger=logger,
-        source_data={"type": "album", "id": "777", "retention": 6},
-    )
-
-    assert result == [
+    expected_tracks = [
         {"id": "1001", "collection": "album__777"},
         {"id": "1002", "collection": "album__777"},
-    ], f"Expected album worker to tag shallow rows with the album collection, got: {result}"
+    ]
+
+    monkeypatch.setattr(
+        album,
+        "fetch_album_metadata_batch",
+        lambda _client, _logger, _album_ids, ingest_tracks=False: expected_tracks,
+    )
+
+    result = album.run(
+        client=object(),
+        config={},
+        logger=logger,
+        source_data={"type": "album", "id": "777"},
+    )
+
+    assert result == expected_tracks, f"Expected album worker to return batch-tagged tracks, got: {result}"
 
 
 def test_file_delegates_to_track_worker(monkeypatch, tmp_path):
