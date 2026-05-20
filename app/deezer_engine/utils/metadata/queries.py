@@ -8,22 +8,39 @@ from utils.db.blocklist import blocklist_where_clause
 from utils.db.connection import get_connection
 
 
-def get_unprocessed_track_ids(logger=None, include_blocklisted=False):
-    """Return track IDs that still require metadata enrichment."""
+def get_unprocessed_track_ids(logger=None, include_blocklisted=False, track_ids=None):
+    """Return track IDs that still require metadata enrichment.
+
+    When track_ids is provided, only those IDs are considered (pipeline-scoped
+    lazy enrichment). Otherwise all DB tracks with missing date_cached are returned.
+    """
     if logger:
-        logger.debug(f"Querying unprocessed track IDs (include_blocklisted={include_blocklisted}).")
+        logger.debug(f"Querying unprocessed track IDs (include_blocklisted={include_blocklisted}, scoped={track_ids is not None}).")
 
     track_filter = blocklist_where_clause(include_blocklisted)
-    query = f"""
-    SELECT id
-    FROM tracks
-    WHERE (date_cached IS NULL OR date_cached = '')
-      AND {track_filter};
-    """
+
+    if track_ids:
+        placeholders = ",".join("?" for _ in track_ids)
+        query = f"""
+        SELECT id
+        FROM tracks
+        WHERE (date_cached IS NULL OR date_cached = '')
+          AND id IN ({placeholders})
+          AND {track_filter};
+        """
+        params = list(track_ids)
+    else:
+        query = f"""
+        SELECT id
+        FROM tracks
+        WHERE (date_cached IS NULL OR date_cached = '')
+          AND {track_filter};
+        """
+        params = []
 
     try:
         with get_connection(logger) as conn:
-            cursor = conn.execute(query)
+            cursor = conn.execute(query, params)
             rows = cursor.fetchall()
             tracks_payload = [{"id": row["id"]} for row in rows]
 

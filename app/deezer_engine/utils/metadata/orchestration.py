@@ -35,9 +35,14 @@ def add_key_to_dicts(logger, dicts, key, value):
 
     return dicts
 
-def update_unprocessed(client, logger):
-    """Identify and process tracks/albums that need metadata and genre mapping."""
-    unprocessed = get_unprocessed_track_ids(logger)
+def update_unprocessed(client, logger, track_ids=None):
+    """Identify and process tracks/albums that need metadata and genre mapping.
+
+    When track_ids is provided, only those specific tracks are enriched (lazy
+    pipeline-scoped enrichment). Album enrichment remains global so that albums
+    referenced by the newly enriched tracks are also populated.
+    """
+    unprocessed = get_unprocessed_track_ids(logger, track_ids=track_ids)
     if unprocessed:
         logger.info(f"Fetching metadata for {len(unprocessed)} new tracks...")
         fetch_track_metadata_batch(client, logger, unprocessed)
@@ -47,7 +52,7 @@ def update_unprocessed(client, logger):
             logger.debug("Shutdown acknowledged after track enrichment. Deferring album enrichment to next run.")
         return
 
-    unprocessed = get_unprocessed_track_ids(logger)
+    unprocessed = get_unprocessed_track_ids(logger, track_ids=track_ids)
     if unprocessed:
         logger.warning(
             f"Metadata enrichment finished but tracks are missing metadata. Expecting 0, got {len(unprocessed)}"

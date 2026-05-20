@@ -47,6 +47,10 @@ Each strategy in `data/strategies.yml` is executed as a three-phase pipeline:
 
 The top-level orchestration lives in `app/deezer_engine/entrypoint.py` (`process_sources`, `process_modifiers`, `process_destinations` → `main()`).
 
+Review `.wiki/Strategy-Configuration` on the appropriate strategy syntax and `.wiki/Setup-Installation.md` if you need to understand the config keys and their operation.
+
+When `pull_metadata = false` then we are running with shallow metadata collection **only** doing no DB updates. Otherwise, it will perform DB udpates for all needed items either on-demand or at the end of the run.
+
 ### StrategyController (`strategies/base.py`)
 
 `StrategyController` is the per-strategy runtime object. It:

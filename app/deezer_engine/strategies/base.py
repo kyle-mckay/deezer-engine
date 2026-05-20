@@ -253,10 +253,54 @@ class StrategyController:
             self.logger.error(f"Failed to push to destination '{dest_type}': {e}")
             raise
 
+    def _modifier_needs_enrichment(self, module_path, config_data):
+        """
+        Detect from config whether a modifier references any field absent from the shallow
+        track payload. Returns True only when a non-shallow field is found; False otherwise.
+        """
+        modifier_fields = []
+        if isinstance(config_data, dict):
+            field_value = config_data.get("field")
+            if isinstance(field_value, str) and field_value.strip():
+                modifier_fields.append(field_value.strip())
+
+            fields_value = config_data.get("fields")
+            if isinstance(fields_value, (list, tuple, set)):
+                for field_name in fields_value:
+                    if isinstance(field_name, str) and field_name.strip():
+                        modifier_fields.append(field_name.strip())
+
+        if not modifier_fields:
+            if self.logger.isEnabledFor(logging.DEBUG):
+                self.logger.debug(f"Modifier '{module_path}' has no field config; skipping metadata enrichment.")
+            return False
+
+        unavailable_fields = [f for f in modifier_fields if not track_header_available(f)]
+        if unavailable_fields:
+            if self.logger.isEnabledFor(logging.DEBUG):
+                self.logger.debug(
+                    f"Modifier '{module_path}' requires full metadata; fields not available in shallow payload: {unavailable_fields}"
+                )
+            return True
+
+        if self.logger.isEnabledFor(logging.DEBUG):
+            self.logger.debug(
+                f"Modifier '{module_path}' field requirements are available in shallow payload: {modifier_fields}. Skipping metadata enrichment."
+            )
+        return False
+
     def check_requires_metadata(self, module_path, config_data):
         """
-        Check if a dynamically loaded module has a requires_metadata function.
-        Returns the result if it exists and is callable, otherwise defaults to True.
+        Determine whether a component needs metadata enrichment before running.
+
+        For modifiers the decision is driven by field detection unless the module
+        opts out explicitly with requires_metadata():
+          - requires_metadata() → True  : force enrichment unconditionally
+          - requires_metadata() → False : skip enrichment unconditionally
+          - no hook (or non-bool)       : infer from configured field/fields keys
+
+        Non-modifier modules (sources, destinations) default to True when no hook
+        is present.
         """
         try:
             module = importlib.import_module(module_path)
@@ -266,53 +310,22 @@ class StrategyController:
                     if isinstance(result, bool):
                         if self.logger.isEnabledFor(logging.DEBUG):
                             self.logger.debug(f"Module '{module_path}' requires_metadata() returned {result}")
-                        if not result:
-                            return False
-
-                        # For modifiers that declare metadata requirements, only force enrichment
-                        # when they reference fields unavailable in shallow track payloads.
-                        if module_path.startswith("strategies.modifiers."):
-                            modifier_fields = []
-                            if isinstance(config_data, dict):
-                                field_value = config_data.get("field")
-                                if isinstance(field_value, str) and field_value.strip():
-                                    modifier_fields.append(field_value.strip())
-
-                                fields_value = config_data.get("fields")
-                                if isinstance(fields_value, (list, tuple, set)):
-                                    for field_name in fields_value:
-                                        if isinstance(field_name, str) and field_name.strip():
-                                            modifier_fields.append(field_name.strip())
-
-                            if modifier_fields:
-                                unavailable_fields = [
-                                    field_name for field_name in modifier_fields
-                                    if not track_header_available(field_name)
-                                ]
-                                if unavailable_fields:
-                                    if self.logger.isEnabledFor(logging.DEBUG):
-                                        self.logger.debug(
-                                            f"Modifier '{module_path}' requires full metadata; fields not available in shallow payload: {unavailable_fields}"
-                                        )
-                                    return True
-
-                                if self.logger.isEnabledFor(logging.DEBUG):
-                                    self.logger.debug(
-                                        f"Modifier '{module_path}' field requirements are available in shallow payload: {modifier_fields}. Skipping metadata enrichment."
-                                    )
-                                return False
-
-                        return True
-                    else:
-                        self.logger.debug(f"Module '{module_path}' requires_metadata() returned non-bool {type(result)}, defaulting to True")
-                        return True
+                        return result
+                    self.logger.debug(
+                        f"Module '{module_path}' requires_metadata() returned non-bool {type(result)}, falling through to field detection"
+                    )
                 except Exception as hook_error:
-                    self.logger.warning(f"Module '{module_path}' requires_metadata() raised exception: {hook_error}. Defaulting to True for safety.")
+                    self.logger.warning(
+                        f"Module '{module_path}' requires_metadata() raised exception: {hook_error}. Defaulting to True for safety."
+                    )
                     return True
-            else:
-                if self.logger.isEnabledFor(logging.DEBUG):
-                    self.logger.debug(f"Module '{module_path}' has no requires_metadata hook, defaulting to True")
-                return True
+
+            if module_path.startswith("strategies.modifiers."):
+                return self._modifier_needs_enrichment(module_path, config_data)
+
+            if self.logger.isEnabledFor(logging.DEBUG):
+                self.logger.debug(f"Module '{module_path}' has no requires_metadata hook, defaulting to True")
+            return True
         except Exception as e:
             self.logger.warning(f"Failed to import module '{module_path}' for metadata check: {e}. Defaulting to True.")
             return True
@@ -325,13 +338,23 @@ class StrategyController:
         pull_metadata = get_global_value('pull_metadata', True)
 
         if requires_it and pull_metadata:
-            self.logger.debug(f"Component '{module_path}' requires metadata. Fetching before processing...")
-            try:
-                update_unprocessed(self.client, self.logger)
-                self.refresh_pipeline_metadata()
-            except Exception as e:
-                self.logger.error(f"Failed to enrich metadata before processing '{module_path}': {e}")
-                raise
+            unenriched_ids = [
+                t['id'] for t in self.pipeline
+                if t.get('id') is not None and not t.get('date_cached')
+            ]
+            if not unenriched_ids:
+                if self.logger.isEnabledFor(logging.DEBUG):
+                    self.logger.debug(
+                        f"Component '{module_path}' requires metadata but all pipeline tracks are already enriched. Skipping."
+                    )
+            else:
+                self.logger.debug(f"Component '{module_path}' requires metadata. Fetching before processing...")
+                try:
+                    update_unprocessed(self.client, self.logger, track_ids=unenriched_ids)
+                    self.refresh_pipeline_metadata()
+                except Exception as e:
+                    self.logger.error(f"Failed to enrich metadata before processing '{module_path}': {e}")
+                    raise
         elif requires_it:
             self.logger.debug(
                 f"Component '{module_path}' requested metadata enrichment, but pull_metadata is disabled. "

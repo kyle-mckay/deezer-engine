@@ -298,13 +298,3 @@ class TestInjectSourceFetching:
         )
         assert [t["id"] for t in result] == ["live1", "live2"]
         assert len(synced) == 2
-
-
-# ---------------------------------------------------------------------------
-# requires_metadata
-# ---------------------------------------------------------------------------
-
-class TestRequiresMetadata:
-    def test_returns_false_unconditionally(self):
-        assert interleave_mod.requires_metadata() is False
-        assert interleave_mod.requires_metadata({"inject": []}) is False

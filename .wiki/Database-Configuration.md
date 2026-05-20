@@ -39,7 +39,7 @@ Pipleline Order of Operations:
 | `explicit_content_lyrics` | The explicit content lyrics values (0:Not Explicit; 1:Explicit; 2:Unknown; 3:Edited; 6:No Advice Available) | int | `false` |
 | `explicit_content_cover` | The explicit cover value (0:Not Explicit; 1:Explicit; 2:Unknown; 3:Edited; 6:No Advice Available) | int | `false` |
 | `preview` | The url of track's preview file. This file contains the first 30 seconds of the track | url | `false` |
-| `bpm` | Beats per minute | float | `true` |
+| `bpm` | Beats per minute (often set to zero in deezer, not relliable for filters) | float | `true` |
 | `gain` | Signal strength | float | `true` |
 | `available_countries` | List of countries where the track is available | list | `true` |
 | `alternative` | Return an alternative readable track if the current track is not readable | track | `true` |

@@ -6,10 +6,6 @@ from utils.collections import get_collection_name, is_collection_cached, fetch_c
 from utils.config import get_global_value
 
 
-def requires_metadata(mod_data=None):
-    return False
-
-
 def _fetch_inject_tracks(client, config, logger, source_data):
     """Fetch tracks for an inject source, using cache when available."""
     source_type = source_data.get('type')

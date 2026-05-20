@@ -3,12 +3,6 @@
 
 import logging
 
-def requires_metadata(mod_data=None):
-    """
-    Limit only slices the list.
-    """
-    return False
-
 def normalize_order(logger, order):
     """Normalizes the limit order to either 'top' or 'tail'"""
     logger.debug(f"Normalizing limit order string: '{order}'")

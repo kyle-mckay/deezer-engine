@@ -7,12 +7,6 @@ import random
 from collections import defaultdict
 from utils.metadata.orchestration import update_unprocessed
 
-def requires_metadata(mod_data=None):
-    """
-    Returns False as all shuffle types can use existing metadata.
-    """
-    return False
-
 def smart_shuffle(logger, current_tracks, client=None):
     logger.debug(f"Initiating smart shuffle for {len(current_tracks)} tracks.")
     # Group tracks by artist

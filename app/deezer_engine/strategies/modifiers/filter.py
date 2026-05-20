@@ -3,12 +3,6 @@
 
 import logging
 
-def requires_metadata(mod_data=None):
-    """
-    Requires metadata because it operates on arbitrary track fields.
-    """
-    return True
-
 def normalize_compariter(logger, operator):
     """Maps various string aliases to a compariter"""
     op = str(operator).lower().strip()
