@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.15.1 - 2026-04-28
+## v0.15.1 - 2026-05-20
+
+### Fixes
+
+- fix: smart shuffle artist grouping changed after introducing shallow collection (#161) (@kylemmkay)
 
 ### Maintenance
 
