@@ -34,5 +34,8 @@ config:
   history_limit: 100        # Default max tracks fetched by history source
   validation_mode: "warn"  # fail or warn for i/o validation checks
 
+  # Interleave modifier defaults.
+  interleave_continue_on_exhaust: false  # Stop origin when inject exhausts; discard partial batches and leftover inject tracks (DEEZER_INTERLEAVE_CONTINUE_ON_EXHAUST)
+
   # Cron mode behavior.
   run_before_cron: true     # Run once immediately on cron startup

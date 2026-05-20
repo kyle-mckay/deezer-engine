@@ -17,19 +17,20 @@ OFFLINE_FIXTURE_DIR = REPO_ROOT / "app" / "tests" / "fixtures" / "album"
 OFFLINE_STRATEGY_PATH = REPO_ROOT / "templates" / "validation" / "input_output" / "strategies.offline.yml"
 
 EXPECTED_COUNTS = {
-    "IOPASS": 73,
+    "IOPASS": 90,
     "IOWARN": 1,
     "WARN": 1,
     "IOERR": 1,
     "ERR": 2,
-    "IOPASS_SF": 30,
+    "IOPASS_SF": 35,
     "IOPASS_MF": 10,
     "IOPASS_ML": 12,
     "IOPASS_MS": 4,
     "IOPASS_ME": 2,
     "IOPASS_MD": 2,
-    "IOPASS_DF": 13,
-    "SAVE_DF": 13,
+    "IOPASS_MI": 8,
+    "IOPASS_DF": 17,
+    "SAVE_DF": 17,
 }
 
 TOTAL_COUNT_KEYS = ("IOPASS", "IOWARN", "WARN", "IOERR", "ERR")
@@ -41,8 +42,9 @@ COMPONENT_COUNT_CASES = [
     pytest.param("IOPASS_MS", "modifier-sort", EXPECTED_COUNTS["IOPASS_MS"], id="modifier-sort-4"),
     pytest.param("IOPASS_ME", "modifier-exclude", EXPECTED_COUNTS["IOPASS_ME"], id="modifier-exclude-2"),
     pytest.param("IOPASS_MD", "modifier-dedupe", EXPECTED_COUNTS["IOPASS_MD"], id="modifier-dedupe-2"),
-    pytest.param("IOPASS_DF", "destination-file", EXPECTED_COUNTS["IOPASS_DF"], id="destination-file-13"),
-    pytest.param("SAVE_DF", "destination-file-save", EXPECTED_COUNTS["SAVE_DF"], id="destination-file-save-13"),
+    pytest.param("IOPASS_MI", "modifier-interleave", EXPECTED_COUNTS["IOPASS_MI"], id="modifier-interleave-8"),
+    pytest.param("IOPASS_DF", "destination-file", EXPECTED_COUNTS["IOPASS_DF"], id="destination-file-17"),
+    pytest.param("SAVE_DF", "destination-file-save", EXPECTED_COUNTS["SAVE_DF"], id="destination-file-save-17"),
 ]
 
 OFFLINE_SHARED_CACHE_KEY = "offline-shared"
@@ -73,6 +75,7 @@ def _parse_counts(log_text):
         "IOPASS_MS": count(lambda line: "[I/O Validation] PASSED Modifier 'sort'" in line),
         "IOPASS_ME": count(lambda line: "[I/O Validation] PASSED Modifier 'exclude'" in line),
         "IOPASS_MD": count(lambda line: "[I/O Validation] PASSED Modifier 'dedupe'" in line),
+        "IOPASS_MI": count(lambda line: "[I/O Validation] PASSED Modifier 'interleave'" in line),
         "IOPASS_DF": count(lambda line: "[I/O Validation] PASSED Destination 'file'" in line),
         "SAVE_DF": count(lambda line: "Successfully saved tracks to:" in line),
     }

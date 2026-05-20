@@ -9,6 +9,7 @@ from utils.config.strategy_validation import load_strategies_with_env_overrides
 import utils.config.strategy_validation as strategy_validation
 from utils.config.key_validation import (
     DESTINATION_TYPE_KEYS,
+    INTERLEAVE_INJECT_ENTRY_KEYS,
     MODIFIER_TYPE_KEYS,
     SOURCE_TYPE_KEYS,
     STRATEGY_TOP_LEVEL_KEYS,
@@ -458,6 +459,132 @@ def test_random_top_level_strategy_typo_warns(monkeypatch, tmp_path, validation_
     assert len(loaded["playlists"]) == 1
     assert "Unknown key(s)" in caplog.text
     assert typo in caplog.text
+
+
+def test_interleave_modifier_loads_without_unknown_key_warnings(monkeypatch, tmp_path, validation_logger, caplog):
+    """Interleave modifier with well-formed inject entries produces no unknown-key warnings."""
+    payload = {
+        "playlists": [
+            {
+                "name": "interleave-clean",
+                "source": [{"type": "favorites"}],
+                "modifiers": [
+                    {
+                        "type": "interleave",
+                        "continue_on_exhaust": True,
+                        "inject": [
+                            {
+                                "source": {"type": "playlist", "id": "123"},
+                                "every": 2,
+                                "add": 1,
+                                "continue_on_exhaust": False,
+                            }
+                        ],
+                    }
+                ],
+                "destination": [{"type": "playlist", "id": "999"}],
+            }
+        ]
+    }
+    monkeypatch.setattr(strategy_validation, "get_data_dir", lambda: _write_strategies(tmp_path, payload))
+
+    with caplog.at_level("WARNING", logger="tests.strategy_validation"):
+        loaded = load_strategies_with_env_overrides(validation_logger)
+
+    assert len(loaded["playlists"]) == 1, f"Expected strategy to load cleanly, got: {loaded}"
+    assert "Unknown key(s)" not in caplog.text, f"Unexpected unknown-key warning: {caplog.text}"
+
+
+def test_interleave_inject_entry_unknown_key_warns(monkeypatch, tmp_path, validation_logger, caplog):
+    """Unknown keys inside an inject entry produce a warning."""
+    payload = {
+        "playlists": [
+            {
+                "name": "interleave-bad-entry-key",
+                "source": [{"type": "favorites"}],
+                "modifiers": [
+                    {
+                        "type": "interleave",
+                        "inject": [
+                            {
+                                "source": {"type": "playlist", "id": "123"},
+                                "every": 2,
+                                "add": 1,
+                                "typo_key": "oops",
+                            }
+                        ],
+                    }
+                ],
+                "destination": [{"type": "playlist", "id": "999"}],
+            }
+        ]
+    }
+    monkeypatch.setattr(strategy_validation, "get_data_dir", lambda: _write_strategies(tmp_path, payload))
+
+    with caplog.at_level("WARNING", logger="tests.strategy_validation"):
+        loaded = load_strategies_with_env_overrides(validation_logger)
+
+    assert len(loaded["playlists"]) == 1, f"Expected strategy to still load, got: {loaded}"
+    assert "Unknown key(s)" in caplog.text, f"Expected unknown-key warning, got: {caplog.text}"
+    assert "typo_key" in caplog.text
+
+
+def test_interleave_inject_source_missing_type_fails(monkeypatch, tmp_path, validation_logger, caplog):
+    """Inject entry source missing 'type' causes the strategy to be rejected."""
+    payload = {
+        "playlists": [
+            {
+                "name": "interleave-inject-missing-type",
+                "source": [{"type": "favorites"}],
+                "modifiers": [
+                    {
+                        "type": "interleave",
+                        "inject": [
+                            {
+                                "source": {"id": "123"},
+                                "every": 2,
+                                "add": 1,
+                            }
+                        ],
+                    }
+                ],
+                "destination": [{"type": "playlist", "id": "999"}],
+            }
+        ]
+    }
+    monkeypatch.setattr(strategy_validation, "get_data_dir", lambda: _write_strategies(tmp_path, payload))
+
+    with caplog.at_level("ERROR", logger="tests.strategy_validation"):
+        loaded = load_strategies_with_env_overrides(validation_logger)
+
+    assert loaded == {"playlists": []}, f"Expected strategy to be rejected, got: {loaded}"
+    assert "Missing 'type'" in caplog.text
+
+
+def test_interleave_inject_not_a_list_fails(monkeypatch, tmp_path, validation_logger, caplog):
+    """'inject' must be a list; a scalar value causes the strategy to be rejected."""
+    payload = {
+        "playlists": [
+            {
+                "name": "interleave-inject-not-list",
+                "source": [{"type": "favorites"}],
+                "modifiers": [
+                    {
+                        "type": "interleave",
+                        "inject": "not-a-list",
+                    }
+                ],
+                "destination": [{"type": "playlist", "id": "999"}],
+            }
+        ]
+    }
+    monkeypatch.setattr(strategy_validation, "get_data_dir", lambda: _write_strategies(tmp_path, payload))
+
+    with caplog.at_level("ERROR", logger="tests.strategy_validation"):
+        loaded = load_strategies_with_env_overrides(validation_logger)
+
+    assert loaded == {"playlists": []}, f"Expected strategy to be rejected, got: {loaded}"
+    assert "'inject' must be a list" in caplog.text
 
 
 @pytest.mark.parametrize(

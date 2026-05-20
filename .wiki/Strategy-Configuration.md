@@ -204,6 +204,7 @@ Modifiers is an *optional* section that allows you to transform your track list 
 | **`shuffle`** | Randomizes the track order (Smart or Random). |
 | **`sort`** | Organizes tracks by fields like Rank, Title, or Date. |
 | **`exclude`** | Removes tracks found in a secondary source. |
+| **`interleave`** | Merges tracks from one or more inject sources into the pipeline at defined intervals. |
 
 ### Global vs Local
 
@@ -322,6 +323,93 @@ modifiers:
 ```
 
 For available sort fields, see the official [deezer documentation for tracks](https://deezer-python.readthedocs.io/en/stable/api_reference/resources/track.html#deezer.Track).
+
+### `interleave`
+
+Merges tracks from one or more inject sources into the current pipeline at defined intervals. For each inject entry, after every N origin tracks, M tracks from that source are inserted. All injection schedules operate relative to the original origin count — injected tracks are never counted as origin.
+
+When the pipeline is empty (e.g. used as the first global modifier), the modifier appends all inject sources in definition order.
+
+```yaml
+modifiers:
+  - type: "interleave"
+    continue_on_exhaust: false  # optional — append remaining inject tracks when origin runs out (default: false)
+    inject:
+      - source:
+          type: "playlist"
+          id: "wife_playlist_id"
+        every: 2    # after every 2 origin tracks...
+        add: 1      # ...insert 1 track from this source
+        continue_on_exhaust: false  # optional — inject partial batch when source runs low (default: false)
+      - source:
+          type: "favorites"
+        every: 3
+        add: 2
+        continue_on_exhaust: false  # stop injecting from this source if a full batch of 2 can't be filled
+```
+
+**`inject` entry keys:**
+
+| Key | Type | Required | Description |
+| --- | --- | --- | --- |
+| `source` | Map | Yes | A standard source block (`type`, `id`, `name`, etc.). |
+| `every` | Int | Yes | Insert after every N origin tracks. |
+| `add` | Int | Yes | Number of tracks to insert per cycle. |
+| `continue_on_exhaust` | Bool | No | When the inject source runs out and a full `add` batch can't be filled: `true` injects whatever remains (partial batch), `false` discards it. Falls back to the top-level key, then the global config default (`false`). |
+
+**Top-level keys:**
+
+| Key | Type | Description |
+| --- | --- | --- |
+| `continue_on_exhaust` | Bool | When origin runs out, `true` appends all remaining inject tracks; `false` discards them. Also controls whether origin stops early when inject exhausts. Falls back to the global config default (`false`). |
+
+**`continue_on_exhaust` precedence (highest → lowest):**
+
+1. Per-inject-entry `continue_on_exhaust` key
+2. Top-level `continue_on_exhaust` key on the interleave block
+3. `interleave_continue_on_exhaust` in `config.yml` / `DEEZER_INTERLEAVE_CONTINUE_ON_EXHAUST` env var
+4. Hardcoded default: `false`
+
+**Example — family mix (alternating every 2 songs):**
+
+```yaml
+playlists:
+  - name: "Family Mix"
+    source:
+      - type: "favorites"
+    modifiers:
+      - type: "interleave"
+        inject:
+          - source:
+              type: "playlist"
+              id: "WIFE_PLAYLIST_ID"
+            every: 2
+            add: 1
+      - type: "dedupe"
+      - type: "shuffle"
+        order: "random"
+    destination:
+      - type: "playlist"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
+```
+
+**Example — as a local modifier (interleave before merging with other sources):**
+
+```yaml
+source:
+  - type: "favorites"
+    modifiers:
+      - type: "interleave"
+        inject:
+          - source:
+              type: "playlist"
+              id: "WIFE_PLAYLIST_ID"
+            every: 1
+            add: 1
+  - type: "smarttracklist"
+    name: "discovery"
+```
 
 ## 🎯 Destinations
 

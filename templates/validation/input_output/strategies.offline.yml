@@ -284,6 +284,114 @@ playlists:
         name: "./pytest/input_output/grouped-source-output-total.json"
         i: 15
 
+  # --- INTERLEAVE MODIFIER TESTS ---
+  - name: "interleave_basic"
+    # Origin: 91258 (18 tracks). Inject: 76585 (2 tracks) every 3, add 1.
+    # Injects at counts 3 and 6; source exhausted. Origin continues (continue_on_exhaust: true).
+    # Result: 18 + 2 = 20.
+    source:
+      - type: "file"
+        dir: "./app/tests/fixtures/album"
+        filename: "91258.json"
+        o: 18
+    modifiers:
+      - type: "interleave"
+        continue_on_exhaust: true
+        i: 18
+        o: 20
+        inject:
+          - source:
+              type: "file"
+              dir: "./app/tests/fixtures/album"
+              filename: "76585.json"
+            every: 3
+            add: 1
+    destination:
+      - type: "file"
+        name: "./pytest/input_output/interleave-basic.json"
+        i: 20
+
+  - name: "interleave_origin_exhausts"
+    # Origin: 76585 (2 tracks). Inject: 102809 (13 tracks) every 1, add 1.
+    # Injects w1 after o1, w2 after o2. Origin done; 11 remainder appended (continue_on_exhaust: true).
+    # Result: 2 + 2 + 11 = 15.
+    source:
+      - type: "file"
+        dir: "./app/tests/fixtures/album"
+        filename: "76585.json"
+        o: 2
+    modifiers:
+      - type: "interleave"
+        continue_on_exhaust: true
+        i: 2
+        o: 15
+        inject:
+          - source:
+              type: "file"
+              dir: "./app/tests/fixtures/album"
+              filename: "102809.json"
+            every: 1
+            add: 1
+    destination:
+      - type: "file"
+        name: "./pytest/input_output/interleave-origin-exhausts.json"
+        i: 15
+
+  - name: "interleave_continue_off"
+    # Same sources as above but top-level continue_on_exhaust: false.
+    # Remainder is discarded when origin runs out. Result: 2 + 2 = 4.
+    source:
+      - type: "file"
+        dir: "./app/tests/fixtures/album"
+        filename: "76585.json"
+        o: 2
+    modifiers:
+      - type: "interleave"
+        continue_on_exhaust: false
+        i: 2
+        o: 4
+        inject:
+          - source:
+              type: "file"
+              dir: "./app/tests/fixtures/album"
+              filename: "102809.json"
+            every: 1
+            add: 1
+    destination:
+      - type: "file"
+        name: "./pytest/input_output/interleave-continue-off.json"
+        i: 4
+
+  - name: "interleave_local_modifier"
+    # Interleave used as a local (child) modifier on the first source block.
+    # Source 1: 91258 (18) + inject 76585 (2) every 3/add 1 → 20 tracks.
+    # Source 2: 536294 (12). Global pipeline: 20 + 12 = 32.
+    source:
+      - type: "file"
+        dir: "./app/tests/fixtures/album"
+        filename: "91258.json"
+        o: 18
+        modifiers:
+          - type: "interleave"
+            continue_on_exhaust: true
+            i: 18
+            o: 20
+            inject:
+              - source:
+                  type: "file"
+                  dir: "./app/tests/fixtures/album"
+                  filename: "76585.json"
+                every: 3
+                add: 1
+      - type: "file"
+        dir: "./app/tests/fixtures/album"
+        filename: "536294.json"
+        o: 12
+    destination:
+      - type: "file"
+        name: "./pytest/input_output/interleave-local-modifier.json"
+        i: 32
+
   - name: "chain_sort_limit_filter_duration"
     source:
       - type: "file"

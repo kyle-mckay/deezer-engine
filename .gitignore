@@ -29,6 +29,9 @@ logs/
 .vscode/
 # PyCharm / IntelliJ
 .idea/
+.claude/*
+!.claude/rules/
+!CLAUDE.md
 
 # --- OS SPECIFIC ---
 .DS_Store

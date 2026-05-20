@@ -72,6 +72,49 @@ playlists:
           - type: "history"
             lookback: 2
             limit: 50
+      - type: "interleave"
+        continue_on_exhaust: true
+        inject:
+          - source:
+              type: "playlist"
+              id: "REPLACE_SOURCE_PLAYLIST_ID"
+            every: 3
+            add: 1
+            continue_on_exhaust: false
+          - source:
+              type: "favorites"
+            every: 5
+            add: 2
+    destination:
+      - type: "playlist"
+        id: "REPLACE_PLAYLIST_ID"
+        order: "replace"
+
+  - name: "Validation - Interleave Modifier"
+    # Covers interleave as a global modifier and as a local (child) modifier.
+    # No unknown-key warnings should appear for any interleave-specific keys.
+    source:
+      - type: "favorites"
+        modifiers:
+          - type: "interleave"
+            inject:
+              - source:
+                  type: "playlist"
+                  id: "REPLACE_SOURCE_PLAYLIST_ID"
+                every: 2
+                add: 1
+      - type: "smarttracklist"
+        name: "discovery"
+    modifiers:
+      - type: "interleave"
+        inject:
+          - source:
+              type: "history"
+              lookback: 7
+            every: 4
+            add: 2
+            continue_on_exhaust: true
+      - type: "dedupe"
     destination:
       - type: "playlist"
         id: "REPLACE_PLAYLIST_ID"

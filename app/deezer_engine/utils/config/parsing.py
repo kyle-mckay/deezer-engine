@@ -44,6 +44,7 @@ ENV_MAPPINGS = {
     'DEEZER_VALIDATION_MODE': 'validation_mode',
     'DEEZER_RUN_BEFORE_CRON': 'run_before_cron',
     'DEEZER_PULL_METADATA': 'pull_metadata',
+    'DEEZER_INTERLEAVE_CONTINUE_ON_EXHAUST': 'interleave_continue_on_exhaust',
     'CONTAINERIZED': 'containerized',
 }
 
@@ -64,7 +65,7 @@ INT_CONFIG_KEYS = {
     'history_limit',
 }
 
-BOOL_CONFIG_KEYS = {'write_logs', 'print_banner', 'run_before_cron', 'pull_metadata', 'containerized'}
+BOOL_CONFIG_KEYS = {'write_logs', 'print_banner', 'run_before_cron', 'pull_metadata', 'containerized', 'interleave_continue_on_exhaust'}
 
 SENSITIVE_KEY_TOKENS = ("arl", "token", "secret", "password", "key")
 
@@ -173,6 +174,11 @@ def _load_base_config():
             config = yaml.safe_load(f) or {}
     except FileNotFoundError:
         config_logger.debug(f"Config file not found at '{config_path}'. Starting from empty config.")
+        config = {}
+    except yaml.YAMLError as e:
+        mark = getattr(e, 'problem_mark', None)
+        location = f" (line {mark.line + 1}, column {mark.column + 1})" if mark else ""
+        config_logger.error(f"config.yml has a syntax error{location}: {e.problem}. Falling back to empty config.")
         config = {}
 
     if not isinstance(config, dict):

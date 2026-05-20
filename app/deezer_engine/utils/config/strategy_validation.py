@@ -4,6 +4,7 @@
 import yaml
 from utils.infrastructure.paths import get_data_dir
 from .key_validation import (
+    INTERLEAVE_INJECT_ENTRY_KEYS,
     STRATEGY_TOP_LEVEL_KEYS,
     format_unknown_key_list,
     get_allowed_destination_keys,
@@ -253,15 +254,40 @@ def _validate_modifiers(logger, strategy_name, modifiers, depth=1, path="root"):
             logger.error(f"[Depth: {depth}, {vtype} # {idx + 1}/{len(modifiers)}] Strategy '{strategy_name}' at {current_path}: Missing 'type'.")
             return False
 
-        # Recursion: Modifier contains a nested source
+        # Recursion: Modifier contains a nested source (e.g. exclude)
         if "source" in mod:
             logger.debug(f"[Depth: {depth}, {vtype} # {idx + 1}/{len(modifiers)}] Found child source in {mod_type}. Recursing...")
             child_source = mod["source"]
-            # Normalize single source dict to a list for the validator
             source_to_validate = child_source if isinstance(child_source, list) else [child_source]
-
             if not _validate_sources(logger, strategy_name, source_to_validate, depth=depth + 1, path=current_path):
                 return False
+
+        # Recursion: interleave inject entries each contain a nested source
+        elif mod_type == "interleave" and "inject" in mod:
+            inject_entries = mod.get("inject", [])
+            if not isinstance(inject_entries, list):
+                logger.error(
+                    f"[Depth: {depth}, {vtype} # {idx + 1}/{len(modifiers)}] Strategy '{strategy_name}' "
+                    f"at {current_path}: 'inject' must be a list."
+                )
+                return False
+            logger.debug(f"[Depth: {depth}, {vtype} # {idx + 1}/{len(modifiers)}] Validating {len(inject_entries)} inject entries in {mod_type}.")
+            for entry_idx, entry in enumerate(inject_entries):
+                entry_path = f"{current_path} > inject[{entry_idx + 1}]"
+                if not isinstance(entry, dict):
+                    logger.error(f"[Depth: {depth}] Strategy '{strategy_name}' at {entry_path}: Inject entry must be an object.")
+                    return False
+                unknown_entry_keys = get_unknown_keys(entry, INTERLEAVE_INJECT_ENTRY_KEYS)
+                if unknown_entry_keys:
+                    formatted_keys = format_unknown_key_list(unknown_entry_keys, INTERLEAVE_INJECT_ENTRY_KEYS)
+                    logger.warning(
+                        f"[Depth: {depth}] Strategy '{strategy_name}' at {entry_path}: Unknown key(s): {formatted_keys}."
+                    )
+                if "source" in entry:
+                    child_source = entry["source"]
+                    source_to_validate = child_source if isinstance(child_source, list) else [child_source]
+                    if not _validate_sources(logger, strategy_name, source_to_validate, depth=depth + 1, path=entry_path):
+                        return False
         else:
             logger.debug(f"[Depth: {depth}, {vtype} # {idx + 1}/{len(modifiers)}] Found no nested source in {mod_type}.")
     return True

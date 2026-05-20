@@ -44,9 +44,17 @@ MODIFIER_TYPE_KEYS = {
     'dedupe': set(),
     'exclude': {'source'},
     'filter': {'field', 'operator', 'value'},
+    'interleave': {'inject', 'continue_on_exhaust'},
     'limit': {'count', 'order'},
     'shuffle': {'order'},
     'sort': {'field', 'order'},
+}
+
+INTERLEAVE_INJECT_ENTRY_KEYS = SOURCE_BASE_KEYS | {
+    'source',
+    'every',
+    'add',
+    'continue_on_exhaust',
 }
 
 DESTINATION_BASE_KEYS = {
@@ -86,6 +94,7 @@ CONFIG_SECTION_KEYS = {
     'validation_mode',
     'run_before_cron',
     'pull_metadata',
+    'interleave_continue_on_exhaust',
 }
 
 

@@ -124,6 +124,56 @@ playlists:
         id: "REPLACE_WITH_YOUR_ID"
         order: "replace"
 
+  # Interleave: merge two libraries so they alternate every 2 songs.
+  # continue_on_exhaust defaults to true (from config/env), so whichever
+  # library runs out first has its remaining tracks appended at the end.
+  - name: "Family Mix"
+    source:
+      - type: "favorites"
+    modifiers:
+      - type: "interleave"
+        inject:
+          - source:
+              type: "playlist"
+              id: "REPLACE_WITH_PARTNER_PLAYLIST_ID"
+            every: 2   # after every 2 of your tracks...
+            add: 1     # ...insert 1 from the partner playlist
+      - type: "dedupe"
+      - type: "shuffle"
+        order: "random"
+    destination:
+      - type: "playlist"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
+
+  # Interleave: used as a local modifier to weave a second source into
+  # one specific source block before it merges with the global pipeline.
+  # continue_on_exhaust: false here means partial inject batches are
+  # dropped rather than appended, overriding the global config default.
+  - name: "Discovery + Favourites Weave"
+    source:
+      - type: "smarttracklist"
+        name: "discovery"
+        modifiers:
+          - type: "interleave"
+            continue_on_exhaust: false
+            inject:
+              - source:
+                  type: "favorites"
+                every: 3   # after every 3 discovery tracks...
+                add: 1     # ...insert 1 favourite
+      - type: "smarttracklist"
+        name: "inspired-by-1"
+    modifiers:
+      - type: "dedupe"
+      - type: "limit"
+        count: 80
+        order: "top"
+    destination:
+      - type: "playlist"
+        id: "REPLACE_WITH_YOUR_ID"
+        order: "replace"
+
   - name: "Favorites Back-up"
     source:
       - type: "favorites"

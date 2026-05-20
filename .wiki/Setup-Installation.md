@@ -61,6 +61,7 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | `schedule` | `DEEZER_SCHEDULE` | No | `0 3 * * *` (cron mode) | Cron expression used when running in scheduled mode. If provided without an explicit command, default mode resolves to cron. |
 | `run_before_cron` | `DEEZER_RUN_BEFORE_CRON` | No | `true` | In cron mode, run one sync immediately at container startup before waiting for the next cron slot. Set to `false` to wait until the next scheduled time. |
 | `pull_metadata` | `DEEZER_PULL_METADATA` | No | `true` | If `true`, fetch full track metadata when needed. Set to `false` to skip extra lookups and run faster, but some advanced features may not work.|
+| `interleave_continue_on_exhaust` | `DEEZER_INTERLEAVE_CONTINUE_ON_EXHAUST` | No | `false` | Global default for the interleave modifier's `continue_on_exhaust` behaviour. When `false`: origin stops as soon as inject exhausts, partial batches are discarded, and leftover inject tracks are not appended. Set to `true` to keep origin flowing and append leftovers. Can be overridden per modifier or per inject entry. |
 
 ### Logic Hierarchy
 

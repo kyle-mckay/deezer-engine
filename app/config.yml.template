@@ -23,3 +23,4 @@ config:
   # file_retention: 168
   # run_before_cron: true
   # blocklist_expiry_days: 7
+  # interleave_continue_on_exhaust: false  # Default for interleave inject/origin exhaustion behaviour. Env: DEEZER_INTERLEAVE_CONTINUE_ON_EXHAUST
