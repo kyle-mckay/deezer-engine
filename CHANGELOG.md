@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.17.0 - 2026-05-20
+
+### Enhancements
+
+- feat: retire old `get_tracks` and `get_albums` workers into a more streamlined version that is shallow collection friendly (closes #147) (#163) (@kylemmkay)
+
 ## v0.16.0 - 2026-05-20
 
 ### Enhancements
