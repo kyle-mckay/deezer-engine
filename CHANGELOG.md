@@ -1,6 +1,10 @@
 # Changelog
 
-## v0.15.1 - 2026-05-20
+## v0.16.0 - 2026-05-20
+
+### Enhancements
+
+- feat: add modifier for track interleave (closes #74) (#162) (@kylemmkay)
 
 ### Fixes
 
