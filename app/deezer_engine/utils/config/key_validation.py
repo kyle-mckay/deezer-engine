@@ -64,7 +64,7 @@ DESTINATION_BASE_KEYS = {
 
 DESTINATION_TYPE_KEYS = {
     'file': {'dir', 'filename', 'name', 'extension', 'retention'},
-    'playlist': {'id', 'order', 'retention'},
+    'playlist': {'id', 'order', 'retention', 'title', 'description', 'visibility'},
 }
 
 CONFIG_ROOT_KEYS = {
@@ -74,6 +74,7 @@ CONFIG_ROOT_KEYS = {
 CONFIG_SECTION_KEYS = {
     'user_id',
     'arl_token',
+    'refresh_token',
     'chunk_size',
     'api_batch_size',
     'rate_limit',

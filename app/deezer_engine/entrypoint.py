@@ -38,6 +38,19 @@ def _is_pytest_mode():
     """Return True when the process is running under pytest."""
     return "PYTEST_CURRENT_TEST" in os.environ
 
+
+_PLAYLIST_METADATA_KEYS = {'title', 'description', 'visibility'}
+
+def _strategies_need_pipe_jwt(strategies_config):
+    """Return True if any strategy has a playlist destination with metadata keys."""
+    if not strategies_config:
+        return False
+    for strategy in strategies_config.get('playlists', []):
+        for dest in strategy.get('destination', []):
+            if dest.get('type') == 'playlist' and _PLAYLIST_METADATA_KEYS.intersection(dest):
+                return True
+    return False
+
 def load_configs(type,logger = None):
     """Load configuration and strategies with environment variable overrides."""
     try:
@@ -315,7 +328,8 @@ def main():
     # 3. Authenticate
     logger.debug("Requesting Deezer authentication...")
     auth_config = None if _is_pytest_mode() else config
-    client = get_authenticated_client(auth_config, logger)
+    pipe_jwt_needed = _strategies_need_pipe_jwt(strategies_config)
+    client = get_authenticated_client(auth_config, logger, pipe_jwt_needed=pipe_jwt_needed)
     
     # 4. Strategy Execution Loop
     if not strategies_config or 'playlists' not in strategies_config:

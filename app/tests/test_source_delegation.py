@@ -98,7 +98,7 @@ def test_history_delegates_to_track_worker(monkeypatch):
     monkeypatch.setattr(
         history,
         "get_deezer_history",
-        lambda _limit, _logger: [
+        lambda _client, _limit, _logger: [
             {"SNG_ID": "301", "TS": 1_700_000_000},
             {"SNG_ID": "302", "TS": 1_699_999_000},
             {"SNG_ID": "301", "TS": 1_700_000_000},
@@ -160,27 +160,39 @@ def test_playlist_returns_tracks_tagged_per_playlist_collection(monkeypatch):
     """Playlist worker should return rows keyed with the playlist-specific collection name."""
     logger = logging.getLogger("tests.source_delegation.playlist")
 
-    class PlaylistObject:
-        def __init__(self, playlist_id, title):
-            self.id = playlist_id
-            self.title = title
-
-        def get_tracks(self):
-            return [object()]
-
-    class Client:
-        def get_playlist(self, playlist_id):
-            return PlaylistObject(playlist_id, f"Playlist {playlist_id}")
-
-    monkeypatch.setattr(playlist, "get_collection_name", lambda _logger, _source_type, name=None, id=None: f"playlist__{id}")
     monkeypatch.setattr(
         playlist,
-        "fetch_shallow_tracks",
-        lambda _tracks, _logger: [{"id": "901"}, {"id": "902"}],
+        "fetch_playlist_info",
+        lambda _client, playlist_id, _logger: {
+            "id": str(playlist_id),
+            "title": f"Playlist {playlist_id}",
+            "description": "",
+            "is_private": False,
+            "is_collaborative": False,
+            "track_count": 2,
+        },
+    )
+    monkeypatch.setattr(
+        playlist,
+        "fetch_playlist_track_ids",
+        lambda _client, _playlist_id, _logger: ["901", "902"],
+    )
+    monkeypatch.setattr(
+        playlist,
+        "get_collection_name",
+        lambda _logger, _source_type, name=None, id=None: f"playlist__{id}",
+    )
+    monkeypatch.setattr(
+        playlist,
+        "fetch_enriched_tracks",
+        lambda _client, _config, _logger, source_data: [
+            {"id": tid, "collection": source_data[0]["override_collection"]}
+            for tid in source_data[0]["id"]
+        ],
     )
 
     result = playlist.run(
-        client=Client(),
+        client=object(),
         config={},
         logger=logger,
         source_data={"type": "playlist", "id": "555", "retention": 6},
@@ -189,7 +201,7 @@ def test_playlist_returns_tracks_tagged_per_playlist_collection(monkeypatch):
     assert result == [
         {"id": "901", "collection": "playlist__555"},
         {"id": "902", "collection": "playlist__555"},
-    ], f"Expected playlist worker to tag shallow rows with the playlist collection, got: {result}"
+    ], f"Expected playlist worker to tag rows with the playlist collection, got: {result}"
 
 
 def test_album_returns_tracks_tagged_per_album_collection(monkeypatch):

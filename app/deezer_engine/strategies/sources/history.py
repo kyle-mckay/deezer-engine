@@ -6,7 +6,6 @@ import logging
 import random
 import time
 from datetime import datetime
-from utils.api.auth import get_authenticated_session
 from utils.config import get_global_value
 from utils.collections import get_collection_name
 from strategies.sources.track import run as fetch_enriched_tracks
@@ -22,22 +21,16 @@ def requires_metadata(source_data=None):
     """
     return False
 
-def get_deezer_history(limit, logger):
+def get_deezer_history(client, limit, logger):
     """
     Fetches history using the exact parameters found in your network logs.
     """
-    # Setup auth
-    arl = get_global_value('arl_token', None)
-    logger.debug(f"History fetch start: limit={limit}, has_arl={bool(arl)}")
-    if not arl:
-        logger.error(f"Unable to fetch history, no arl token available")
-        return []
-    
-    warm_url = "https://www.deezer.com/en/profile/me/history"
-    session, api_token = get_authenticated_session(arl, logger, warm_url)
-    
+    session = client.session
+    api_token = client.api_token
+    logger.debug(f"History fetch start: limit={limit}, has_session={bool(session)}")
     if not session or not api_token:
-        raise Exception("Authentication failed.")
+        logger.error("Unable to fetch history: no authenticated session on client.")
+        return []
 
     logger.debug("History auth established. Preparing gateway request.")
 
@@ -88,7 +81,7 @@ def run(client, config, logger, source_data):
         
         collection = get_collection_name(logger, source_type, None, None)
 
-        history_tracks = get_deezer_history(source_limit, logger)
+        history_tracks = get_deezer_history(client, source_limit, logger)
         logger.debug(f"History source raw rows fetched: {len(history_tracks)}")
         if not history_tracks:
             logger.info("Fetched 0 items from history.")

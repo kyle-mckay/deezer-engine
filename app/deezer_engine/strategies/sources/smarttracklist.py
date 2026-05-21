@@ -5,7 +5,6 @@ import json
 import re
 import random
 from datetime import datetime
-from utils.api.auth import get_authenticated_session
 from utils.collections import get_collection_name
 from utils.config import get_global_value
 from strategies.sources.track import run as fetch_enriched_tracks
@@ -21,17 +20,17 @@ def requires_metadata(source_data=None):
     return False
 
 
-def _fetch_smarttracklist_tracks(arl, logger, list_name, collection_name):
+def _fetch_smarttracklist_tracks(client, logger, list_name, collection_name):
     """Fetch shallow smarttracklist rows already tagged with the target collection."""
     logger.debug(f"SmartTracklist live fetch start: name='{list_name}', collection='{collection_name}'")
 
-    warm_url = f"https://www.deezer.com/us/smarttracklist/{list_name}"
-    session, api_token = get_authenticated_session(arl, logger, warm_url)
-
+    session = client.session
+    api_token = client.api_token
     if not session or not api_token:
-        logger.error(f"Auth failed for {list_name}: Session or API token missing.")
+        logger.error(f"Auth failed for {list_name}: no authenticated session on client.")
         return []
 
+    warm_url = f"https://www.deezer.com/us/smarttracklist/{list_name}"
     page_response = session.get(warm_url)
     page_text = page_response.text
 
@@ -103,7 +102,6 @@ def run(client, config, logger, source_data):
         # Extract configuration
         retention_hrs = source_data[0].get('retention', get_global_value('retention', default=0))
         name_value = source_data[0].get('name')
-        arl = config.get('config', {}).get('arl_token')
 
         if name_value is None:
             logger.error("Source type 'smarttracklist' failed: missing 'name' in configuration.")
@@ -127,16 +125,13 @@ def run(client, config, logger, source_data):
             logger.warning("SmartTracklist source has no valid names after filtering invalid list entries.")
             return []
 
-        # Security: Mask ARL in debug logs
-        masked_arl = f"{arl[:6]}...{arl[-6:]}" if arl else "None"
-        logger.debug(f"Params: names='{normalized_list_names}', retention={retention_hrs}h, arl={masked_arl}")
         logger.debug(f"SmartTracklist source start: names='{normalized_list_names}', retention={retention_hrs}h")
 
         all_results = []
         for list_name in normalized_list_names:
             logger.info(f"Fetching tracks for smarttracklist: '{list_name}'...")
             collection_name = get_collection_name(logger, "smarttracklist", name=list_name)
-            shallow_tracks = _fetch_smarttracklist_tracks(arl, logger, list_name, collection_name)
+            shallow_tracks = _fetch_smarttracklist_tracks(client, logger, list_name, collection_name)
             collected_ids = list(
                 dict.fromkeys(
                     str(track.get('id')).strip()

@@ -13,5 +13,13 @@ Use this folder for functions that talk to Deezer or API-adjacent network concer
 - It transforms/stores entity metadata in SQLite (`utils/metadata`, `utils/db`).
 - It is generic app infrastructure (paths/logging/files/signals in `utils/infrastructure`).
 
+## Modules
+
+- **auth.py** — Session bootstrap (`get_authenticated_client`, `get_authenticated_session`), JWT lifecycle (`get_or_refresh_pipe_jwt`).
+- **playlist.py** — Shared playlist operations: `fetch_playlist_info`, `fetch_playlist_track_ids` (both work for private playlists via gw-light), and standalone write hooks `set_playlist_privacy`, `rename_playlist`, `set_playlist_description` (use pipe.deezer.com GraphQL with the Bearer JWT).
+- **fetching.py** — Batched metadata fetch orchestration for tracks and albums.
+- **rate_limit.py** — API rate-limit checkpoint logic.
+- **retry.py** — Retry/backoff and error-classification helpers.
+
 ## Quick check
 If it would still make sense without network/API access, it likely does not belong here.

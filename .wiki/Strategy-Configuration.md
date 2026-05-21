@@ -425,6 +425,7 @@ Define where the final list is saved.
 #### `playlist`
 
 **ID** (required) - The playlist ID you wish to save to: `https://www.deezer.com/us/playlist/<playlist_id>`
+
 **Order** (optional) - The method of adding/removing songs from the destination:
 
 | Mode | Behavior |
@@ -435,12 +436,32 @@ Define where the final list is saved.
 
 **Retention** (optional) - How old the collection for this playlist is before it's considered stale and needs to be refreshed. Defaults to `0` (no caching, always fetch live).
 
+**title** (optional) - Rename the playlist on every sync. Leave unset to preserve the current name.
+
+**description** (optional) - Set or update the playlist description on every sync. Leave unset to preserve the current description.
+
+**visibility** (optional) - Set the playlist's visibility state. Accepts `public`, `private`, or `collaborative`. Unambiguous prefixes and abbreviations are also accepted (e.g. `pub`, `pri`, `col`, `collab`). Ambiguous input (e.g. `p`, which matches both `public` and `private`) logs a warning and skips the change. Leave unset to preserve the current visibility.
+
+> [!NOTE]
+> `title`, `description`, and `visibility` require a valid `refresh_token` in `config.yml`. Without it, metadata write operations are skipped with a warning each run. See [Setup & Installation](Setup-Installation) for how to obtain this token.
+
+> [!TIP]
+> Only the fields you explicitly specify are changed — unset fields always keep their current value. For example, setting `title` alone will not affect visibility or description.
+
 ```yaml
 destination:
   - type: "playlist"
     id: "01234567"
     order: "smart"
     retention: 24
+
+  # With metadata management:
+  - type: "playlist"
+    id: "01234567"
+    order: "smart"
+    title: "My Synced Playlist"
+    description: "Automatically managed by deezer-engine."
+    visibility: "private"   # public | private | collaborative
 ```
 
 ### `file`
