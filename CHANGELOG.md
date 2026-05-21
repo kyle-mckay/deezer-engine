@@ -1,9 +1,11 @@
 # Changelog
 
-## v0.17.0 - 2026-05-20
+## v0.17.0 - 2026-05-21
 
 ### Enhancements
 
+- enhance: migrate smart tracklists and history to newer gw-light logic (@kylemmkay)
+- feat: refactor gw-light functions for reusability, and allow for user private playlist access, add ability to update playlist metadata (@kylemmkay)
 - feat: implement track field detection for modifier usage (closes #95) (#164) (@kylemmkay)
 - feat: retire old `get_tracks` and `get_albums` workers into a more streamlined version that is shallow collection friendly (closes #147) (#163) (@kylemmkay)
 
@@ -255,3 +257,4 @@ Added source for smart track playlists (Discovery, Inspired by, new releases)
 ## v0.1.0 - 2026-01-10
 
 Inital version that can pull and add to playlists
+
