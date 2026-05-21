@@ -3,6 +3,11 @@ config:
   arl_token: "PASTE_ARL_HERE"
   user_id: "YOUR_NUMERIC_USER_ID" # Numeric ID from your profile URL
 
+  # Optional: enables playlist metadata writes (rename, privacy, description).
+  # Export the 'refresh-token' cookie from your browser alongside the ARL.
+  # Without this, those operations will be skipped with a warning.
+  # refresh_token: ""
+
   # Logging and visibility.
   log_level: "INFO" # DEBUG, INFO, WARNING, ERROR
   print_banner: true

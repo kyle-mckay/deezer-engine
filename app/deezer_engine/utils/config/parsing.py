@@ -23,6 +23,7 @@ _ENV_SNAPSHOT = {}
 ENV_MAPPINGS = {
     'DEEZER_USER_ID': 'user_id',
     'DEEZER_ARL_TOKEN': 'arl_token',
+    'DEEZER_REFRESH_TOKEN': 'refresh_token',
     'DEEZER_CHUNK_SIZE': 'chunk_size',
     'DEEZER_API_BATCH_SIZE': 'api_batch_size',
     'DEEZER_RATE_LIMIT': 'rate_limit',

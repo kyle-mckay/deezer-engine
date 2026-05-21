@@ -40,6 +40,7 @@ Deezer Engine can be configured via a `config.yml` file or **Environment Variabl
 | --- | --- | --- | --- | --- |
 | `arl_token` | `DEEZER_ARL_TOKEN` | **Yes** | N/A | Your Deezer ARL authentication token. See [Obtaining ARL token](https://www.google.com/search?q=%23obtaining-arl-token). |
 | `user_id` | `DEEZER_USER_ID` | **Yes** | N/A | Your numeric Deezer user ID (found in profile URL). |
+| `refresh_token` | `DEEZER_REFRESH_TOKEN` | No | N/A | Your Deezer `refresh-token` browser cookie. Required to update playlist metadata (title, description, visibility) via the `playlist` destination. Export the `refresh-token` cookie from your browser after logging in (DevTools → Application → Cookies → `deezer.com`). Without this, metadata write operations are skipped with a warning. |
 | `log_level` | `DEEZER_LOG_LEVEL` | No | `INFO` | Verbosity: `DEBUG`, `INFO`, `WARNING`, `ERROR`. |
 | `write_logs` | `DEEZER_WRITE_LOGS` | No | `true` | Whether to write logs to `/deezer_engine/data/logs/`. |
 | `chunk_size` | `DEEZER_CHUNK_SIZE` | No | `50` | Max tracks processed in batch operation's. (Adding/removing from playlist, db checkpoint caching) |

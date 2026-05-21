@@ -3,6 +3,12 @@ config:
   arl_token: "PASTE_ARL_HERE"
   user_id: "YOUR_NUMERIC_USER_ID"
 
+  # Optional: enables playlist metadata writes (title, description, visibility).
+  # Export the 'refresh-token' cookie from your browser after logging in to Deezer
+  # (DevTools → Application → Cookies → deezer.com). Use the raw value (ending in =, not %3D).
+  # Without this, metadata write operations are skipped with a warning each run.
+  # refresh_token: ""
+
   # Logging behavior.
   log_level: "INFO"        # DEBUG, INFO, WARNING, ERROR
   write_logs: true          # Write logs to ./data/logs
