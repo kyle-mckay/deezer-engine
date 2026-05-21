@@ -1,15 +1,13 @@
 # SPDX-FileCopyrightText: 2026 kylemmkay
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import json
 import logging
-import random
 import time
 from datetime import datetime
 from utils.config import get_global_value
 from utils.collections import get_collection_name
+from utils.api.playlist import gw_post
 from strategies.sources.track import run as fetch_enriched_tracks
-from utils.metadata.orchestration import add_key_to_dicts
 
 # Headers returned from History:
 # History delegates to `track.py` with the extracted id's, so returned rows follow the Track payload shape.
@@ -22,44 +20,16 @@ def requires_metadata(source_data=None):
     return False
 
 def get_deezer_history(client, limit, logger):
-    """
-    Fetches history using the exact parameters found in your network logs.
-    """
-    session = client.session
-    api_token = client.api_token
-    logger.debug(f"History fetch start: limit={limit}, has_session={bool(session)}")
-    if not session or not api_token:
-        logger.error("Unable to fetch history: no authenticated session on client.")
+    """Fetch raw history rows via user.getSongsHistory."""
+    logger.debug(f"History fetch start: limit={limit}")
+    try:
+        results = gw_post(client, "user.getSongsHistory", {"nb": limit, "start": 0}, logger)
+        history_rows = results.get('data', [])
+        logger.debug(f"History fetch end: rows={len(history_rows)}")
+        return history_rows
+    except RuntimeError as e:
+        logger.error(f"Unable to fetch history: {e}")
         return []
-
-    logger.debug("History auth established. Preparing gateway request.")
-
-    # 2. Use method and parameters seen in HAR file when visiting `https://www.deezer.com/profile/me/history`
-    # Method from logs: user.getSongsHistory 
-    cid = random.randint(100000000, 999999999)
-    method = "user.getSongsHistory"
-    
-    gw_url = (
-        f"https://www.deezer.com/ajax/gw-light.php?"
-        f"method={method}&input=3&api_version=1.0"
-        f"&api_token={api_token}&cid={cid}"
-    )
-
-    # Body from logs: {"nb": 40, "start": 0} 
-    payload = {
-        "nb": limit, # Number of tracks to fetch 
-        "start": 0
-    }
-    
-
-    # Format response
-    response = session.post(gw_url, data=json.dumps(payload))
-    resp_json = response.json()
-
-    # Return nested tracks
-    history_rows = resp_json.get('results', {}).get('data', [])
-    logger.debug(f"History fetch end: status={response.status_code}, rows={len(history_rows)}")
-    return history_rows
 
 def run(client, config, logger, source_data):
     """

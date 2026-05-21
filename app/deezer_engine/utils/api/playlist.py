@@ -96,7 +96,7 @@ _UPDATE_PLAYLIST_MUTATION = (
 )
 
 
-def _gw_post(client, method, payload, logger):
+def gw_post(client, method, payload, logger):
     """
     Make a single authenticated gw-light POST and return the parsed results dict.
     Raises RuntimeError if the session is missing or the gateway returns an error.
@@ -137,7 +137,7 @@ def fetch_playlist_info(client, playlist_id, logger):
     """
     logger.debug(f"Fetching playlist info for ID: {playlist_id}")
     try:
-        results = _gw_post(client, "deezer.pagePlaylist", {
+        results = gw_post(client, "deezer.pagePlaylist", {
             "playlist_id": str(playlist_id),
             "lang": "en",
             "tab": 0,
@@ -185,7 +185,7 @@ def fetch_playlist_track_ids(client, playlist_id, logger):
     """
     logger.debug(f"Fetching track IDs for playlist {playlist_id}")
     try:
-        results = _gw_post(client, "deezer.pagePlaylist", {
+        results = gw_post(client, "deezer.pagePlaylist", {
             "playlist_id": str(playlist_id),
             "lang": "en",
             "tab": 0,

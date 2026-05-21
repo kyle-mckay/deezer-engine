@@ -8,6 +8,7 @@ from .fetching import fetch_album_metadata_batch, fetch_track_metadata_batch, ge
 from .playlist import (
 	fetch_playlist_info,
 	fetch_playlist_track_ids,
+	gw_post,
 	rename_playlist,
 	set_playlist_description,
 	set_playlist_privacy,
@@ -38,6 +39,7 @@ __all__ = [
 	"get_authenticated_client",
 	"get_authenticated_session",
 	"get_or_refresh_pipe_jwt",
+	"gw_post",
 	"log_enrichment_progress",
 	"persist_album_batch",
 	"persist_track_batch",

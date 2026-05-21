@@ -41,7 +41,7 @@ Every source entry supports these optional fields:
 | `album` | `id` | All tracks from one album ID or multiple album IDs. |
 | `artist` | `id` | Iterates through one or multiple artists' discographies. |
 | `track` | `id` | Fetches one track ID or multiple track IDs directly. |
-| `smarttracklist` | `name` | Curated: `discovery`, `new-releases`, `inspired-by-1` to `5`. |
+| `smarttracklist` | `name` | Curated: `discovery`, `new-releases`, `monthly-top`, `inspired-by-1` to `5`. |
 | `file` | `format` | Imports tracks from a file on your computer. |
 
 #### `favorites`
