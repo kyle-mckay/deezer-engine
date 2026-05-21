@@ -61,13 +61,13 @@ reassemble_header() {
         if [[ "$line" =~ ^##\  ]] && [ "$header_updated" = false ]; then
             # extract version from line (e.g., 'v0.4.0' from '## v0.4.0 - 2026...')
             local current_version=$(echo "$line" | cut -d' ' -f2)
-            
+
             # use highest version
             local higher_version=$(echo -e "$current_version\n$new_tag" | sort -V | tail -n 1)
 
             echo "## $higher_version - $date" >> "$dest_file"
             header_updated=true
-            
+
             if [ "$higher_version" != "$new_tag" ]; then
                 echo "Kept existing higher version $higher_version instead of $new_tag"
             fi
@@ -81,6 +81,9 @@ reassemble_header() {
         echo "" >> "$dest_file"
         echo "## $new_tag - $date" >> "$dest_file"
     fi
+
+    # Ensure no trailing blank lines at the end of header file
+    sed -i '${/^$/d;}' "$dest_file"
 }
 
 inject_changes() {
@@ -88,15 +91,31 @@ inject_changes() {
     local category="$2"
     local commit_msg="$3"
     local tmp_file="inject.tmp"
-    local bullets
 
+    # If no message, don't even try to inject a category header
+    [ -z "$commit_msg" ] && return
+
+    local bullets
     bullets=$(printf '%s\n' "$commit_msg" | sed '/^$/d; s/^/- /')
 
-    # if category exists, insert after header
-    if grep -q "^### $category" "$dest_file"; then
-        local cat_line=$(grep -n "^### $category" "$dest_file" | cut -d: -f1)
-        local insert_at=$((cat_line + 1)) 
+    # Find boundaries of the current (first) version section
+    local section_start next_section section_end
+    section_start=$(grep -n "^## " "$dest_file" | head -n 1 | cut -d: -f1)
+    next_section=$(grep -n "^## " "$dest_file" | sed -n '2p' | cut -d: -f1)
+    if [ -n "$next_section" ]; then
+        section_end=$((next_section - 1))
+    else
+        section_end=$(wc -l < "$dest_file")
+    fi
 
+    # Check if category header exists within current section only
+    local cat_offset
+    cat_offset=$(sed -n "${section_start},${section_end}p" "$dest_file" \
+        | grep -n "^### $category" | head -n 1 | cut -d: -f1)
+
+    if [ -n "$cat_offset" ]; then
+        local cat_line=$((section_start + cat_offset - 1))
+        local insert_at=$((cat_line + 1))
         head -n "$insert_at" "$dest_file" > "$tmp_file"
         printf '%s\n' "$bullets" >> "$tmp_file"
         tail -n +"$((insert_at + 1))" "$dest_file" >> "$tmp_file"
@@ -104,41 +123,52 @@ inject_changes() {
         return
     fi
 
-    # find target line (version header)
-    local target_line=$(grep -n "^## " "$dest_file" | head -n 1 | cut -d: -f1)
+    # Category not in current section - determine insert position by hierarchy
+    local final_target=$section_start
 
-    # handle category hierarchy
-    local final_target=$target_line
-    
     if [ "$category" == "Breaking" ]; then
-        final_target=$target_line
+        final_target=$section_start
     elif [ "$category" == "Enhancements" ]; then
-        local break_line=$(grep -n "^### Breaking" "$dest_file" | cut -d: -f1)
-        if [ -n "$break_line" ]; then
-            # find last bullet in breaking section
-            local rel_last=$(sed -n "${break_line},/^##/p" "$dest_file" | grep -n "^-" | tail -n 1 | cut -d: -f1)
-            final_target=$((break_line + rel_last - 1))
+        local break_offset
+        break_offset=$(sed -n "${section_start},${section_end}p" "$dest_file" \
+            | grep -n "^### Breaking" | head -n 1 | cut -d: -f1)
+        if [ -n "$break_offset" ]; then
+            local break_line=$((section_start + break_offset - 1))
+            local rel_last
+            rel_last=$(sed -n "${break_line},${section_end}p" "$dest_file" \
+                | grep -n "^-" | tail -n 1 | cut -d: -f1)
+            [ -n "$rel_last" ] && final_target=$((break_line + rel_last - 1))
         fi
     elif [ "$category" == "Fixes" ]; then
-        local enh_line=$(grep -n "^### Enhancements" "$dest_file" | cut -d: -f1)
-        local break_line=$(grep -n "^### Breaking" "$dest_file" | cut -d: -f1)
-        if [ -n "$enh_line" ]; then
-            local rel_last=$(sed -n "${enh_line},/^##/p" "$dest_file" | grep -n "^-" | tail -n 1 | cut -d: -f1)
-            final_target=$((enh_line + rel_last - 1))
-        elif [ -n "$break_line" ]; then
-            local rel_last=$(sed -n "${break_line},/^##/p" "$dest_file" | grep -n "^-" | tail -n 1 | cut -d: -f1)
-            final_target=$((break_line + rel_last - 1))
+        local enh_offset break_offset
+        enh_offset=$(sed -n "${section_start},${section_end}p" "$dest_file" \
+            | grep -n "^### Enhancements" | head -n 1 | cut -d: -f1)
+        break_offset=$(sed -n "${section_start},${section_end}p" "$dest_file" \
+            | grep -n "^### Breaking" | head -n 1 | cut -d: -f1)
+        if [ -n "$enh_offset" ]; then
+            local enh_line=$((section_start + enh_offset - 1))
+            local rel_last
+            rel_last=$(sed -n "${enh_line},${section_end}p" "$dest_file" \
+                | grep -n "^-" | tail -n 1 | cut -d: -f1)
+            [ -n "$rel_last" ] && final_target=$((enh_line + rel_last - 1))
+        elif [ -n "$break_offset" ]; then
+            local break_line=$((section_start + break_offset - 1))
+            local rel_last
+            rel_last=$(sed -n "${break_line},${section_end}p" "$dest_file" \
+                | grep -n "^-" | tail -n 1 | cut -d: -f1)
+            [ -n "$rel_last" ] && final_target=$((break_line + rel_last - 1))
         fi
     elif [ "$category" == "Maintenance" ]; then
-        [ -n "$(tail -n 1 "$dest_file")" ] && echo "" >> "$dest_file"
-        echo -e "### Maintenance\n" >> "$dest_file"
-        printf '%s\n' "$bullets" >> "$dest_file"
-        return
+        local last_non_blank
+        last_non_blank=$(sed -n "${section_start},${section_end}p" "$dest_file" \
+            | grep -n "." | tail -n 1 | cut -d: -f1)
+        [ -n "$last_non_blank" ] && final_target=$((section_start + last_non_blank - 1))
     fi
 
-    # reassemble using sandwich method
+    # sandwich method
     head -n "$final_target" "$dest_file" > "$tmp_file"
-    echo -e "\n### $category\n" >> "$tmp_file"
+    echo "" >> "$tmp_file"
+    echo "### $category" >> "$tmp_file"
     printf '%s\n' "$bullets" >> "$tmp_file"
     tail -n +"$((final_target + 1))" "$dest_file" >> "$tmp_file"
     mv "$tmp_file" "$dest_file"
@@ -154,7 +184,7 @@ extract_latest_changelog() {
         # Check if line starts with '## '
         if [[ "$line" =~ ^##[[:space:]] ]]; then
             ((header_count++))
-            
+
             # If this is the second header, we are done
             if [ "$header_count" -eq 2 ]; then
                 break
@@ -195,22 +225,50 @@ DATE=$(date +%Y-%m-%d)
 TEMP_HEADER="header.tmp"
 TEMP_BODY="body.tmp"
 
-# find old tag line number
-OLD_LINE_NUM=$(get_tag_line_number "$OLD_TAG" "$FILE")
+# If a draft for NEW_TAG already exists, inject directly without restructuring
+NEW_LINE_NUM=$(get_tag_line_number "$NEW_TAG" "$FILE")
+if [ "$NEW_LINE_NUM" -gt 0 ]; then
+    # Overwrite the existing header line with the current date
+    sed -i "${NEW_LINE_NUM}s/.*/## ${NEW_TAG} - ${DATE}/" "$FILE"
 
-# split file into header and body
-END_RANGE=$((OLD_LINE_NUM - 1))
-export_range 1 "$END_RANGE" "$FILE" "$TEMP_HEADER"
-export_from_line "$OLD_LINE_NUM" "$FILE" "$TEMP_BODY"
+    inject_changes "$FILE" "$CATEGORY" "$COMMIT_MSG"
+    [ -n "$(tail -n 1 "$FILE")" ] && echo "" >> "$FILE"
+    echo "Injected into existing draft section $NEW_TAG in $FILE and updated header date to $DATE."
+    exit 0
+fi
+
+# Find split point: prefer OLD_TAG, fall back to first version header
+SPLIT_LINE=$(get_tag_line_number "$OLD_TAG" "$FILE")
+
+if [ "$SPLIT_LINE" -eq 0 ]; then
+    SPLIT_LINE=$(grep -n "^## " "$FILE" | head -n 1 | cut -d: -f1)
+fi
+
+# Split file into header (before split) and body (from split onwards)
+if [ "${SPLIT_LINE:-0}" -gt 1 ]; then
+    export_range 1 $((SPLIT_LINE - 1)) "$FILE" "$TEMP_HEADER"
+else
+    > "$TEMP_HEADER"
+fi
+
+if [ "${SPLIT_LINE:-0}" -gt 0 ]; then
+    export_from_line "$SPLIT_LINE" "$FILE" "$TEMP_BODY"
+else
+    > "$TEMP_BODY"
+fi
 
 # reassemble header with new version
 reassemble_header "$TEMP_HEADER" "$FILE" "$NEW_TAG" "$DATE"
 
 # inject category and commit message
-inject_changes "$FILE" "$CATEGORY" "$COMMIT_MSG"
+if [[ "$COMMIT_MSG" = "" ]]; then
+    echo "No commit message provided, skipping category injection."
+else
+    inject_changes "$FILE" "$CATEGORY" "$COMMIT_MSG"
+fi
 
-# add spacing newline if needed
-[ -n "$(tail -n 1 "$FILE")" ] && echo "" >> "$FILE"
+# add ONE spacing newline before the body
+echo "" >> "$FILE"
 
 # strip header for release body
 cp "$FILE" "$TEMP_HEADER"
@@ -219,4 +277,10 @@ sed -i '1,4d' "$TEMP_HEADER"
 # append old versions
 cat "$TEMP_BODY" >> "$FILE"
 
-echo "Header processed. $FILE now contains the title and the new version header."
+# FINAL CLEANUP:
+# 1. Clear lines that contain only whitespace
+sed -i 's/^[[:space:]]*$//' "$FILE"
+# 2. Collapse triple newlines (or more) into a single blank line
+sed -i 'N;/^\n\n$/D;P;D' "$FILE"
+
+echo "Header processed. $FILE updated successfully."

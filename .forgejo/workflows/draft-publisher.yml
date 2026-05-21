@@ -1,10 +1,9 @@
 name: Draft and Publish New Release
-
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '.forgejo/**'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       branch:
@@ -15,7 +14,6 @@ on:
 
 jobs:
   draft-release:
-    # Get triggered by actions
     if: |
       (github.event_name == 'push' && contains(github.event.head_commit.message, '[release-draft]')) ||
       (github.event_name == 'workflow_dispatch')
@@ -33,37 +31,57 @@ jobs:
 
       - name: Validate Release Version
         id: validator
+        env:
+          TOKEN: ${{ secrets.REPO_PAT }}
         run: |
           set -eo pipefail
-          # extract drafted version
-          
           NEW_TAG=$(grep "__version__ =" app/deezer_engine/__version__.py | cut -d '"' -f 2)
+          if [ -z "$NEW_TAG" ] || [ "$NEW_TAG" = "v" ]; then
+            echo "ERROR: Could not extract version from app/deezer_engine/__version__.py"
+            exit 1
+          fi
+          echo "Extracted tag: $NEW_TAG"
+
+          # Fail if a published (non-draft) release already exists for this tag
+          HTTP_STATUS=$(curl -s -o /tmp/release_check.json -w "%{http_code}" \
+            -H "Authorization: token $TOKEN" \
+            "https://codeberg.org/api/v1/repos/${{ github.repository }}/releases/tags/$NEW_TAG")
+          if [ "$HTTP_STATUS" = "200" ]; then
+            IS_DRAFT=$(jq -r '.draft' /tmp/release_check.json)
+            if [ "$IS_DRAFT" = "false" ]; then
+              echo "ERROR: A published release for $NEW_TAG already exists. Bump the version before drafting."
+              exit 1
+            fi
+            echo "Found existing draft for $NEW_TAG — it will be replaced by the cleanup step."
+          fi
+
           echo "final_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
       - name: Prepare Release Body
         id: body
         run: |
           set -eo pipefail
-          # use changelog to populate release body if available
           if [ -f "./CHANGELOG.md" ]; then
             echo "--- Snip of Changelog ---"
             head -n 10 ./CHANGELOG.md
             echo "----------------------------"
             echo "content<<EOF" >> $GITHUB_OUTPUT
+            # Leave blank lines above the separator as a visual placeholder for
+            # the release author to write a user-facing TLDR before publishing.
+            printf "\n\n\n---\n\n" >> $GITHUB_OUTPUT
             chmod +x .forgejo/update-changelog.sh
             .forgejo/update-changelog.sh "changelog" >> $GITHUB_OUTPUT
             echo "" >> $GITHUB_OUTPUT
             echo "EOF" >> $GITHUB_OUTPUT
           else
-            echo "content=Automated release for ${{ steps.git_push.outputs.final_tag }}" >> $GITHUB_OUTPUT
+            echo "content=Automated release for ${{ steps.validator.outputs.final_tag }}" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Cleanup Old Drafts
         env:
           TOKEN: ${{ secrets.REPO_PAT }}
         run: |
           echo ">>> Fetching releases..."
-          # Get all releases and filter for IDs where draft is true
           DRAFT_IDS=$(curl -s -H "Authorization: token $TOKEN" \
             "https://codeberg.org/api/v1/repos/${{ github.repository }}/releases" \
             | jq -r '.[] | select(.draft == true) | .id')
@@ -71,21 +89,53 @@ jobs:
           if [ -z "$DRAFT_IDS" ]; then
             echo ">>> No drafts found to delete."
           else
-          for ID in $DRAFT_IDS; do
+            for ID in $DRAFT_IDS; do
               echo ">>> Deleting old draft ID: $ID"
-            curl -s -X DELETE -H "Authorization: token $TOKEN" \
-              "https://codeberg.org/api/v1/repos/${{ github.repository }}/releases/$ID"
-          done
+              curl -s -X DELETE -H "Authorization: token $TOKEN" \
+                "https://codeberg.org/api/v1/repos/${{ github.repository }}/releases/$ID"
+            done
           fi
 
       - name: Create Draft Release
         uses: https://gitea.com/actions/gitea-release-action@main
-        if: ${{ github.ref_name == 'main' }}
         with:
           base_url: https://codeberg.org
           token: ${{ secrets.REPO_PAT }}
           tag_name: ${{ steps.validator.outputs.final_tag }}
           name: "Release ${{ steps.validator.outputs.final_tag }}"
           draft: true
-          target_commitish: ${{ github.head_ref || github.ref_name }}
+          target_commitish: main
           body: ${{ steps.body.outputs.content }}
+
+  remove-beta-tag:
+    if: |
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && github.ref_name == 'main')
+    timeout-minutes: 5
+    runs-on: py-runner
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.REPO_PAT }}
+
+      - name: Remove beta tag
+        env:
+          TOKEN: ${{ secrets.REPO_PAT }}
+        run: |
+          echo ">>> Removing beta tag after release publish..."
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+            -H "Authorization: token $TOKEN" \
+            "https://codeberg.org/api/v1/repos/${{ github.repository }}/tags/beta")
+          if [ "$STATUS" = "204" ]; then
+            echo ">>> beta tag removed."
+          elif [ "$STATUS" = "404" ]; then
+            echo ">>> beta tag not found, skipping."
+          else
+            echo ">>> Unexpected status: $STATUS"
+            exit 1
+          fi

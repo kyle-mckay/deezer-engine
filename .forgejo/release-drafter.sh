@@ -8,7 +8,9 @@ PR_NUMBER=""
 AUTHOR=""
 DRY_RUN=true
 RUN_TESTS=false
+FORCE=false
 DEPTH=""
+POST_RELEASE=false
 
 VERSION_FILE="app/deezer_engine/__version__.py"
 CHANGELOG_FILE="CHANGELOG.md"
@@ -32,8 +34,10 @@ Options:
   --dry-run                  Preview only, do not modify files (default)
   --dry-run=true|false       Explicit dry-run toggle
   --no-dry-run               Apply changes to version + changelog
-    --depth <n>                Use last n commits from HEAD/end-ref for message collection
-    --depth=<n>                Same as above
+  --force                    Convert skip instructions into empty markers to force header appends
+  --depth <n>                Use last n commits from HEAD/end-ref for message collection
+  --depth=<n>                Same as above
+  --post-release             Force a patch bump with no changelog entry (used after publishing a release)
   --test                     Run built-in hard-coded tests
   -h, --help                 Show this help
 
@@ -84,6 +88,14 @@ parse_args() {
                 DRY_RUN=false
                 shift
                 ;;
+            --force)
+                FORCE=true
+                shift
+                ;;
+            --post-release)
+                POST_RELEASE=true
+                shift
+                ;;
             --test)
                 RUN_TESTS=true
                 shift
@@ -108,7 +120,7 @@ parse_args() {
 }
 
 version_to_int() {
-    echo "$1" | sed 's/v//' | awk -F. '{ printf("%03d%03d%03d\n", $1,$2,$3); }'
+    echo "$1" | sed 's/v//' | awk -F. '{ printf("%d\n", $1*1000000 + $2*1000 + $3); }'
 }
 
 increment_version() {
@@ -137,8 +149,8 @@ is_in_changelog() {
 }
 
 collect_commit_messages_from_git() {
+    local end_ref="HEAD"
     local range=""
-    local end_ref="${TARGET_SHA:-${GITHUB_SHA:-HEAD}}"
 
     if [[ -n "$DEPTH" ]]; then
         if ! [[ "$DEPTH" =~ ^[0-9]+$ ]] || [[ "$DEPTH" == "0" ]]; then
@@ -149,24 +161,23 @@ collect_commit_messages_from_git() {
         return
     fi
 
-    if [[ -n "${GIT_RANGE:-}" ]]; then
-        range="$GIT_RANGE"
-    elif [[ -n "${BEFORE_SHA:-}" ]] && [[ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]]; then
-        if git rev-parse -q --verify "$BEFORE_SHA^{commit}" >/dev/null 2>&1 && git rev-parse -q --verify "$end_ref^{commit}" >/dev/null 2>&1; then
-            range="$BEFORE_SHA..$end_ref"
-        fi
+    # Priority 1: beta tag acts as rolling cursor (reset each pipeline run)
+    if git rev-parse -q --verify "beta^{commit}" >/dev/null 2>&1; then
+        range="beta..${end_ref}"
     fi
 
-    if [[ -z "$range" ]] && [[ -n "$CURRENT_TAG" ]]; then
-        if git rev-parse -q --verify "$CURRENT_TAG^{commit}" >/dev/null 2>&1; then
-            range="$CURRENT_TAG..HEAD"
-        fi
+    # Priority 2: most recent versioned release tag
+    if [[ -z "$range" ]]; then
+        local latest_tag
+        latest_tag=$(git describe --tags --abbrev=0 --match "v[0-9]*" 2>/dev/null || true)
+        [[ -n "$latest_tag" ]] && range="${latest_tag}..${end_ref}"
     fi
 
+    # Priority 3: last 15 commits
     if [[ -n "$range" ]]; then
         git log --format=%s "$range"
     else
-        git log --format=%s -n 20
+        git log --format=%s -n 15
     fi
 }
 
@@ -178,13 +189,19 @@ filter_commit_messages() {
         [[ -z "$line" ]] && continue
         RAW_COMMIT_COUNT=$((RAW_COMMIT_COUNT + 1))
 
-        if [[ "${line,,}" == *"[release-draft]"* ]]; then
+        if [[ "${line,,}" == *"[release-draft]"* ]] || [[ "${line,,}" == *"[skip draft]"* ]]; then
             IGNORED_RELEASE_DRAFT_COUNT=$((IGNORED_RELEASE_DRAFT_COUNT + 1))
             continue
         fi
 
         if is_in_changelog "$line"; then
             IGNORED_EXISTING_CHANGELOG_COUNT=$((IGNORED_EXISTING_CHANGELOG_COUNT + 1))
+            continue
+        fi
+
+        # Drop untagged items or forced empty skips (-2) entirely from the logs
+        if [[ $(get_priority "$line") -eq -2 ]]; then
+            IGNORED_RELEASE_DRAFT_COUNT=$((IGNORED_RELEASE_DRAFT_COUNT + 1))
             continue
         fi
 
@@ -196,48 +213,57 @@ filter_commit_messages() {
     done <<< "$input"
 }
 
-build_formatted_lines() {
-    local formatted=""
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        [[ -z "$line" ]] && continue
-        local rendered="$line"
-        if [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] && [[ "$PR_NUMBER" != "0" ]]; then
-            rendered="$rendered #$PR_NUMBER"
-        fi
-        if [[ -n "$AUTHOR" && "$AUTHOR" != "***" ]]; then
-            rendered="$rendered (@$AUTHOR)"
-        fi
-        if [[ -z "$formatted" ]]; then
-            formatted="$rendered"
-        else
-            formatted="$formatted"$'\n'"$rendered"
-        fi
-    done <<< "$COMMIT_MSG"
-    echo "$formatted"
-}
-
 get_priority() {
     local input
     input=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-    local prefix=""
-    [[ "$input" == *":"* ]] && prefix="${input%%:*}"
+    local type_scope=""
 
-    if [[ "$prefix" =~ ^major$ || "$input" =~ major || "$input" =~ breaking || "$input" =~ ! ]]; then
-        echo 3
-    elif [[ "$prefix" =~ ^(minor|feat) || "$input" =~ feature || "$input" =~ feat || "$input" =~ enhancement || "$input" =~ enhance ]] || \
-         [[ -z "$prefix" && "$input" =~ minor ]]; then
-        echo 2
-    elif [[ "$prefix" =~ ^(patch|fix) || "$input" =~ bug || "$input" =~ patch ]]; then
-        echo 1
-    elif [[ "$input" =~ skip || "$input" =~ ignore-release ]]; then
-        echo -1
+    # 1. Check for skips globally
+    if [[ "$input" == *"[skip"* || "$input" == *"[ignore-release]"* ]]; then
+        if [[ "$FORCE" == true ]]; then
+            echo -2  # Dropped from changelog entirely, skips skip-exit routing
+        else
+            echo -1  # Standard skip instruction exit execution
+        fi
+        return
+    fi
+
+    # 2. Extract the prefix (everything before the colon)
+    if [[ "$input" == *":"* ]]; then
+        type_scope="${input%%:*}"
     else
+        # No colon means no tag. Ignore it.
+        echo -2
+        return
+    fi
+
+    # 3. Strictly evaluate the prefix only (including common shorthands)
+    if [[ "$type_scope" =~ !$ || "$type_scope" =~ breaking || "$type_scope" =~ major || "$type_scope" =~ brk ]]; then
+        echo 3
+    elif [[ "$type_scope" =~ ^(feat|feature|minor|enhance|enhancement|add|new|imp|enh) ]]; then
+        echo 2
+    elif [[ "$type_scope" =~ ^(fix|patch|bug|fx|tweak) ]]; then
+        echo 1
+    else
+        # Everything else (chore, docs, refactor, style, test, ci, build, upd) defaults to 0
         echo 0
     fi
 }
 
+get_commit_category() {
+    local pri
+    pri=$(get_priority "$1")
+    case "$pri" in
+        3) echo "Breaking" ;;
+        2) echo "Enhancements" ;;
+        1) echo "Fixes" ;;
+        0) echo "Maintenance" ;;
+        *) echo "" ;;
+    esac
+}
+
 calculate_logic() {
-    local msg_pri=0
+    local msg_pri=-2
     local msg_has_skip=false
 
     while IFS= read -r line || [[ -n "$line" ]]; do
@@ -282,7 +308,45 @@ calculate_logic() {
 
 apply_release_logic() {
     if [[ -z "$CURRENT_TAG" ]]; then
-        CURRENT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        CURRENT_TAG=$(git describe --tags --abbrev=0 --match "v[0-9]*" 2>/dev/null || echo "v0.0.0")
+    fi
+
+    if [[ "$POST_RELEASE" == true ]]; then
+        local calculated_tag file_tag final_tag update_action
+        calculated_tag=$(increment_version "$CURRENT_TAG" "patch")
+        file_tag=$(current_version_from_file)
+
+        local calc_int file_int
+        calc_int=$(version_to_int "$calculated_tag")
+        file_int=$(version_to_int "$file_tag")
+
+        echo "------------------------------------------"
+        echo "Release logic: POST-RELEASE PATCH BUMP"
+        echo "Dry Run     : $DRY_RUN"
+        echo "------------------------------------------"
+
+        if (( file_int >= calc_int )); then
+            final_tag="$file_tag"
+            update_action="No-op: file already at $file_tag"
+        else
+            final_tag="$calculated_tag"
+            if [[ "$DRY_RUN" == true ]]; then
+                update_action="Would update version to $final_tag (dry-run)"
+            else
+                update_action="Updated version to $final_tag"
+                sed -i "s/^__version__ = .*/__version__ = \"$final_tag\"/" "$VERSION_FILE"
+            fi
+        fi
+
+        echo "Version    : $CURRENT_TAG -> $final_tag (patch)"
+        echo "Action     : $update_action"
+        echo "------------------------------------------"
+
+        if [[ "$DRY_RUN" == false ]]; then
+            bash .forgejo/update-changelog.sh "$CURRENT_TAG" "$final_tag" "Maintenance" ""
+        fi
+
+        return 0
     fi
 
     if [[ -z "$COMMIT_MSG" ]]; then
@@ -300,25 +364,82 @@ apply_release_logic() {
     commit_title=$(echo "$COMMIT_MSG" | sed '/^$/d' | head -n 1)
 
     if [[ -z "$commit_title" ]]; then
-        echo "------------------------------------------"
-        echo "Release logic: SKIPPED"
-        echo "Reason      : No eligible commits after filtering"
-        echo "Raw commits : $RAW_COMMIT_COUNT"
-        echo "Ignored     : [release-draft]=$IGNORED_RELEASE_DRAFT_COUNT, in_changelog=$IGNORED_EXISTING_CHANGELOG_COUNT"
-        echo "Dry Run     : $DRY_RUN"
-        echo "------------------------------------------"
-        return 0
+        # Check if HEAD is ahead of the latest tag
+        local ahead_count=0
+        if git rev-parse -q --verify "$CURRENT_TAG^{commit}" >/dev/null 2>&1; then
+            ahead_count=$(git rev-list --count "$CURRENT_TAG"..HEAD 2>/dev/null || echo 0)
+        else
+            ahead_count=$(git rev-list --count HEAD 2>/dev/null || echo 0)
+        fi
+
+        if [[ "$ahead_count" -gt 0 ]]; then
+            bump_type="patch"
+
+            echo "------------------------------------------"
+            echo "Release logic: FORCED PATCH BUMP (ahead of tag by $ahead_count commits, no loggable logs)"
+            echo "Raw commits : $RAW_COMMIT_COUNT"
+            echo "Ignored     : [release-draft]=$IGNORED_RELEASE_DRAFT_COUNT, in_changelog=$IGNORED_EXISTING_CHANGELOG_COUNT"
+            echo "Dry Run     : $DRY_RUN"
+            echo "------------------------------------------"
+
+            local calculated_tag file_tag final_tag update_action
+            calculated_tag=$(increment_version "$CURRENT_TAG" "$bump_type")
+            file_tag=$(current_version_from_file)
+
+            local calc_int file_int
+            calc_int=$(version_to_int "$calculated_tag")
+            file_int=$(version_to_int "$file_tag")
+
+            if (( file_int > calc_int )); then
+                final_tag="$file_tag"
+                update_action="Kept existing higher version $file_tag instead of $calculated_tag"
+            elif (( file_int == calc_int )); then
+                final_tag="$file_tag"
+                if [[ "$DRY_RUN" == true ]]; then
+                    update_action="Would be no-op: file already at $file_tag (matches calculated $calculated_tag)"
+                else
+                    update_action="File already up to date ($file_tag)"
+                fi
+            else
+                final_tag="$calculated_tag"
+                if [[ "$DRY_RUN" == true ]]; then
+                    update_action="Would update version to $final_tag (dry-run)"
+                else
+                    update_action="Updated version to $final_tag"
+                    sed -i "s/^__version__ = .*/__version__ = \"$final_tag\"/" "$VERSION_FILE"
+                fi
+            fi
+
+            echo "Version    : $CURRENT_TAG -> $final_tag ($bump_type)"
+            echo "Action     : $update_action"
+            echo "Dry Run    : $DRY_RUN"
+            echo "------------------------------------------"
+
+            if [[ "$DRY_RUN" == false ]]; then
+                bash .forgejo/update-changelog.sh "$CURRENT_TAG" "$final_tag" "Maintenance" ""
+            fi
+
+            return 0
+        else
+            echo "------------------------------------------"
+            echo "Release logic: SKIPPED ENTIRELY"
+            echo "Reason      : No eligible conventional commits found AND HEAD is not ahead of tag ($CURRENT_TAG)"
+            echo "Raw commits : $RAW_COMMIT_COUNT"
+            echo "Ignored     : [release-draft]=$IGNORED_RELEASE_DRAFT_COUNT, in_changelog=$IGNORED_EXISTING_CHANGELOG_COUNT"
+            echo "Dry Run     : $DRY_RUN"
+            echo "------------------------------------------"
+            return 0
+        fi
     fi
 
-    local result bump_type category formatted_lines
+    local result bump_type
     result=$(calculate_logic)
     bump_type=$(echo "$result" | cut -d'|' -f1)
-    category=$(echo "$result" | cut -d'|' -f2)
-    formatted_lines=$(build_formatted_lines)
 
     if [[ "$bump_type" == "skip" ]]; then
         echo "------------------------------------------"
-        echo "Release logic: SKIPPED"
+        echo "Release logic: SKIPPED ENTIRELY"
+        echo "Reason      : Commit messages or labels explicitly contained an ignore instruction ([skip ci] / ignore-release)"
         echo "Dry Run     : $DRY_RUN"
         echo "------------------------------------------"
         return 0
@@ -337,7 +458,11 @@ apply_release_logic() {
         update_action="Kept existing higher version $file_tag instead of $calculated_tag"
     elif (( file_int == calc_int )); then
         final_tag="$file_tag"
-        update_action="File already up to date ($file_tag)"
+        if [[ "$DRY_RUN" == true ]]; then
+            update_action="Would be no-op: file already at $file_tag (matches calculated $calculated_tag)"
+        else
+            update_action="File already up to date ($file_tag)"
+        fi
     else
         final_tag="$calculated_tag"
         if [[ "$DRY_RUN" == true ]]; then
@@ -347,6 +472,34 @@ apply_release_logic() {
             sed -i "s/^__version__ = .*/__version__ = \"$final_tag\"/" "$VERSION_FILE"
         fi
     fi
+
+    # Group commits by individual category
+    local breaking_lines="" enhancements_lines="" fixes_lines="" maintenance_lines=""
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ -z "$line" ]] && continue
+        local cat rendered
+        cat=$(get_commit_category "$line")
+        [[ -z "$cat" ]] && continue
+        rendered="$line"
+        if [[ "$PR_NUMBER" =~ ^[0-9]+$ ]] && [[ "$PR_NUMBER" != "0" ]]; then
+            rendered="$rendered #$PR_NUMBER"
+        fi
+        if [[ -n "$AUTHOR" && "$AUTHOR" != "***" ]]; then
+            rendered="$rendered (@$AUTHOR)"
+        fi
+        case "$cat" in
+            Breaking)     breaking_lines="${breaking_lines:+$breaking_lines$'\n'}$rendered" ;;
+            Enhancements) enhancements_lines="${enhancements_lines:+$enhancements_lines$'\n'}$rendered" ;;
+            Fixes)        fixes_lines="${fixes_lines:+$fixes_lines$'\n'}$rendered" ;;
+            Maintenance)  maintenance_lines="${maintenance_lines:+$maintenance_lines$'\n'}$rendered" ;;
+        esac
+    done <<< "$COMMIT_MSG"
+
+    local categories_summary=""
+    [[ -n "$breaking_lines" ]]     && categories_summary="${categories_summary:+$categories_summary, }Breaking"
+    [[ -n "$enhancements_lines" ]] && categories_summary="${categories_summary:+$categories_summary, }Enhancements"
+    [[ -n "$fixes_lines" ]]        && categories_summary="${categories_summary:+$categories_summary, }Fixes"
+    [[ -n "$maintenance_lines" ]]  && categories_summary="${categories_summary:+$categories_summary, }Maintenance"
 
     echo "------------------------------------------"
     echo "Release Draft Detection:"
@@ -359,16 +512,21 @@ apply_release_logic() {
     echo "Commit Cnt : $(echo "$COMMIT_MSG" | sed '/^$/d' | wc -l)"
     echo "Ignored    : [release-draft]=$IGNORED_RELEASE_DRAFT_COUNT, in_changelog=$IGNORED_EXISTING_CHANGELOG_COUNT"
     echo "Labels     : ${LABELS:-[None]}"
-    echo "Formatted  : $(echo "$formatted_lines" | head -n 1)"
-    echo "Category   : $category"
+    echo "Categories : ${categories_summary:-[None]}"
     echo "Version    : $CURRENT_TAG -> $final_tag ($bump_type)"
     echo "Action     : $update_action"
     echo "Dry Run    : $DRY_RUN"
     echo "------------------------------------------"
 
     if [[ "$DRY_RUN" == false ]]; then
-        bash .forgejo/update-changelog.sh "$CURRENT_TAG" "$final_tag" "$category" "$formatted_lines"
+        [[ -n "$breaking_lines" ]]     && bash .forgejo/update-changelog.sh "$CURRENT_TAG" "$final_tag" "Breaking"     "$breaking_lines"
+        [[ -n "$enhancements_lines" ]] && bash .forgejo/update-changelog.sh "$CURRENT_TAG" "$final_tag" "Enhancements" "$enhancements_lines"
+        [[ -n "$fixes_lines" ]]        && bash .forgejo/update-changelog.sh "$CURRENT_TAG" "$final_tag" "Fixes"        "$fixes_lines"
+        [[ -n "$maintenance_lines" ]]  && bash .forgejo/update-changelog.sh "$CURRENT_TAG" "$final_tag" "Maintenance"  "$maintenance_lines"
     fi
+
+    # Ensure successful release processing returns 0 even when some categories are empty.
+    return 0
 }
 
 assert_eq() {

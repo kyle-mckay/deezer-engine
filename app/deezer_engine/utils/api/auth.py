@@ -179,7 +179,7 @@ def get_authenticated_client(config, logger, pipe_jwt_needed=False):
     """
     if config is None:
         if logger:
-            logger.debug("Config is None — returning unauthenticated client for testing.")
+            logger.debug("Config is None, returning unauthenticated Deezer client for testing.")
         client = deezer.Client()
         client.session = None
         client.api_token = None
