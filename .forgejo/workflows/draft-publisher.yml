@@ -66,9 +66,6 @@ jobs:
             head -n 10 ./CHANGELOG.md
             echo "----------------------------"
             echo "content<<EOF" >> $GITHUB_OUTPUT
-            # Leave blank lines above the separator as a visual placeholder for
-            # the release author to write a user-facing TLDR before publishing.
-            printf "\n\n\n---\n\n" >> $GITHUB_OUTPUT
             chmod +x .forgejo/update-changelog.sh
             .forgejo/update-changelog.sh "changelog" >> $GITHUB_OUTPUT
             echo "" >> $GITHUB_OUTPUT
